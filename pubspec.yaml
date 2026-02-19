@@ -1,0 +1,14 @@
+name: logger_builder
+description: A toolkit for building your own loggers.
+version: 0.1.0
+repository: https://github.com/vi-k/logger_builder
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  meta: ^1.18.1
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0

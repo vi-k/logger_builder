@@ -1,0 +1,71 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "simple logger",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/simple_logger.dart"
+        },
+        {
+            "name": "complex logger",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/complex_logger.dart"
+        },
+        {
+            "name": "json reporter",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/json_reporter.dart"
+        },
+        {
+            "name": "hierarchical logger",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/hierarchical_logger.dart",
+        },
+        {
+            "name": "async printer",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/async_log_printers/async_log_printer.dart",
+        },
+        {
+            "name": "async printer with param",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/async_log_printers/async_log_printer_with_param.dart",
+        },
+        {
+            "name": "async buffered printer",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/async_log_printers/async_buffered_log_printer.dart",
+        },
+        {
+            "name": "async buffered printe with param",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/async_log_printers/async_buffered_log_printer_with_param.dart",
+        },
+        {
+            "name": "benchmarks",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/benchmarks.dart"
+        },
+    ]
+}
