@@ -57,3 +57,15 @@ final class LazyString extends TypedLazy<String?> {
   @override
   String? convert(Object? resolved) => resolved?.toString();
 }
+
+/// Class for lazy evaluation of a non-nullable string value.
+///
+/// Same as [LazyString], but the `null` value is returned as a fallback value.
+final class LazyNonNullableString extends TypedLazy<String> {
+  final String fallbackValue;
+
+  LazyNonNullableString(super.unresolved, this.fallbackValue);
+
+  @override
+  String convert(Object? resolved) => resolved?.toString() ?? fallbackValue;
+}
