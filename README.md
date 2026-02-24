@@ -1,4 +1,9 @@
 [![Dart CI](https://github.com/vi-k/logger_builder/actions/workflows/dart.yml/badge.svg)](https://github.com/vi-k/logger_builder/actions/workflows/dart.yml)
+[![GitHub Repo](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/vi-k/logger_builder)
+[![Pub Publisher](https://img.shields.io/pub/publisher/logger_builder)](https://pub.dev/publishers/yet-another.dev/packages)
+![Pub Version](https://img.shields.io/pub/v/logger_builder)
+![GitHub License](https://img.shields.io/github/license/vi-k/logger_builder)
+[![Dart](https://img.shields.io/badge/Dart-blue?logo=dart)](https://dart.dev/)
 
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.

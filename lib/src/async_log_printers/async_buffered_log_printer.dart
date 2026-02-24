@@ -43,7 +43,7 @@ base class AsyncBufferedLogPrinter<T extends Object?> {
     _controller.stream.asyncMap(_handleMessages).listen(_next);
   }
 
-  FutureOr<void> _handleMessages(_) {
+  FutureOr<void> _handleMessages(void _) {
     final buffer = _buffer;
     _buffer = [];
     if (buffer.isNotEmpty) {
@@ -56,7 +56,7 @@ base class AsyncBufferedLogPrinter<T extends Object?> {
     }
   }
 
-  void _next(_) {
+  void _next(void _) {
     if (_buffer.isNotEmpty) {
       _controller.add(null);
     }

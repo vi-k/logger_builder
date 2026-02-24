@@ -1,4 +1,4 @@
-## 0.1.3
+## 0.1.3-0.1.4
 
 - Fix bug with builder and printer inheritance in subloggers.
 
