@@ -1,24 +1,21 @@
-/// Класс для ленивого вычисления значения.
+/// Class for lazy evaluation of a value.
 ///
-/// Используется для того, чтобы не тратить ресурсы на вычисление значения,
-/// которое может не понадобиться. Например, при передаче значений в логгер,
-/// который в релизной сборке должен быть отключен.
+/// Used to avoid resource consumption on value calculation, which may not be
+/// needed. For example, when passing values to a logger, which should be
+/// disabled in the release build.
 ///
-/// Непосредственное значение передаётся напрямую, а ленивое значение через
-/// фунцию:
+/// The value is passed directly, or through a function:
 ///
 /// ```dart
 /// info('direct value'); // Direct value
 /// info(() => expensiveOperation()); // Lazy value
 /// info(expensiveOperation); // Lazy value
 ///
-/// ...
-///
 /// void info(Object? message) {
 ///   if (isDisabled) return;
 ///
 ///   final lazyMessage = Lazy(message);
-///   print(lazyMessage.resolved); // Только здесь будет сделано вычисление
+///   print(lazyMessage.resolved); // Only here will the calculation be made
 /// }
 /// ```
 ///
@@ -33,12 +30,12 @@ base class Lazy {
       obj is Object? Function() ? obj() : obj;
 }
 
-/// Базовый класс для ленивого вычисления типизированного значения.
+/// Base class for lazy evaluation of a typed value.
 ///
-/// Тоже самое, что [Lazy], но с последующим преобразованием `Object?` в [T]
-/// с помощью метода [convert].
+/// Same as [Lazy], but with subsequent conversion of `Object?` to [T]
+/// using the [convert] method.
 ///
-/// Если значение уже имеет тип [T], метод [convert] не будет вызван.
+/// If the value already has type [T], the [convert] method will not be called!
 abstract base class TypedLazy<T extends Object?> extends Lazy {
   late final T value = switch (resolved) {
     final T value => value,
@@ -50,11 +47,10 @@ abstract base class TypedLazy<T extends Object?> extends Lazy {
   T convert(Object? resolved);
 }
 
-/// Класс для ленивого вычисления строкового значения.
+/// Class for lazy evaluation of a string value.
 ///
-/// Тоже самое, что [Lazy], но с последующим преобразованием значения в строку.
-/// Если вычисление значения в результате даёт строку, то метод [convert] не
-/// будет вызван.
+/// Same as [Lazy], but with subsequent conversion of [Object] to [String]
+/// using the [toString] method. The `null` value is returned as is.
 final class LazyString extends TypedLazy<String?> {
   LazyString(super.unresolved);
 

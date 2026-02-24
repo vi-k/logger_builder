@@ -5,14 +5,14 @@ import 'utils/hierarchical_logger.dart';
 
 void main() {
   group('Hierarchy', () {
-    late HierarchicalLogger log;
-    late HierarchicalLogger log2;
-    late HierarchicalLogger log3;
+    late Logger log;
+    late Logger log2;
+    late Logger log3;
     final buf = <String>[];
 
     setUp(() {
       log =
-          HierarchicalLogger('root')
+          Logger('root')
             ..level = Levels.all
             ..printer = buf.add;
       log2 = log.withAddedName('first');
@@ -259,9 +259,8 @@ void main() {
         log3.i('info');
       }
 
-      String Function(HierarchicalLogEntry entry) customBuilder(
-        String prefix,
-      ) => (entry) => '$prefix ${HierarchicalLogger.defaultBuilder(entry)}';
+      String Function(LogEntry entry) customBuilder(String prefix) =>
+          (entry) => '$prefix ${Logger.defaultBuilder(entry)}';
 
       test('initial state', () {
         expect(log.builderLinked, isFalse);

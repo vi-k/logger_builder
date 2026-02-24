@@ -1,30 +1,37 @@
 import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/benchmark.dart';
 import 'package:logger_builder_examples/console.dart';
-import 'package:logger_builder_examples/simple_logger.dart';
+import 'package:logger_builder_examples/hierarchical_logger.dart';
 import 'package:logging/logging.dart' as l;
 import 'package:talker_logger/talker_logger.dart' as t;
 
-Future<void> main() async {
-  final log = SimpleLogger()..level = Levels.debug;
+String builder(LogEntry entry) => '[${entry.levelName}] ${entry.message}';
 
-  benchmarkTitle('Benchmarks');
+/// Usage:
+///
+/// ```bash
+/// dart compile exe example/logger_builder_examples/bin/benchmarks.dart && ./example/logger_builder_examples/bin/benchmarks.exe
+/// ```
+Future<void> main() async {
+  final log = Logger('root')..level = Levels.all;
+
+  benchmarkTitle('benchmarks');
 
   title('Sample:');
 
   // CustomLogger:
   line('CustomLogger:');
   log
-    ..builder = SimpleLogger.defaultBuilder
+    ..builder = builder
     ..printer = print
     ..i('Info message')
     ..printer = (_) {};
 
   // logging
   //
-  // Ставим логгер в равные условия с нашим:
-  // - делаем вычисления итоговой строки
-  // - добавляем проверку printer?.call, неигнорируемую компилятором
+  // Put the logger on equal footing with `CustomLogger`:
+  // - calculate the final string
+  // - set an empty printer call
   void Function(String) printer = print;
   l.Logger.root.onRecord.listen((record) {
     final text = '[${record.level.name}] ${record.message}';
@@ -36,9 +43,10 @@ Future<void> main() async {
   printer = (_) {};
 
   // talker
-  // Ставим логгер в похожие условия с нашим:
-  // - сбрасываем вывод, чтобы избежать влияния на производительность
-  // - делаем вычисления итоговой строки
+  //
+  // Put the logger on equal footing with `CustomLogger`:
+  // - calculate the final string
+  // - set an empty output call
   final formatter = TalkerSimpleLoggerFormatter();
   final talkSampleLog = t.TalkerLogger(formatter: formatter);
   line('\ntalker:');
@@ -266,7 +274,7 @@ Future<void> main() async {
 
   //
   title(
-    'Lazy string wrappped in constant'
+    'Lazy string wrapped in constant'
     ' (logging ${!logging ? '[on]enabled[/on]' : '[off]disabled[/off]'}):',
   );
 
@@ -306,6 +314,11 @@ class TalkerSimpleLoggerFormatter extends t.LoggerFormatter {
       final String msg => msg,
       final Object? msg => msg.toString(),
     };
+
+    // The time will not be displayed, but we take it to put the loggers in the
+    // same conditions.
+    // ignore: unused_local_variable
+    final time = DateTime.now();
 
     final text = '[${details.level.name}] $message';
     return text;

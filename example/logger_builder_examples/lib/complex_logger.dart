@@ -1,6 +1,6 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef ComplexLog =
+typedef LogFunction =
     bool Function(
       Object? source,
       Object? message, {
@@ -8,7 +8,7 @@ typedef ComplexLog =
       StackTrace? stackTrace,
     });
 
-final class ComplexLogEntry extends CustomLogEntry {
+final class LogEntry extends CustomLogEntry {
   static int _lastSequenceNumber = 0;
 
   final DateTime time;
@@ -17,7 +17,7 @@ final class ComplexLogEntry extends CustomLogEntry {
   final LazyString _lazySource;
   final LazyString _lazyMessage;
 
-  ComplexLogEntry(
+  LogEntry(
     super.levelLogger, {
     super.error,
     super.stackTrace,
@@ -34,18 +34,38 @@ final class ComplexLogEntry extends CustomLogEntry {
   String? get message => _lazyMessage.value;
 }
 
-final class ComplexLogger
+final class LevelLogger
     extends
-        CustomLogger<
-          ComplexLogger,
-          ComplexLevelLogger,
-          ComplexLog,
-          ComplexLogEntry,
-          String
-        > {
+        CustomLevelLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+  LevelLogger({required super.level, required super.name, super.shortName})
+    : super(
+        noLog: (_, _, {error, stackTrace}) => true,
+        builder: Logger.defaultBuilder,
+        printer: print,
+      );
+
+  @override
+  LogFunction get processLog => (source, message, {error, stackTrace}) {
+    final entry = LogEntry(
+      this,
+      error: error,
+      stackTrace: stackTrace,
+      name: logger.name,
+      source: source,
+      message: message,
+    );
+
+    printer(builder(entry));
+
+    return true;
+  };
+}
+
+final class Logger
+    extends CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
   final String name;
 
-  ComplexLogger(this.name);
+  Logger(this.name);
 
   @override
   void registerLevels() {
@@ -59,56 +79,28 @@ final class ComplexLogger
     registerLevel(_shout);
   }
 
-  final ComplexLevelLogger _finest = ComplexLevelLogger(
-    level: Levels.finest,
-    name: 'FINEST',
-  );
-  final ComplexLevelLogger _finer = ComplexLevelLogger(
-    level: Levels.finer,
-    name: 'FINER',
-  );
-  final ComplexLevelLogger _fine = ComplexLevelLogger(
-    level: Levels.fine,
-    name: 'FINE',
-  );
-  final ComplexLevelLogger _config = ComplexLevelLogger(
-    level: Levels.config,
-    name: 'CONFIG',
-  );
-  final ComplexLevelLogger _info = ComplexLevelLogger(
-    level: Levels.info,
-    name: 'INFO',
-  );
-  final ComplexLevelLogger _warning = ComplexLevelLogger(
+  final LevelLogger _finest = LevelLogger(level: Levels.finest, name: 'FINEST');
+  final LevelLogger _finer = LevelLogger(level: Levels.finer, name: 'FINER');
+  final LevelLogger _fine = LevelLogger(level: Levels.fine, name: 'FINE');
+  final LevelLogger _config = LevelLogger(level: Levels.config, name: 'CONFIG');
+  final LevelLogger _info = LevelLogger(level: Levels.info, name: 'INFO');
+  final LevelLogger _warning = LevelLogger(
     level: Levels.warning,
     name: 'WARNING',
   );
-  final ComplexLevelLogger _severe = ComplexLevelLogger(
-    level: Levels.severe,
-    name: 'SEVERE',
-  );
-  final ComplexLevelLogger _shout = ComplexLevelLogger(
-    level: Levels.shout,
-    name: 'SHOUT',
-  );
+  final LevelLogger _severe = LevelLogger(level: Levels.severe, name: 'SEVERE');
+  final LevelLogger _shout = LevelLogger(level: Levels.shout, name: 'SHOUT');
 
-  ComplexLog get finest => _finest.log;
-  ComplexLog get finer => _finer.log;
-  ComplexLog get fine => _fine.log;
-  ComplexLog get config => _config.log;
-  ComplexLog get info => _info.log;
-  ComplexLog get warning => _warning.log;
-  ComplexLog get severe => _severe.log;
-  ComplexLog get shout => _shout.log;
+  LogFunction get finest => _finest.log;
+  LogFunction get finer => _finer.log;
+  LogFunction get fine => _fine.log;
+  LogFunction get config => _config.log;
+  LogFunction get info => _info.log;
+  LogFunction get warning => _warning.log;
+  LogFunction get severe => _severe.log;
+  LogFunction get shout => _shout.log;
 
-  static bool _noLog(
-    Object? source,
-    Object? message, {
-    Object? error,
-    StackTrace? stackTrace,
-  }) => true;
-
-  static String defaultBuilder(ComplexLogEntry entry) =>
+  static String defaultBuilder(LogEntry entry) =>
       '${entry.time.toIso8601String()} [${entry.name}] '
       '#${entry.sequenceNumber} '
       '${entry.source == null ? '' : '${entry.source} | '}'
@@ -116,42 +108,4 @@ final class ComplexLogger
       '${entry.error == null ? '' : ': ${entry.error}'}'
       '${entry.stackTrace == null || entry.stackTrace == StackTrace.empty //
                   ? '' : '\n${entry.stackTrace}'}';
-}
-
-final class ComplexLevelLogger
-    extends
-        CustomLevelLogger<
-          ComplexLogger,
-          ComplexLevelLogger,
-          ComplexLog,
-          ComplexLogEntry,
-          String
-        > {
-  ComplexLevelLogger({
-    required super.level,
-    required super.name,
-    super.shortName,
-  }) : super(
-         noLog: ComplexLogger._noLog,
-         builder: ComplexLogger.defaultBuilder,
-         printer: print,
-       );
-
-  @override
-  ComplexLog get processLog => (source, message, {error, stackTrace}) {
-    if (!isEnabled) return true;
-
-    final entry = ComplexLogEntry(
-      this,
-      error: error,
-      stackTrace: stackTrace,
-      name: logger.name,
-      source: source,
-      message: message,
-    );
-
-    printer(builder(entry));
-
-    return true;
-  };
 }

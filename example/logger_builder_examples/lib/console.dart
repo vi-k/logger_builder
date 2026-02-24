@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:ansi_escape_codes/ansi_escape_codes.dart' as ansi;
+import 'package:ansi_escape_codes/extensions.dart';
 
 final _titlePrinter = ansi.AnsiPrinter(
   ansiCodesEnabled: !Platform.isIOS,
@@ -48,6 +50,21 @@ void line(String text) {
 
 void description(String text) {
   _descriptionPrinter.print(_prepare(text));
+}
+
+void box(String text) {
+  final lines = text.split('\n');
+  final widths = lines.map((line) => line.removeEscapeCodes().length).toList();
+  final maxWidth = widths.reduce(math.max);
+  _descriptionPrinter.print('┌─${'─' * maxWidth}─┐');
+  for (final (index, line) in lines.indexed) {
+    _descriptionPrinter
+      ..write('│ ')
+      ..write('${ansi.fg256Gray10}$line${ansi.reset}')
+      ..write(' ' * (maxWidth - widths[index]))
+      ..writeln(' │');
+  }
+  _descriptionPrinter.print('└─${'─' * maxWidth}─┘');
 }
 
 String _prepare(String text) => text

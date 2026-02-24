@@ -1,8 +1,14 @@
+import 'package:ansi_escape_codes/ansi_escape_codes.dart';
 import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/simple_logger.dart';
 
+/// Usage:
+///
+/// ```bash
+/// dart compile exe example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer_with_param.dart && ./example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer_with_param.exe
+/// ```
 Future<void> main() async {
-  final log = SimpleLogger()..level = Levels.all;
+  final log = Logger()..level = Levels.all;
 
   final asyncPrinter = AsyncBufferedLogPrinterWithParam<String, bool>((
     entries,
@@ -11,7 +17,7 @@ Future<void> main() async {
     print('Send messages: ${entries.length}');
     for (final (message, isError) in entries) {
       if (isError) {
-        print('\x1B[31m$message\x1B[0m');
+        print('$fgRed$message$reset');
       } else {
         print(message);
       }

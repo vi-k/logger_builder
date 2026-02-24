@@ -30,15 +30,9 @@ abstract class CustomLevelLogger<
 
   /// Link to [L] logger.
   ///
-  /// We use a weak reference to simplify [L] logger disposal. As a rule, this
-  /// is not relevant for the root logger, whose lifecycle is equal to the
-  /// application lifecycle. But it is relevant for subloggers with a short
-  /// lifecycle.
-  ///
   /// The [LL] logger is attached to [L] logger using the
-  /// [CustomLogger.registerLevel] method. Detachment occurs automatically when
-  /// the [L] logger is disposed of.
-  WeakReference<L>? _logger;
+  /// [CustomLogger.registerLevel] method.
+  L? _logger;
 
   /// Current log function.
   ///
@@ -72,10 +66,9 @@ abstract class CustomLevelLogger<
   Log get log => _log;
 
   @protected
-  L get logger =>
-      _logger?.target ?? (throw StateError('Logger is not attached'));
+  L get logger => _logger ?? (throw StateError('Logger is not attached'));
 
-  bool get isEnabled => _log != _noLog;
+  bool get isEnabled => !identical(_log, _noLog);
 
   CustomLogBuilder<Ent, Out> get builder => _builder;
 
@@ -106,7 +99,7 @@ abstract class CustomLevelLogger<
   }
 
   void _attach(L logger) {
-    _logger = WeakReference(logger);
+    _logger = logger;
     _toggle(logger.level <= level);
   }
 

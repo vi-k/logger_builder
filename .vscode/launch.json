@@ -19,18 +19,18 @@
             "program": "bin/complex_logger.dart"
         },
         {
-            "name": "json reporter",
-            "request": "launch",
-            "type": "dart",
-            "cwd": "example/logger_builder_examples",
-            "program": "bin/json_reporter.dart"
-        },
-        {
             "name": "hierarchical logger",
             "request": "launch",
             "type": "dart",
             "cwd": "example/logger_builder_examples",
             "program": "bin/hierarchical_logger.dart",
+        },
+        {
+            "name": "json reporter",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "example/logger_builder_examples",
+            "program": "bin/json_reporter.dart"
         },
         {
             "name": "async printer",

@@ -15,11 +15,11 @@ void benchmarkTitle(String file) {
   title('\nSimple benchmark:');
   line('Usage:');
   description(
-    'dart compile exe example/pkglog_example/bin/$file.dart && ./example/pkglog_example/bin/$file.exe',
+    'dart compile exe example/logger_builder_examples/bin/$file.dart && ./example/logger_builder_examples/bin/$file.exe',
   );
   line('\nEnable asserts:');
   description(
-    'dart compile exe --enable-asserts example/pkglog_example/bin/$file.dart && ./example/pkglog_example/bin/$file.exe',
+    'dart compile exe --enable-asserts example/logger_builder_examples/bin/$file.dart && ./example/logger_builder_examples/bin/$file.exe',
   );
 }
 

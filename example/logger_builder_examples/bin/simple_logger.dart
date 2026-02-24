@@ -1,9 +1,15 @@
+import 'package:ansi_escape_codes/ansi_escape_codes.dart';
 import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/console.dart';
 import 'package:logger_builder_examples/simple_logger.dart';
 
+/// Usage:
+///
+/// ```bash
+/// dart compile exe example/logger_builder_examples/bin/simple_logger.dart && ./example/logger_builder_examples/bin/simple_logger.exe
+/// ```
 Future<void> main() async {
-  final log = SimpleLogger()..level = Levels.all;
+  final log = Logger()..level = Levels.all;
 
   title('Default usage:');
   log.d('Debug message');
@@ -34,10 +40,10 @@ Future<void> main() async {
   log[Levels.debug].log('Debug message');
   log[Levels.info].log('Info message');
   log[Levels.error].log('Error message');
-  log.builder = SimpleLogger.defaultBuilder;
+  log.builder = Logger.defaultBuilder;
 
   title('Custom printer:');
-  log[Levels.error].printer = (text) => print('\x1B[31m$text\x1B[0m');
+  log[Levels.error].printer = (text) => print('$fgRed$text$reset');
   log[Levels.debug].log('Debug message');
   log[Levels.info].log('Info message');
   log[Levels.error].log('Error message');

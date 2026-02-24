@@ -1,13 +1,19 @@
 import 'dart:developer' as development;
 
+import 'package:ansi_escape_codes/ansi_escape_codes.dart';
 import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/complex_logger.dart';
 import 'package:logger_builder_examples/console.dart';
 
 final class MyClass {}
 
+/// Usage:
+///
+/// ```bash
+/// dart compile exe example/logger_builder_examples/bin/complex_logger.dart && ./example/logger_builder_examples/bin/complex_logger.exe
+/// ```
 Future<void> main() async {
-  final log = ComplexLogger('logger_name')..level = Levels.all;
+  final log = Logger('logger_name')..level = Levels.all;
 
   title('Default usage:');
   log.finest(MyClass, 'Finest message');
@@ -63,11 +69,11 @@ Future<void> main() async {
   log[Levels.warning].log(MyClass, 'Warning message');
   log[Levels.severe].log(MyClass, 'Severe message');
   log[Levels.shout].log(MyClass, 'Shout message');
-  log.builder = ComplexLogger.defaultBuilder;
+  log.builder = Logger.defaultBuilder;
 
   title('Custom printer:');
   log[Levels.severe].printer =
-      log[Levels.shout].printer = (text) => print('\x1B[31m$text\x1B[0m');
+      log[Levels.shout].printer = (text) => print('$fgRed$text$reset');
   log[Levels.finest].log(MyClass, 'Finest message');
   log[Levels.finer].log(MyClass, 'Finer message');
   log[Levels.fine].log(MyClass, 'Fine message');

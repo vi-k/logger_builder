@@ -1,8 +1,13 @@
 import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/simple_logger.dart';
 
+/// Usage:
+///
+/// ```bash
+/// dart compile exe example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer.dart && ./example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer.exe
+/// ```
 Future<void> main() async {
-  final log = SimpleLogger()..level = Levels.all;
+  final log = Logger()..level = Levels.all;
 
   final asyncPrinter = AsyncBufferedLogPrinter<String>((messages) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));

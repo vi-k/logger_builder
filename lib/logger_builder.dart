@@ -1,4 +1,5 @@
-///
+/// A toolkit for creating your own customizable and hierarchical loggers in
+/// Dart with good performance when disabled.
 library;
 
 export 'src/async_log_printers/async_buffered_log_printer.dart';
