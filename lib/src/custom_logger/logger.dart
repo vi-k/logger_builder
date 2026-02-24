@@ -62,8 +62,9 @@ abstract base class CustomLogger<
     for (final parentLevelLogger in parent._levelLoggers.values) {
       final levelLogger = _levelLoggers[parentLevelLogger.level];
       if (levelLogger != null) {
-        builder = parentLevelLogger.builder;
-        printer = parentLevelLogger.printer;
+        levelLogger
+          ..builder = parentLevelLogger.builder
+          ..printer = parentLevelLogger.printer;
       }
     }
 
@@ -106,10 +107,9 @@ abstract base class CustomLogger<
 
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger? when sublogger._levelLinked) {
-        final tmp = sublogger._levelLinked;
         sublogger
           ..level = value
-          .._levelLinked = tmp;
+          .._levelLinked = true;
       }
     }
   }

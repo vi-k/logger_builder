@@ -1,3 +1,7 @@
+## 0.1.3
+
+- Fix bug with builder and printer inheritance in subloggers.
+
 ## 0.1.2
 
 - Add a CI badge to README.
