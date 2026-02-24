@@ -3,7 +3,7 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: package:logger_builder
+name: logger_builder
 
 on:
   push:
