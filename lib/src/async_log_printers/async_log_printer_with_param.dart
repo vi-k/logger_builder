@@ -57,6 +57,6 @@ base class AsyncLogPrinterWithParam<T extends Object?, P extends Object?> {
   /// This created publisher is typically assigned to a Logger instance's
   /// printer callback or used with log-level specific printers.
   void Function(T) publisher(P param) => (message) {
-    _controller.add((message, param));
-  };
+        _controller.add((message, param));
+      };
 }

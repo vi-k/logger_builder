@@ -3,6 +3,8 @@
 - Add a CI badge to README.
 - Remove vm_service from example.
 - Add GitHub Actions for CI.
+- Downgrade Dart SDK constraint to 3.2.0.
+- Downgrade meta to 1.16.0.
 
 ## 0.1.0-0.1.1
 

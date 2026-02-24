@@ -1,12 +1,11 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFunction =
-    bool Function(
-      Object? source,
-      Object? message, {
-      Object? error,
-      StackTrace? stackTrace,
-    });
+typedef LogFunction = bool Function(
+  Object? source,
+  Object? message, {
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 final class LogEntry extends CustomLogEntry {
   static int _lastSequenceNumber = 0;
@@ -25,40 +24,39 @@ final class LogEntry extends CustomLogEntry {
     required this.name,
     required Object? source,
     required Object? message,
-  }) : time = DateTime.now(),
-       sequenceNumber = ++_lastSequenceNumber,
-       _lazySource = LazyString(source),
-       _lazyMessage = LazyString(message);
+  })  : time = DateTime.now(),
+        sequenceNumber = ++_lastSequenceNumber,
+        _lazySource = LazyString(source),
+        _lazyMessage = LazyString(message);
 
   String? get source => _lazySource.value;
   String? get message => _lazyMessage.value;
 }
 
-final class LevelLogger
-    extends
-        CustomLevelLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger,
+    LogFunction, LogEntry, String> {
   LevelLogger({required super.level, required super.name, super.shortName})
-    : super(
-        noLog: (_, _, {error, stackTrace}) => true,
-        builder: Logger.defaultBuilder,
-        printer: print,
-      );
+      : super(
+          noLog: (_, __, {error, stackTrace}) => true,
+          builder: Logger.defaultBuilder,
+          printer: print,
+        );
 
   @override
   LogFunction get processLog => (source, message, {error, stackTrace}) {
-    final entry = LogEntry(
-      this,
-      error: error,
-      stackTrace: stackTrace,
-      name: logger.name,
-      source: source,
-      message: message,
-    );
+        final entry = LogEntry(
+          this,
+          error: error,
+          stackTrace: stackTrace,
+          name: logger.name,
+          source: source,
+          message: message,
+        );
 
-    printer(builder(entry));
+        printer(builder(entry));
 
-    return true;
-  };
+        return true;
+      };
 }
 
 final class Logger
@@ -107,5 +105,5 @@ final class Logger
       '${entry.message}'
       '${entry.error == null ? '' : ': ${entry.error}'}'
       '${entry.stackTrace == null || entry.stackTrace == StackTrace.empty //
-                  ? '' : '\n${entry.stackTrace}'}';
+          ? '' : '\n${entry.stackTrace}'}';
 }

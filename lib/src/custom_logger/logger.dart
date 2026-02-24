@@ -5,8 +5,8 @@ import 'levels.dart';
 
 part 'level_logger.dart';
 
-typedef CustomLogBuilder<Ent extends CustomLogEntry, Out extends Object?> =
-    Out Function(Ent entry);
+typedef CustomLogBuilder<Ent extends CustomLogEntry, Out extends Object?> = Out
+    Function(Ent entry);
 
 typedef CustomLogPrinter<Out extends Object?> = void Function(Out out);
 
@@ -30,12 +30,11 @@ typedef CustomLogPrinter<Out extends Object?> = void Function(Out out);
 /// Subclasses must implement the [registerLevels] method to configure their
 /// associated [CustomLevelLogger]s.
 abstract base class CustomLogger<
-  L extends CustomLogger<L, LL, Log, Ent, Out>,
-  LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,
-  Log extends Function,
-  Ent extends CustomLogEntry,
-  Out extends Object?
-> {
+    L extends CustomLogger<L, LL, Log, Ent, Out>,
+    LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,
+    Log extends Function,
+    Ent extends CustomLogEntry,
+    Out extends Object?> {
   static final Finalizer<CustomLogger> _finalizer = Finalizer((logger) {
     logger._subloggers.removeWhere((subLogger) => subLogger.target == null);
   });

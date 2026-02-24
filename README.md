@@ -3,6 +3,16 @@
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.
 
+## Table of contents
+
+- [Features](#features)
+- [What can this toolkit do?](#what-can-this-toolkit-do)
+- [Performance](#performance)
+- [How to make your own logger?](#how-to-make-your-own-logger)
+- [Lazy Evaluation](#lazy-evaluation)
+- [Custom Builders and Printers](#custom-builders-and-printers)
+- [Examples](#examples)
+
 ## Features
 
 - **Custom Loggers**: Build your own logger classes extending `CustomLogger`
@@ -235,7 +245,7 @@ manager.
 Here is a simplified example of how you can build a logger tailored strictly
 to your application's needs:
 
-**1. Define the log method signature**
+**1. Define the log function signature**
 
 ```dart
 import 'package:logger_builder/logger_builder.dart';
@@ -289,13 +299,15 @@ if your logging system requires it. `stackTrace` can be used independently of
 stackTrace ??= error is Error ? error.stackTrace : null;
 ```
 
-`CustomLogEntry` also has a ready-made zone field. By default, it is equal to
+`CustomLogEntry` also has a ready-made `zone` field. By default, it is equal to
 `Zone.current`, i.e., the zone in which the logger was called.
 
 **3. Define the Level Logger (handles logic for a specific log level)**
 
 ```dart
-final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+final class LevelLogger
+    extends
+        CustomLevelLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
   LevelLogger({
     required super.level,
     required super.name,
@@ -446,7 +458,9 @@ YOUR own unique logger.
 **4. Define the Main Logger (manages the different level loggers)**
 
 ```dart
-final class Logger extends CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+final class Logger
+    extends
+        CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
   Logger();
 
   @override
@@ -483,7 +497,7 @@ disabled, and to `processLog` when it is enabled!
 
 ```dart
 void main() {
-  final log = MyLogger()..level = Levels.all;
+  final log = Logger()..level = Levels.all;
 
   log.i('Hello, world!');
   log.e('Something went wrong', error: Exception('Something went wrong'));
@@ -492,7 +506,7 @@ void main() {
 
 The entire example can be viewed here: [simple_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart).
 
-### Lazy Evaluation
+## Lazy Evaluation
 
 When invoking log methods with potentially expensive payload evaluations, you
 can use closures. The log entry will lazily convert closures using
@@ -536,7 +550,7 @@ not match `String`, the `toString()` method will be called. The `null` value
 is returned as is.
 
 
-### Custom Builders and Printers
+## Custom Builders and Printers
 
 At runtime, you can swap out builders and printers for the whole logger, or
 just a specific level:
@@ -551,10 +565,31 @@ log.builder = (entry) => '${DateTime.now()} | ${entry.message}';
 log[Levels.error].printer = (text) => print('\x1B[31m$text\x1B[0m');
 ```
 
-## Additional information
+## Examples
 
-The `/example` directory contains more elaborate examples, demonstrating:
-- Simple logger ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart), [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/simple_logger.dart)).
-- Multi-parameter log methods ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/complex_logger.dart), [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/complex_logger.dart)).
-- Complex hierarchy loggers ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/hierarchical_logger.dart), [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart)).
-- Custom formatters converting log entries directly to JSON dictionaries ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/json_reporter.dart), [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/json_reporter.dart)).
+The [example/logger_builder_examples](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/) directory contains more elaborate examples, demonstrating:
+- Simple logger
+  ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart),
+  [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/simple_logger.dart)).
+- Multi-parameter log methods
+  ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/complex_logger.dart),
+  [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/complex_logger.dart)).
+- Complex hierarchy loggers
+  ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/hierarchical_logger.dart),
+  [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart)).
+- Custom formatters converting log entries directly to JSON dictionaries
+  ([logger](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/json_reporter.dart),
+  [usage](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/json_reporter.dart)).
+- Async printers:
+  - Async printer
+    ([printer](https://github.com/vi-k/logger_builder/blob/main/lib/src/async_log_printers/async_log_printer.dart),
+    [example](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_log_printers/async_log_printer.dart))
+  - Async printer with param
+    ([printer](https://github.com/vi-k/logger_builder/blob/main/lib/src/async_log_printers/async_log_printer_with_param.dart),
+    [example](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_log_printers/async_log_printer_with_param.dart))
+  - Async buffered printer
+    ([printer](https://github.com/vi-k/logger_builder/blob/main/lib/src/async_log_printers/async_buffered_log_printer.dart),
+    [example](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer.dart))
+  - Async buffered printer with param
+    ([printer](https://github.com/vi-k/logger_builder/blob/main/lib/src/async_log_printers/async_buffered_log_printer_with_param.dart),
+    [example](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer_with_param.dart))

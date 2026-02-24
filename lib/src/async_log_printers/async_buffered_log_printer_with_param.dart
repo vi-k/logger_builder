@@ -34,10 +34,8 @@ import 'async_buffered_log_printer.dart';
 /// log.printer = asyncPrinter.publisher(false);
 /// log[Levels.error].printer = asyncPrinter.publisher(true);
 /// ```
-base class AsyncBufferedLogPrinterWithParam<
-  T extends Object?,
-  P extends Object?
-> {
+base class AsyncBufferedLogPrinterWithParam<T extends Object?,
+    P extends Object?> {
   final _controller = StreamController<void>();
   List<(T, P)> _buffer = [];
 
@@ -95,10 +93,10 @@ base class AsyncBufferedLogPrinterWithParam<
   /// publisher is typically assigned to a Logger instance's printer callback
   /// or used with log-level specific printers.
   void Function(T) publisher(P param) => (message) {
-    final isEmpty = _buffer.isEmpty;
-    _buffer.add((message, param));
-    if (isEmpty) {
-      _controller.add(null);
-    }
-  };
+        final isEmpty = _buffer.isEmpty;
+        _buffer.add((message, param));
+        if (isEmpty) {
+          _controller.add(null);
+        }
+      };
 }

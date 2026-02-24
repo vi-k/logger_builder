@@ -21,11 +21,11 @@ abstract base class CustomLogEntry {
     this.error,
     StackTrace? stackTrace,
     Zone? zone,
-  }) : level = levelLogger.level,
-       levelName = levelLogger.name,
-       shortLevelName = levelLogger.shortName,
-       stackTrace = stackTrace ?? stackTraceFromError(error),
-       zone = zone ?? Zone.current;
+  })  : level = levelLogger.level,
+        levelName = levelLogger.name,
+        shortLevelName = levelLogger.shortName,
+        stackTrace = stackTrace ?? stackTraceFromError(error),
+        zone = zone ?? Zone.current;
 
   static StackTrace? stackTraceFromError(Object? error) =>
       error is Error ? error.stackTrace : null;

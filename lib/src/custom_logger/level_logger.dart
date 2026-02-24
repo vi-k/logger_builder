@@ -13,12 +13,11 @@ part of 'logger.dart';
 ///
 /// It takes the same generic type parameters as [CustomLogger].
 abstract class CustomLevelLogger<
-  L extends CustomLogger<L, LL, Log, Ent, Out>,
-  LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,
-  Log extends Function,
-  Ent extends CustomLogEntry,
-  Out extends Object?
-> {
+    L extends CustomLogger<L, LL, Log, Ent, Out>,
+    LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,
+    Log extends Function,
+    Ent extends CustomLogEntry,
+    Out extends Object?> {
   /// Numerical value of the level of this [LL] logger.
   ///
   /// Greater than 0 and less than 2000
@@ -65,12 +64,12 @@ abstract class CustomLevelLogger<
     required Log noLog,
     required CustomLogBuilder<Ent, Out> builder,
     required CustomLogPrinter<Out> printer,
-  }) : assert(name.isNotEmpty, 'name must be non-empty'),
-       shortName = shortName ?? name[0],
-       _noLog = noLog,
-       _log = noLog,
-       _builder = builder,
-       _printer = printer;
+  })  : assert(name.isNotEmpty, 'name must be non-empty'),
+        shortName = shortName ?? name[0],
+        _noLog = noLog,
+        _log = noLog,
+        _builder = builder,
+        _printer = printer;
 
   @protected
   Log get processLog;
