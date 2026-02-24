@@ -244,15 +244,14 @@ typedef LogFunction =
     bool Function(Object? message, {Object? error, StackTrace? stackTrace});
 ```
 
-В качестве возвращаемого значения вы можете выбрать `void`, но если вы хотите
-использовать логгер вместе с `assert`, то лучше выбрать `bool`. Если пока не
-решили, то точно выбирайте `bool`.
+You can choose `void` as the return value, but if you want to use the logger
+together with `assert`, it is better to choose `bool`. If you haven't decided
+yet, definitely choose `bool`.
 
-Обратите внимание на тип `message`: `Object?`. Во-первых, это сделано для того,
-чтобы можно было передавать в логер любой объект. Логер дальше сам
-сконвертирует его в строку. Во-вторых, это даёт возможность использовать
-отложенные вычисления, передавав в логер функцию, которая будет вызвана
-только в случае, если лог будет выведен.
+Pay attention to the type of `message` - `Object?`. First, this is done so that
+any object can be passed to the logger. The logger will then convert it to a
+string itself. Secondly, this makes it possible to use deferred calculations by
+passing a function to the logger that will be called only if the log is output.
 
 **2. Define the Entry Payload**
 
@@ -271,28 +270,27 @@ final class LogEntry extends CustomLogEntry {
 }
 ```
 
-Это структура, в которой будет храниться вся информация о конкретном логе,
-которую мы получим из функции `LogFunction` или вычислим самостоятельно.
+This is a structure that will store all information about a specific log, which
+will be obtained from the `LogFunction` function or calculated independently.
 
-Конструктор всегда требует передать ссылку на `levelLogger` (о нём ниже). Но
-на самом деле ссылка на `levelLogger` нужна только для того, чтобы извлечь
-из него данные об уровне: `level`, `levelName`, `levelShortName`. Сама ссылка
-не сохраняется.
+The constructor always requires a reference to `levelLogger` (more on that
+below). But in fact, the reference to `levelLogger` is only needed to extract
+the data about the level from it: `level`, `levelName`, `levelShortName`. The
+reference itself is not saved.
 
-Также в базовом классе `CustomLogEntry` есть уже готовые поля `error` и
-`stackTrace`. Они не обязательны для заполнения, но вы можете их использовать,
-если это предполагается вашей системой логирования. `stackTrace` можно
-использовать независимо от `error`. Но если вы не передаёте `stackTrace`, а
-в качестве `error` передаёте `Error` вместо `Exception`, то `stackTrace` будет
-взят автоматически из `error`, если он там есть:
+Also, the base class `CustomLogEntry` already has ready-made fields `error` and
+`stackTrace`. They are not required to be filled in, but you can use them
+if your logging system requires it. `stackTrace` can be used independently of
+`error`. But if you do not pass `stackTrace`, and pass `Error` instead of
+`Exception` as `error`, then `stackTrace` will be taken automatically from
+`error`, if it is there:
 
 ```dart
 stackTrace ??= error is Error ? error.stackTrace : null;
 ```
 
-Также в `CustomLogEntry` есть готовое поля `zone`. По умолчанию оно равно
-`Zone.current`, т.е. зоне, в которой был вызван логгер.
-
+`CustomLogEntry` also has a ready-made zone field. By default, it is equal to
+`Zone.current`, i.e., the zone in which the logger was called.
 
 **3. Define the Level Logger (handles logic for a specific log level)**
 
