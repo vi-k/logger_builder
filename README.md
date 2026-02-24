@@ -1,4 +1,4 @@
-# logger_builder
+[![Dart CI](https://github.com/vi-k/logger_builder/actions/workflows/dart.yml/badge.svg)](https://github.com/vi-k/logger_builder/actions/workflows/dart.yml)
 
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.
