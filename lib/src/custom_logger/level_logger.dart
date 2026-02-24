@@ -1,5 +1,17 @@
 part of 'logger.dart';
 
+/// An abstract base class representing a specific log level for
+/// a [CustomLogger].
+///
+/// Instances of this class handle logging operations for a particular log
+/// level. They manage the conversion of log data into [CustomLogEntry] objects
+/// using a builder, and dispatching the formatted output to a printer.
+///
+/// When the logger's level is above this level logger's configured [level],
+/// calls to the actual logic will be replaced with a no-op function to avoid
+/// unnecessary computations.
+///
+/// It takes the same generic type parameters as [CustomLogger].
 abstract class CustomLevelLogger<
   L extends CustomLogger<L, LL, Log, Ent, Out>,
   LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,

@@ -168,9 +168,9 @@ final log = Logger()..level = Levels.off;
 log.d('This will not be logged');
 ```
 
-If logging is disabled, an empty dummy function is called under the hood. No
-calculations, no checks. Just one call to an empty function, which, as a rule,
-is well optimized by the compiler.
+If logging is disabled, a no-op function is called under the hood. No
+calculations, no checks. Just one call to an empty no-op function, which, as
+a rule, is well optimized by the compiler.
 
 **Lazy evaluation of parameters**
 
@@ -343,11 +343,11 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   `shortName`. In the `CustomLogEntry` structure, this value is stored with the
   name `levelShortName`. You can use this value as you wish.
 
-- `noLog` is the very important parameter. It is an empty dummy function that
-  will be called when this log level is not enabled. Since you yourself define
-  the signature of the log function, you will have to define this dummy
-  function yourself. That is, its type must match exactly the type of the
-  `LogFunction`. Pass a global function or static method here:
+- `noLog` is the very important parameter. It is a no-op function that will be
+  called when this log level is not enabled. Since you yourself define the
+  signature of the log function, you will have to define this no-op function
+  yourself. That is, its type must match exactly the type of the `LogFunction`.
+  Pass a global function or static method here:
 
   ```dart
   noLog: _noLog,
@@ -393,7 +393,7 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   function.
 
   And of course, you can use only the `builder` function for both building and
-  printing the log, and not use the `printer` function, passing an empty dummy
+  printing the log, and not use the `printer` function, passing a no-op
   function to it.
 
 Finally, you need to create the main function `processLog`, which will be

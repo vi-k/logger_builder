@@ -10,6 +10,25 @@ typedef CustomLogBuilder<Ent extends CustomLogEntry, Out extends Object?> =
 
 typedef CustomLogPrinter<Out extends Object?> = void Function(Out out);
 
+/// An abstract base class for creating customized loggers.
+///
+/// This class serves as the core of a flexible logging system, supporting
+/// hierarchical subloggers, dynamically configurable levels, and customizable
+/// message builders and printers.
+///
+/// It uses five generic type parameters to ensure type safety across the
+/// system:
+/// - [L]: The concrete implementation class of the logger extending
+///   [CustomLogger].
+/// - [LL]: The concrete implementation class of [CustomLevelLogger] used
+///   by [L].
+/// - [Log]: The function signature used for emitting logs for specific levels.
+/// - [Ent]: The concrete type of [CustomLogEntry] consumed by the builder.
+/// - [Out]: The output type produced by the builder and consumed by the
+///   printer (e.g., typically `String` or a map for JSON).
+///
+/// Subclasses must implement the [registerLevels] method to configure their
+/// associated [CustomLevelLogger]s.
 abstract base class CustomLogger<
   L extends CustomLogger<L, LL, Log, Ent, Out>,
   LL extends CustomLevelLogger<L, LL, Log, Ent, Out>,
@@ -123,13 +142,6 @@ abstract base class CustomLogger<
     }
   }
 
-  /// Sets the log message builder for a specific level.
-  ///
-  /// ```dart
-  /// log.setBuilderForLevel(Levels.info, (entry) {
-  ///   return '${entry.levelName.toUpperCase()}: ${entry.message}';
-  /// });
-  /// ```
   void _setLevelBuilder(int level, CustomLogBuilder<Ent, Out> value) {
     _builderLinked = false;
     this[level]._builder = value;
@@ -171,11 +183,6 @@ abstract base class CustomLogger<
     }
   }
 
-  /// Sets the log printer for a specific level.
-  ///
-  /// ```dart
-  /// log.setPrinterForLevel(Levels.info, stdout.writeln);
-  /// ```
   void _setLevelPrinter(int level, CustomLogPrinter<Out> printer) {
     _printerLinked = false;
     this[level]._printer = printer;
