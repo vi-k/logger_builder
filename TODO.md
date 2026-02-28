@@ -3,7 +3,6 @@
 - Саблогеры другого типа
 - AsyncLogBuilder
 - MultiLogPrinter/MultiLogBuilder ???
-- Если я хочу спрятать builder/printer?
 
 ## README.md
 - AsyncLogPrinter

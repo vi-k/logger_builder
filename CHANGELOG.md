@@ -1,3 +1,9 @@
+## 0.2.0
+
+- [breaking changes] Rename `LazyString` to `LazyStringOrNull` and
+  `LazyNonNullableString` to `LazyString`.
+- Refactor `hierarchical_logger.dart` example to use `LazyString` for path.
+
 ## 0.1.3-0.1.4
 
 - Fix bug with builder and printer inheritance in subloggers.

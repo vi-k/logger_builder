@@ -13,8 +13,8 @@ final class LogEntry extends CustomLogEntry {
   final DateTime time;
   final int sequenceNumber;
   final String name;
-  final LazyString _lazySource;
-  final LazyString _lazyMessage;
+  final LazyStringOrNull _lazySource;
+  final LazyStringOrNull _lazyMessage;
 
   LogEntry(
     super.levelLogger, {
@@ -26,8 +26,8 @@ final class LogEntry extends CustomLogEntry {
     required Object? message,
   })  : time = DateTime.now(),
         sequenceNumber = ++_lastSequenceNumber,
-        _lazySource = LazyString(source),
-        _lazyMessage = LazyString(message);
+        _lazySource = LazyStringOrNull(source),
+        _lazyMessage = LazyStringOrNull(message);
 
   String? get source => _lazySource.value;
   String? get message => _lazyMessage.value;

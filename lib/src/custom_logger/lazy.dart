@@ -1,3 +1,12 @@
+final class _NoData {
+  const _NoData();
+
+  @override
+  String toString() => '<no data>';
+}
+
+const _noData = _NoData();
+
 /// Class for lazy evaluation of a value.
 ///
 /// Used to avoid resource consumption on value calculation, which may not be
@@ -19,12 +28,30 @@
 /// }
 /// ```
 ///
-/// See also [TypedLazy] and [LazyString].
+/// > [!IMPORTANT]
+/// > When the value is resolved, the unresolved value will be cleared. Thus,
+/// > if a closure was passed as the value, all variables it captured will be
+/// > freed.
+///
+/// See also [TypedLazy], [LazyString] and [LazyStringOrNull].
 base class Lazy {
-  final Object? unresolved;
-  late final Object? resolved = resolveToObject(unresolved);
+  Object? _unresolved;
+  Object? _resolved = _noData;
 
-  Lazy(this.unresolved);
+  Lazy(this._unresolved);
+
+  Lazy.resolved(Object? resolved)
+      : _unresolved = _noData,
+        _resolved = resolved;
+
+  Object? get resolved {
+    if (identical(_resolved, _noData)) {
+      _resolved = resolveToObject(_unresolved);
+      _unresolved = _noData;
+    }
+
+    return _resolved;
+  }
 
   static Object? resolveToObject(Object? obj) =>
       obj is Object? Function() ? obj() : obj;
@@ -36,13 +63,29 @@ base class Lazy {
 /// using the [convert] method.
 ///
 /// If the value already has type [T], the [convert] method will not be called!
+///
+/// > [!IMPORTANT]
+/// > When the value is converted, the [resolved] value will be cleared.
 abstract base class TypedLazy<T extends Object?> extends Lazy {
-  late final T value = switch (resolved) {
-    final T value => value,
-    _ => convert(resolved),
-  };
+  Object? _value = _noData;
 
   TypedLazy(super.unresolved);
+
+  TypedLazy.resolved(T super.resolved)
+      : _value = resolved,
+        super.resolved();
+
+  T get value {
+    if (identical(_value, _noData)) {
+      final resolved = this.resolved;
+      final value = resolved is T ? resolved : convert(resolved);
+      _resolved = _noData;
+      _value = value;
+      return value;
+    }
+
+    return _value as T;
+  }
 
   T convert(Object? resolved);
 }
@@ -50,22 +93,30 @@ abstract base class TypedLazy<T extends Object?> extends Lazy {
 /// Class for lazy evaluation of a string value.
 ///
 /// Same as [Lazy], but with subsequent conversion of [Object] to [String]
-/// using the [toString] method. The `null` value is returned as is.
-final class LazyString extends TypedLazy<String?> {
-  LazyString(super.unresolved);
-
-  @override
-  String? convert(Object? resolved) => resolved?.toString();
-}
-
-/// Class for lazy evaluation of a non-nullable string value.
-///
-/// Same as [LazyString], but the `null` value is returned as a fallback value.
-final class LazyNonNullableString extends TypedLazy<String> {
+/// using the [toString] method. The `null` value is returned as
+/// a [fallbackValue].
+final class LazyString extends TypedLazy<String> {
   final String fallbackValue;
 
-  LazyNonNullableString(super.unresolved, this.fallbackValue);
+  LazyString(super.unresolved, [this.fallbackValue = 'null']);
+
+  LazyString.resolved(super.resolved)
+      : fallbackValue = '',
+        super.resolved();
 
   @override
   String convert(Object? resolved) => resolved?.toString() ?? fallbackValue;
+}
+
+/// Class for lazy evaluation of a string value or null.
+///
+/// Same as [Lazy], but with subsequent conversion of [Object] to [String]
+/// using the [toString] method. The `null` value is returned as is.
+final class LazyStringOrNull extends TypedLazy<String?> {
+  LazyStringOrNull(super.unresolved);
+
+  LazyStringOrNull.resolved(super.resolved) : super.resolved();
+
+  @override
+  String? convert(Object? resolved) => resolved?.toString();
 }

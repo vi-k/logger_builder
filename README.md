@@ -278,10 +278,10 @@ final class LogEntry extends CustomLogEntry {
     super.levelLogger, {
     super.error,
     super.stackTrace,
-    required Object? message,
-  }) : _lazyMessage = LazyString(message);
+    required Object message,
+  }) : _lazyMessage = LazyString(message, 'no message');
 
-  String? get message => _lazyMessage.value;
+  String get message => _lazyMessage.value;
 }
 ```
 
@@ -538,11 +538,13 @@ print(lazy.unresolved); // access to the original "unresolved" value
 `Lazy` returns `Object?`. For a typed value, extend the `TypedLazy` class:
 
 ```dart
-class MyLazyString extends TypedLazy<String> {
-  MyLazyString(super.unresolved);
+final class LazyString extends TypedLazy<String> {
+  final String fallbackValue;
+
+  LazyString(super.unresolved, [this.fallbackValue = 'null']);
 
   @override
-  String convert(Object? resolved) => resolved?.toString() ?? '(no data)';
+  String convert(Object? resolved) => resolved?.toString() ?? fallbackValue;
 }
 ```
 
@@ -550,9 +552,9 @@ The `convert` function will only be called for values whose type does not match
 the specified one. Therefore, if you expect a specific type and conversion from
 other types is impossible, throw an exception or return a fallback value.
 
-For `String?` use the ready-made `LazyString` class. If the value type does
-not match `String`, the `toString()` method will be called. The `null` value
-is returned as is.
+For `String` use the ready-to-use `LazyString` or `LazyStringOrNull` classes.
+If the value type does not match `String`, the `toString()` method will be
+called.
 
 
 ## Custom Builders and Printers

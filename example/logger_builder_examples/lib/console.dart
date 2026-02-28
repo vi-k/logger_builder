@@ -7,28 +7,28 @@ import 'package:ansi_escape_codes/extensions.dart';
 final _titlePrinter = ansi.AnsiPrinter(
   ansiCodesEnabled: !Platform.isIOS,
   defaultState: const ansi.SgrPlainState(
-    foreground: ansi.Color256(ansi.Colors.rgb530),
+    foreground: ansi.Color256.rgb530,
   ),
 );
 
 final _subtitlePrinter = ansi.AnsiPrinter(
   ansiCodesEnabled: !Platform.isIOS,
   defaultState: const ansi.SgrPlainState(
-    foreground: ansi.Color256(ansi.Colors.rgb432),
+    foreground: ansi.Color256.rgb432,
   ),
 );
 
 final _linePrinter = ansi.AnsiPrinter(
   ansiCodesEnabled: !Platform.isIOS,
   defaultState: const ansi.SgrPlainState(
-    foreground: ansi.Color256(ansi.Colors.gray16),
+    foreground: ansi.Color256.gray16,
   ),
 );
 
 final _descriptionPrinter = ansi.AnsiPrinter(
   ansiCodesEnabled: !Platform.isIOS,
   defaultState: const ansi.SgrPlainState(
-    foreground: ansi.Color256(ansi.Colors.gray10),
+    foreground: ansi.Color256.gray10,
   ),
 );
 

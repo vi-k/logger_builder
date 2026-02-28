@@ -1,71 +1,73 @@
-import 'dart:collection';
-
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFunction =
-    bool Function(Object? message, {Object? error, StackTrace? stackTrace});
+typedef LogFunction = bool Function(
+  Object? message, {
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 final class LogEntry extends CustomLogEntry {
   final DateTime timestamp;
-  final List<String> path;
-  final LazyString _lazyMessage;
+  final LazyString _lazyPath;
+  final LazyStringOrNull _lazyMessage;
 
   LogEntry(
     super.levelLogger, {
     super.error,
     super.stackTrace,
-    required this.path,
+    required LazyString path,
     required Object? message,
-  }) : timestamp = DateTime.now(),
-       _lazyMessage = LazyString(message);
+  })  : timestamp = DateTime.now(),
+        _lazyPath = path,
+        _lazyMessage = LazyStringOrNull(message);
 
-  String get name => path.last;
-
+  String get path => _lazyPath.value;
   String? get message => _lazyMessage.value;
 }
 
-final class LevelLogger
-    extends
-        CustomLevelLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
-  LevelLogger({required super.level, required super.name})
-    : super(
-        noLog: (_, {error, stackTrace}) => true,
-        builder: Logger.defaultBuilder,
-        printer: print,
-      );
+final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger,
+    LogFunction, LogEntry, String> {
+  LevelLogger({required super.level, required super.name, super.shortName})
+      : super(
+          noLog: (_, {error, stackTrace}) => true,
+          builder: Logger.defaultBuilder,
+          printer: print,
+        );
 
   @override
   LogFunction get processLog => (message, {error, stackTrace}) {
-    final entry = LogEntry(
-      this,
-      error: error,
-      stackTrace: stackTrace,
-      path: logger.path,
-      message: message,
-    );
+        final entry = LogEntry(
+          this,
+          error: error,
+          stackTrace: stackTrace,
+          path: logger._lazyPath,
+          message: message,
+        );
 
-    printer(builder(entry));
+        printer(builder(entry));
 
-    return true;
-  };
+        return true;
+      };
 }
 
 final class Logger
     extends CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
-  final List<String> path;
+  final LazyString _lazyPath;
+  final String pathSeparator;
 
-  Logger(String name) : path = UnmodifiableListView(List.filled(1, name));
+  Logger(Object name, {this.pathSeparator = ' | '})
+      : _lazyPath = LazyString(name, '?');
 
-  Logger._(super.parent, String name)
-    : path = UnmodifiableListView(
-        List.generate(growable: false, parent.path.length + 1, (index) {
-          if (index == parent.path.length) return name;
-          return parent.path[index];
-        }),
-      ),
-      super.sub();
+  Logger._(super.parent, Object name)
+      : _lazyPath = LazyString(
+          () => '${parent.path}'
+              '${parent.pathSeparator}'
+              '${LazyString(name, '?').value}',
+        ),
+        pathSeparator = parent.pathSeparator,
+        super.sub();
 
-  String get name => path.last;
+  String get path => _lazyPath.value;
 
   Logger withAddedName(String name) => Logger._(this, name);
 
@@ -85,5 +87,5 @@ final class Logger
   }
 
   static String defaultBuilder(LogEntry entry) =>
-      '[${entry.shortLevelName}] ${entry.path.join(' | ')} | ${entry.message}';
+      '[${entry.shortLevelName}] ${entry.path} | ${entry.message}';
 }

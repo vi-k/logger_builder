@@ -11,13 +11,12 @@ final class JsonReportNoData {
 
 const _noData = JsonReportNoData._();
 
-typedef JsonReport =
-    bool Function(
-      String event, {
-      Object? data,
-      Object? error,
-      StackTrace? stackTrace,
-    });
+typedef JsonReport = bool Function(
+  String event, {
+  Object? data,
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 final class JsonReportEntry extends CustomLogEntry {
   final DateTime timestamp;
@@ -30,56 +29,42 @@ final class JsonReportEntry extends CustomLogEntry {
     super.stackTrace,
     required this.event,
     required Object? data,
-  }) : timestamp = DateTime.now(),
-       _lazyData = Lazy(data);
+  })  : timestamp = DateTime.now(),
+        _lazyData = Lazy(data);
 
   Object? get data => _lazyData.resolved;
 }
 
-final class JsonLevelReporter
-    extends
-        CustomLevelLogger<
-          JsonReporter,
-          JsonLevelReporter,
-          JsonReport,
-          JsonReportEntry,
-          Map<String, Object?>
-        > {
+final class JsonLevelReporter extends CustomLevelLogger<JsonReporter,
+    JsonLevelReporter, JsonReport, JsonReportEntry, Map<String, Object?>> {
   JsonLevelReporter({
     required super.level,
     required super.name,
     super.shortName,
   }) : super(
-         noLog: (_, {data = _noData, error, stackTrace}) => true,
-         builder: JsonReporter.defaultBuilder,
-         printer: JsonReporter.defaultPrinter,
-       );
+          noLog: (_, {data = _noData, error, stackTrace}) => true,
+          builder: JsonReporter.defaultBuilder,
+          printer: JsonReporter.defaultPrinter,
+        );
 
   @override
   JsonReport get processLog => (event, {data = _noData, error, stackTrace}) {
-    final entry = JsonReportEntry(
-      this,
-      error: error,
-      stackTrace: stackTrace,
-      event: event,
-      data: data,
-    );
+        final entry = JsonReportEntry(
+          this,
+          error: error,
+          stackTrace: stackTrace,
+          event: event,
+          data: data,
+        );
 
-    printer(builder(entry));
+        printer(builder(entry));
 
-    return true;
-  };
+        return true;
+      };
 }
 
-final class JsonReporter
-    extends
-        CustomLogger<
-          JsonReporter,
-          JsonLevelReporter,
-          JsonReport,
-          JsonReportEntry,
-          Map<String, Object?>
-        > {
+final class JsonReporter extends CustomLogger<JsonReporter, JsonLevelReporter,
+    JsonReport, JsonReportEntry, Map<String, Object?>> {
   JsonReporter();
 
   final JsonLevelReporter _d = JsonLevelReporter(
@@ -120,16 +105,16 @@ final class JsonReporter
   }
 
   static String jsonToString(Map<String, Object?> json) => jsonEncode(
-    json,
-    toEncodable: (nonEncodable) {
-      try {
-        return (nonEncodable as dynamic).toJson();
-        // ignore: avoid_catching_errors
-      } on NoSuchMethodError {
-        return nonEncodable.toString();
-      }
-    },
-  );
+        json,
+        toEncodable: (nonEncodable) {
+          try {
+            return (nonEncodable as dynamic).toJson();
+            // ignore: avoid_catching_errors
+          } on NoSuchMethodError {
+            return nonEncodable.toString();
+          }
+        },
+      );
 
   static void defaultPrinter(Map<String, Object?> json) {
     print(jsonToString(json));
