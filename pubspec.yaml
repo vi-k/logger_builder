@@ -1,6 +1,6 @@
 name: logger_builder
 description: A toolkit for creating your own customizable and hierarchical loggers in Dart.
-version: 0.1.4
+version: 0.2.0
 repository: https://github.com/vi-k/logger_builder
 
 topics:
