@@ -4,30 +4,30 @@ import 'dart:math' as math;
 import 'package:ansi_escape_codes/ansi_escape_codes.dart' as ansi;
 import 'package:ansi_escape_codes/extensions.dart';
 
-final _titlePrinter = ansi.AnsiPrinter(
+final _titlePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultState: const ansi.SgrPlainState(
+  defaultStyle: const ansi.Style(
     foreground: ansi.Color256.rgb530,
   ),
 );
 
-final _subtitlePrinter = ansi.AnsiPrinter(
+final _subtitlePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultState: const ansi.SgrPlainState(
+  defaultStyle: const ansi.Style(
     foreground: ansi.Color256.rgb432,
   ),
 );
 
-final _linePrinter = ansi.AnsiPrinter(
+final _linePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultState: const ansi.SgrPlainState(
+  defaultStyle: const ansi.Style(
     foreground: ansi.Color256.gray16,
   ),
 );
 
-final _descriptionPrinter = ansi.AnsiPrinter(
+final _descriptionPrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultState: const ansi.SgrPlainState(
+  defaultStyle: const ansi.Style(
     foreground: ansi.Color256.gray10,
   ),
 );
@@ -54,7 +54,8 @@ void description(String text) {
 
 void box(String text) {
   final lines = text.split('\n');
-  final widths = lines.map((line) => line.removeEscapeCodes().length).toList();
+  final widths =
+      lines.map((line) => line.ansiRemoveEscapeCodes().length).toList();
   final maxWidth = widths.reduce(math.max);
   _descriptionPrinter.print('┌─${'─' * maxWidth}─┐');
   for (final (index, line) in lines.indexed) {

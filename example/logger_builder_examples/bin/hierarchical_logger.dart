@@ -102,7 +102,7 @@ Future<void> main() async {
   box(
     'After installing its own builder on the'
     '\nsublogger, builder unlinks from the parent.'
-    '\n${bold}This cannot be restored.$resetBoldAndFaint',
+    '\n${bold}This cannot be restored.$resetBoldAndDim',
   );
   log2.builder = alternativeBuilder;
 
@@ -151,7 +151,7 @@ Future<void> main() async {
   box(
     'After installing its own printer on the'
     '\nsublogger, printer unlinks from the parent.'
-    '\n${bold}This cannot be restored.$resetBoldAndFaint',
+    '\n${bold}This cannot be restored.$resetBoldAndDim',
   );
 
   log3.printer = (_) {};

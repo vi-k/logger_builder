@@ -1,7 +1,10 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFunction = bool Function(Object? message,
-    {Object? error, StackTrace? stackTrace});
+typedef LogFunction = bool Function(
+  Object? message, {
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 final class LogEntry extends CustomLogEntry {
   final LazyStringOrNull _lazyMessage;
