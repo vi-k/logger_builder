@@ -56,13 +56,13 @@ final class Logger
   final String pathSeparator;
 
   Logger(Object name, {this.pathSeparator = ' | '})
-      : _lazyPath = LazyString(name, '?');
+      : _lazyPath = LazyString(name);
 
   Logger._(super.parent, Object name)
       : _lazyPath = LazyString(
           () => '${parent.path}'
               '${parent.pathSeparator}'
-              '${LazyString(name, '?').value}',
+              '${LazyString(name).value}',
         ),
         pathSeparator = parent.pathSeparator,
         super.sub();

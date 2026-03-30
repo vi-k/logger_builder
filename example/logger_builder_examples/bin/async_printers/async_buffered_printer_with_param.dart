@@ -5,12 +5,12 @@ import 'package:logger_builder_examples/simple_logger.dart';
 /// Usage:
 ///
 /// ```bash
-/// dart compile exe example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer_with_param.dart && ./example/logger_builder_examples/bin/async_log_printers/async_buffered_log_printer_with_param.exe
+/// dart compile exe example/logger_builder_examples/bin/async_printers/async_buffered_printer_with_param.dart && ./example/logger_builder_examples/bin/async_printers/async_buffered_printer_with_param.exe
 /// ```
 Future<void> main() async {
   final log = Logger()..level = Levels.all;
 
-  final asyncPrinter = AsyncBufferedLogPrinterWithParam<String, bool>((
+  final asyncPrinter = AsyncBufferWithParam<String, bool>((
     entries,
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));

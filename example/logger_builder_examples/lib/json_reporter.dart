@@ -42,7 +42,7 @@ final class JsonLevelReporter extends CustomLevelLogger<JsonReporter,
     required super.name,
     super.shortName,
   }) : super(
-          noLog: (_, {data = _noData, error, stackTrace}) => true,
+          noLog: (_, {data, error, stackTrace}) => true,
           builder: JsonReporter.defaultBuilder,
           printer: JsonReporter.defaultPrinter,
         );

@@ -76,8 +76,13 @@ abstract base class CustomLogger<
   @visibleForTesting
   int get subLoggersCount => _subloggers.length;
 
+  @visibleForTesting
   bool get levelLinked => _levelLinked;
+
+  @visibleForTesting
   bool get builderLinked => _builderLinked;
+
+  @visibleForTesting
   bool get printerLinked => _printerLinked;
 
   LL operator [](int level) =>

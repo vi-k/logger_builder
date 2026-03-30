@@ -8,16 +8,6 @@
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.
 
-## Table of contents
-
-- [Features](#features)
-- [What can this toolkit do?](#what-can-this-toolkit-do)
-- [Performance](#performance)
-- [How to make your own logger?](#how-to-make-your-own-logger)
-- [Lazy Evaluation](#lazy-evaluation)
-- [Custom Builders and Printers](#custom-builders-and-printers)
-- [Examples](#examples)
-
 ## Features
 
 - **Custom Loggers**: Build your own logger classes extending `CustomLogger`
@@ -34,6 +24,17 @@ with good performance when disabled.
 - **Flexible Formatting & Output**: Loggers decouple the **builder** (which
   formats the entry into a string or other object) and the **printer** (which
   decides what to do with the formatted object, like printing to the console).
+
+
+## Table of contents
+
+- [What can this toolkit do?](#what-can-this-toolkit-do)
+- [Performance](#performance)
+- [How to make your own logger?](#how-to-make-your-own-logger)
+- [Lazy Evaluation](#lazy-evaluation)
+- [Custom Builders and Printers](#custom-builders-and-printers)
+- [Async Builders and Printers](#async-builders-and-printers)
+- [Examples](#examples)
 
 ## What can this toolkit do?
 
@@ -136,14 +137,14 @@ YOUR logs become an integral part of the USER's logs in the form in which they
 want to see them.
 
 ```dart
-final log = Logger('your_package');
+final log = Logger('package');
 // Your logs:
-log.i('your_feature', 'Info message');
-// [i] your_package | your_feature | Info message
+log.i('feature', 'Info message');
+// [i] package | feature | Info message
 
-// User logs after configuration:
+// User logs after configuration as an example:
 log.builder = ...;
-// 2026-02-23 19:19:09.123 [INFO] your_package/your_feature/ Info message
+// 2026-02-23 19:19:09.123 [INFO] package/feature/ Info message
 ```
 
 **Customizable output**
@@ -241,6 +242,7 @@ constant, the logging code will be removed by the compiler. This is not just
 
 Benchmarks can be seen here: [benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart).
 
+
 ## How to make your own logger?
 
 Building a basic custom logger involves defining your log function signature,
@@ -263,10 +265,11 @@ You can choose `void` as the return value, but if you want to use the logger
 together with `assert`, it is better to choose `bool`. If you haven't decided
 yet, definitely choose `bool`.
 
-Pay attention to the type of `message` - `Object?`. First, this is done so that
-any object can be passed to the logger. The logger will then convert it to a
-string itself. Secondly, this makes it possible to use deferred calculations by
-passing a function to the logger that will be called only if the log is output.
+Pay attention to the type of `message` is `Object?`. First, this is done so
+that any object can be passed to the logger. The logger will then convert it to
+a string itself. Secondly, this makes it possible to use deferred calculations
+by passing a function to the logger that will be called only if the log is
+output.
 
 **2. Define the Entry Payload**
 
@@ -279,7 +282,7 @@ final class LogEntry extends CustomLogEntry {
     super.error,
     super.stackTrace,
     required Object message,
-  }) : _lazyMessage = LazyString(message, 'no message');
+  }) : _lazyMessage = LazyString(message);
 
   String get message => _lazyMessage.value;
 }
@@ -360,11 +363,11 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   `shortName`. In the `CustomLogEntry` structure, this value is stored with the
   name `levelShortName`. You can use this value as you wish.
 
-- `noLog` is the very important parameter. It is a no-op function that will be
-  called when this log level is not enabled. Since you yourself define the
-  signature of the log function, you will have to define this no-op function
-  yourself. That is, its type must match exactly the type of the `LogFunction`.
-  Pass a global function or static method here:
+- `noLog` is a no-op function that will be called when this log level is not
+  enabled. Since you yourself define the signature of the log function, you
+  will have to define this no-op function yourself. That is, its type must
+  match exactly the type of the `LogFunction`. Pass a global function or static
+  method here:
 
   ```dart
   noLog: _noLog,
@@ -470,6 +473,7 @@ final class Logger
 
   @override
   void registerLevels() {
+    registerLevel(_debug);
     registerLevel(_info);
     registerLevel(_error);
   }
@@ -511,6 +515,7 @@ void main() {
 
 The entire example can be viewed here: [simple_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart).
 
+
 ## Lazy Evaluation
 
 When invoking log methods with potentially expensive payload evaluations, you
@@ -532,7 +537,6 @@ The main class for lazy computations is `Lazy`:
 final lazy = Lazy(() => expensiveComputation());
 print(lazy.resolved); // expensiveComputation() will be called only here
 print(lazy.resolved); // expensiveComputation() will not be called again
-print(lazy.unresolved); // access to the original "unresolved" value
 ```
 
 `Lazy` returns `Object?`. For a typed value, extend the `TypedLazy` class:
@@ -571,6 +575,151 @@ log.builder = (entry) => '${DateTime.now()} | ${entry.message}';
 // Change the printer for errors only (e.g. print in red using ansi codes)
 log[Levels.error].printer = (text) => print('\x1B[31m$text\x1B[0m');
 ```
+
+
+## Async Builders and Printers
+
+`CustomLogger` does not natively support asynchronous log processing. You can,
+of course, specify an asynchronous function as a builder or printer:
+
+```dart
+log.printer = (message) async {
+  await ...
+};
+```
+
+But the logs will be output in parallel without waiting for each other. In
+some cases, this might be exactly what you need. But if the order of log
+processing is important to you (for example, when writing to a file), then
+this is not the right option for you.
+
+Therefore, for asynchronous processing of logs, `log.builder` and `log.printer`
+can only be used as message registrars, but the sequential processing of logs
+should be handled by someone else.
+
+`logger_builder` already has a set of ready-made asynchronous handlers. You can
+use them both as a builder and as a printer.
+
+
+### `AsyncHandler`
+
+`AsyncHandler` is a simple version of an asynchronous handler.
+
+```dart
+Future<void> main() async {
+  final asyncPrinter = AsyncHandler<String>((message) async {
+    await ...;
+  });
+  final log = Logger()
+    ..level = Levels.all
+    ..printer = asyncPrinter.publish;
+
+  log.d('Debug message');
+  log.i('Info message');
+  log.e('Error message');
+}
+```
+
+See an example:
+[printer_based_on_async_handler.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_printers/printer_based_on_async_handler.dart).
+
+### `AsyncHandlerBase`
+
+`AsyncHandlerBase` allows you to create your own handler class.
+
+```dart
+final class MyAsyncPrinter extends AsyncHandlerBase<String> {
+  @override
+  FutureOr<void> handle(String message) async {
+    await ...;
+  }
+}
+
+Future<void> main() async {
+  final asyncPrinter = MyAsyncPrinter();
+  final log = Logger()
+    ..level = Levels.all
+    ..printer = asyncPrinter.publish;
+
+  log.d('Debug message');
+  log.i('Info message');
+  log.e('Error message');
+}
+```
+
+See also an example:
+[printer_based_on_async_handler.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_printers/printer_based_on_async_handler.dart).
+
+> [!NOTE]
+> All versions of handlers have a `Base` version.
+
+### `AsyncHandlerWithParam`
+
+`AsyncHandlerWithParam` allows you to add an additional parameter to the
+handler.
+
+```dart
+Future<void> main() async {
+  final asyncPrinter =
+      AsyncHandlerWithParam<String, bool>((message, isError) async {
+    if (isError) {
+      await ...;
+    } else {
+      await ...;
+    }
+  });
+  final log = Logger()
+    ..level = Levels.all
+    ..printer = asyncPrinter.publishWithParam(false)
+    ..[Levels.error].printer = asyncPrinter.publishWithParam(true);
+
+  log.d('Debug message');
+  log.i('Info message');
+  log.e('Error message');
+}
+```
+
+See also an example:
+[printer_based_on_async_handler_with_param.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_printers/printer_based_on_async_handler_with_param.dart).
+
+### `AsyncBuffer`
+
+```dart
+Future<void> main() async {
+  final asyncPrinter = AsyncBuffer<String>((messages) async {
+    await ...;
+    return []; // All messages have been processed
+  });
+
+  final log = Logger()
+    ..level = Levels.all
+    ..printer = asyncPrinter.publish;
+
+  log.d('1 Debug message');
+  log.i('1 Info message');
+  log.e('1 Error message');
+
+  await null; // 3 messages handled
+
+  log.d('2 Debug message');
+  log.i('2 Info message');
+  log.e('2 Error message');
+
+  log.d('3 Debug message');
+  log.i('3 Info message');
+  log.e('3 Error message');
+
+  await null; // 6 messages handled
+}
+```
+
+See also an example:
+[printer_based_on_async_buffer.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_printers/printer_based_on_async_buffer.dart).
+
+And see also `AsyncBufferWithParam`.
+
+- `AsyncBufferWithParam`
+- `MultiPublisher`
 
 ## Examples
 

@@ -1,6 +1,10 @@
 ## 0.2.1
 
 * Upgrade ansi_escape_codes to 3.0.2.
+* Refactor `AsyncLogPrinter` to `AsyncHandler`. `AsyncHandler` can be used both
+  as a printer and as a builder. Rename `AsyncLogPrinterWithParam` to
+  `AsyncHandlerWithParam`, `AsyncBufferedLogPrinter` to `AsyncBuffer`,
+  `AsyncBufferedLogPrinterWithParam` to `AsyncBufferWithParam`.
 
 ## 0.2.0
 

@@ -2,7 +2,6 @@
 
 - Саблогеры другого типа
 - AsyncLogBuilder
-- MultiLogPrinter/MultiLogBuilder ???
 
 ## README.md
 - AsyncLogPrinter
