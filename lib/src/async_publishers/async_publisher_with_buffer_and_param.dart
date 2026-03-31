@@ -11,6 +11,26 @@ import 'async_publisher_with_param.dart';
 ///
 /// This bridges the batched workflow of buffer-based publishers with the
 /// contextual routing of parameter-based publishers.
+///
+/// Example usage:
+///
+/// ```dart
+/// final class MetricsPublisher extends AsyncPublisherWithBufferAndParamBase<String, Log> {
+///   @override
+///   Future<void> handle(
+///     List<(String, Log)> entries,
+///     List<(String, Log)> retryBuffer,
+///   ) async {
+///     try {
+///       await metricsClient.sendBatch(entries); // entries are a list of (String source, Log log)
+///     } catch (e) {
+///       retryBuffer.addAll(entries); // Queue failed logs back for next flush
+///     }
+///   }
+/// }
+///
+/// log.publisher = asyncPublisher.withParam(source);
+/// ```
 abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
     Log extends CustomLog> implements HasFlush {
   final bool sync;
@@ -96,6 +116,20 @@ final class _AsyncParamPublisher<Param extends Object?, Log extends CustomLog>
 /// Combines the capabilities of [AsyncPublisherWithBuffer] and
 /// [AsyncPublisherWithParam], processing batches of logs where each log event
 /// is paired with an auxiliary parameter for context.
+///
+/// Example usage:
+///
+/// ```dart
+/// final asyncPublisher = AsyncPublisherWithBufferAndParam<String, Log>((entries, retryBuffer) async {
+///   try {
+///     await db.insertBatch(entries); // entries are a list of (String collectionName, Log log)
+///   } catch (e) {
+///     retryBuffer.addAll(entries); // Retry them next time
+///   }
+/// });
+///
+/// log.publisher = asyncPublisher.withParam(collectionName);
+/// ```
 final class AsyncPublisherWithBufferAndParam<Param extends Object?,
         Log extends CustomLog>
     extends AsyncPublisherWithBufferAndParamBase<Param, Log> {
@@ -119,6 +153,24 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
 ///
 /// Supports returning unhandled parameter-log pairs during formatting, which
 /// will be placed back at the front of the queue for the next batch attempt.
+///
+/// Example usage:
+///
+/// ```dart
+/// final asyncFormatter = AsyncFormatterWithBufferAndParam<String, Log, Map<String, Object?>>(
+///   format: (entries, retryBuffer) async {
+///     // Format a batch of parameter-log tuples into a payload map
+///     return {'logs': entries.map((e) => {'ctx': e.$1, 'msg': e.$2.message}).toList()};
+///   },
+///   output: (out, entries, retryBuffer) async {
+///     try {
+///       await apiClient.postLogs(out);
+///     } catch (e) {
+///       retryBuffer.addAll(entries); // On failure, put logs back into the retry queue
+///     }
+///   },
+/// );
+/// ```
 final class AsyncFormatterWithBufferAndParam<Param extends Object?,
         Log extends CustomLog, Out extends Object?>
     extends AsyncPublisherWithBufferAndParamBase<Param, Log> {
