@@ -37,10 +37,10 @@ final class LevelLogger
         publisher.publish(
           Log(
             this,
-            error: error,
-            stackTrace: stackTrace,
             path: logger._lazyPath,
             message: message,
+            error: error,
+            stackTrace: stackTrace,
           ),
         );
 
