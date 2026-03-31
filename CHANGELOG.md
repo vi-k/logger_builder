@@ -1,4 +1,4 @@
-## 0.3.0
+## 0.3.0-0.3.1
 
 * [breaking changes] Refactor a builder and a printer to one publisher.
 * Upgrade ansi_escape_codes to 3.0.2 for examples.
