@@ -680,7 +680,7 @@ Future<void> main() async {
 ```
 
 See an example:
-[async_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_publishers/async_publisher.dart).
+[async_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/async_publisher.dart).
 
 ### `AsyncPublisherBase`
 
@@ -709,7 +709,7 @@ Future<void> main() async {
 ```
 
 See also an example:
-[async_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_publishers/async_publisher.dart).
+[async_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/async_publisher.dart).
 
 > [!NOTE]
 > All versions of handlers have a `Base` version.
@@ -740,7 +740,7 @@ Future<void> main() async {
 ```
 
 See also an example:
-[async_publisher_with_param.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_publishers/async_publisher_with_param.dart).
+[async_publisher_with_param.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/async_publisher_with_param.dart).
 
 ### `AsyncPublisherWithBuffer`
 
@@ -779,7 +779,7 @@ Future<void> main() async {
 ```
 
 See also an example:
-[async_publisher_with_buffer.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/async_publishers/async_publisher_with_buffer.dart).
+[async_publisher_with_buffer.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer.dart).
 
 And see also `AsyncPublisherWithBufferAndParam`.
 
@@ -806,7 +806,7 @@ await multiPublisher.flush();
 ```
 
 See also an example:
-[multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/multi_publisher.dart).
+[multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
 
 
 ## Examples
