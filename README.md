@@ -311,7 +311,7 @@ final class Log extends CustomLog {
 ```
 
 This is a structure that will store all information about a specific log, which
-will be obtained from the `LogFunction` function or calculated independently.
+will be obtained from the `LogFn` function or calculated independently.
 
 The constructor always requires a reference to `levelLogger` (more on that
 below). But in fact, the reference to `levelLogger` is only needed to extract
@@ -518,9 +518,9 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   final _info = LevelLogger(level: Levels.info, name: 'info');
   final _error = LevelLogger(level: Levels.error, name: 'error');
 
-  LogFunction get debug => _debug.log;
-  LogFunction get info => _info.log;
-  LogFunction get error => _error.log;
+  LogFn get debug => _debug.log;
+  LogFn get info => _info.log;
+  LogFn get error => _error.log;
 }
 ```
 
