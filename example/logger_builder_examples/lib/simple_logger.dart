@@ -1,50 +1,48 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFunction = bool Function(
+typedef LogFn = bool Function(
   Object? message, {
   Object? error,
   StackTrace? stackTrace,
 });
 
-final class LogEntry extends CustomLogEntry {
-  final LazyStringOrNull _lazyMessage;
+final class Log extends CustomLog {
+  final LazyString _lazyMessage;
 
-  LogEntry(
+  Log(
     super.levelLogger, {
+    required Object? message,
     super.error,
     super.stackTrace,
-    required Object? message,
-  }) : _lazyMessage = LazyStringOrNull(message);
+    super.zone,
+  }) : _lazyMessage = LazyString(message);
 
-  String? get message => _lazyMessage.value;
+  String get message => _lazyMessage.value;
 }
 
-final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger,
-    LogFunction, LogEntry, String> {
+final class LevelLogger
+    extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log> {
   LevelLogger({required super.level, required super.name, super.shortName})
       : super(
           noLog: (_, {error, stackTrace}) => true,
-          builder: Logger.defaultBuilder,
-          printer: print,
         );
 
   @override
-  LogFunction get processLog => (message, {error, stackTrace}) {
-        final entry = LogEntry(
-          this,
-          error: error,
-          stackTrace: stackTrace,
-          message: message,
+  LogFn get processLog => (message, {error, stackTrace}) {
+        publisher.publish(
+          Log(
+            this,
+            message: message,
+            error: error,
+            stackTrace: stackTrace,
+          ),
         );
-
-        printer(builder(entry));
 
         return true;
       };
 }
 
-final class Logger
-    extends CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   Logger();
 
   @override
@@ -58,10 +56,7 @@ final class Logger
   final LevelLogger _i = LevelLogger(level: Levels.info, name: 'info');
   final LevelLogger _e = LevelLogger(level: Levels.error, name: 'error');
 
-  LogFunction get d => _d.log;
-  LogFunction get i => _i.log;
-  LogFunction get e => _e.log;
-
-  static String defaultBuilder(LogEntry entry) =>
-      '[${entry.shortLevelName}] ${entry.message}';
+  LogFn get d => _d.log;
+  LogFn get i => _i.log;
+  LogFn get e => _e.log;
 }

@@ -3,13 +3,28 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/console.dart';
 import 'package:logger_builder_examples/simple_logger.dart';
 
+final class DefaultLogPublisher implements CustomLogPublisher<Log> {
+  const DefaultLogPublisher();
+
+  static String format(Log log) => '[${log.shortLevelName}] ${log.message}';
+
+  static void output(String out) => print(out);
+
+  @override
+  void publish(Log log) {
+    output(format(log));
+  }
+}
+
 /// Usage:
 ///
 /// ```bash
 /// dart compile exe example/logger_builder_examples/bin/simple_logger.dart && ./example/logger_builder_examples/bin/simple_logger.exe
 /// ```
 Future<void> main() async {
-  final log = Logger()..level = Levels.all;
+  final log = Logger()
+    ..level = Levels.all
+    ..publisher = const DefaultLogPublisher();
 
   title('Default usage:');
   log.d('Debug message');
@@ -34,18 +49,23 @@ Future<void> main() async {
   log[Levels.info].log('Info message');
   log[Levels.error].log('Error message');
 
-  title('Custom builder:');
-  log.builder =
-      (entry) => '[${entry.levelName.toUpperCase()}] ${entry.message}';
+  title('Custom formatter:');
+  log.publisher = CustomLogFormatter(
+    format: (log) => '[${log.levelName.toUpperCase()}] ${log.message}',
+    output: DefaultLogPublisher.output,
+  );
   log[Levels.debug].log('Debug message');
   log[Levels.info].log('Info message');
   log[Levels.error].log('Error message');
-  log.builder = Logger.defaultBuilder;
+  log.publisher = const DefaultLogPublisher();
 
-  title('Custom printer:');
-  log[Levels.error].printer = (text) => print('$fgRed$text$reset');
+  title('Custom level printer:');
+  log[Levels.error].publisher = CustomLogFormatter(
+    format: DefaultLogPublisher.format,
+    output: (str) => DefaultLogPublisher.output('$fgRed$str$reset'),
+  );
   log[Levels.debug].log('Debug message');
   log[Levels.info].log('Info message');
   log[Levels.error].log('Error message');
-  log.printer = print;
+  log.publisher = const DefaultLogPublisher();
 }

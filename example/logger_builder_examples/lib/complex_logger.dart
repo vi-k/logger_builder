@@ -1,13 +1,13 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFunction = bool Function(
+typedef LogFn = bool Function(
   Object? source,
   Object? message, {
   Object? error,
   StackTrace? stackTrace,
 });
 
-final class LogEntry extends CustomLogEntry {
+final class Log extends CustomLog {
   static int _lastSequenceNumber = 0;
 
   final DateTime time;
@@ -16,7 +16,7 @@ final class LogEntry extends CustomLogEntry {
   final LazyStringOrNull _lazySource;
   final LazyStringOrNull _lazyMessage;
 
-  LogEntry(
+  Log(
     super.levelLogger, {
     super.error,
     super.stackTrace,
@@ -33,34 +33,31 @@ final class LogEntry extends CustomLogEntry {
   String? get message => _lazyMessage.value;
 }
 
-final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger,
-    LogFunction, LogEntry, String> {
+final class LevelLogger
+    extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log> {
   LevelLogger({required super.level, required super.name, super.shortName})
       : super(
           noLog: (_, __, {error, stackTrace}) => true,
-          builder: Logger.defaultBuilder,
-          printer: print,
         );
 
   @override
-  LogFunction get processLog => (source, message, {error, stackTrace}) {
-        final entry = LogEntry(
-          this,
-          error: error,
-          stackTrace: stackTrace,
-          name: logger.name,
-          source: source,
-          message: message,
+  LogFn get processLog => (source, message, {error, stackTrace}) {
+        publisher.publish(
+          Log(
+            this,
+            error: error,
+            stackTrace: stackTrace,
+            name: logger.name,
+            source: source,
+            message: message,
+          ),
         );
-
-        printer(builder(entry));
 
         return true;
       };
 }
 
-final class Logger
-    extends CustomLogger<Logger, LevelLogger, LogFunction, LogEntry, String> {
+final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   final String name;
 
   Logger(this.name);
@@ -89,16 +86,16 @@ final class Logger
   final LevelLogger _severe = LevelLogger(level: Levels.severe, name: 'SEVERE');
   final LevelLogger _shout = LevelLogger(level: Levels.shout, name: 'SHOUT');
 
-  LogFunction get finest => _finest.log;
-  LogFunction get finer => _finer.log;
-  LogFunction get fine => _fine.log;
-  LogFunction get config => _config.log;
-  LogFunction get info => _info.log;
-  LogFunction get warning => _warning.log;
-  LogFunction get severe => _severe.log;
-  LogFunction get shout => _shout.log;
+  LogFn get finest => _finest.log;
+  LogFn get finer => _finer.log;
+  LogFn get fine => _fine.log;
+  LogFn get config => _config.log;
+  LogFn get info => _info.log;
+  LogFn get warning => _warning.log;
+  LogFn get severe => _severe.log;
+  LogFn get shout => _shout.log;
 
-  static String defaultBuilder(LogEntry entry) =>
+  static String defaultBuilder(Log entry) =>
       '${entry.time.toIso8601String()} [${entry.name}] '
       '#${entry.sequenceNumber} '
       '${entry.source == null ? '' : '${entry.source} | '}'

@@ -11,8 +11,8 @@ enum BenchmarkMode {
   const BenchmarkMode(this.start, this.end);
 }
 
-void benchmarkTitle(String file) {
-  title('\nSimple benchmark:');
+void benchmarkTitle({required String file}) {
+  title('\nBenchmarks:');
   line('Usage:');
   description(
     'dart compile exe example/logger_builder_examples/bin/$file.dart && ./example/logger_builder_examples/bin/$file.exe',

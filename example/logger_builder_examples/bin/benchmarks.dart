@@ -5,7 +5,25 @@ import 'package:logger_builder_examples/hierarchical_logger.dart';
 import 'package:logging/logging.dart' as l;
 import 'package:talker_logger/talker_logger.dart' as t;
 
-String builder(LogEntry entry) => '[${entry.levelName}] ${entry.message}';
+String builder(Log log) => '[${log.levelName}] ${log.message}';
+
+final class BenchmarkLogFormatter implements CustomLogPublisher<Log> {
+  const BenchmarkLogFormatter();
+
+  @override
+  void publish(Log log) {
+    builder(log);
+  }
+}
+
+final class BenchmarkLogPrinter implements CustomLogPublisher<Log> {
+  const BenchmarkLogPrinter();
+
+  @override
+  void publish(Log log) {
+    print(builder(log));
+  }
+}
 
 /// Usage:
 ///
@@ -15,17 +33,16 @@ String builder(LogEntry entry) => '[${entry.levelName}] ${entry.message}';
 Future<void> main() async {
   final log = Logger('root')..level = Levels.all;
 
-  benchmarkTitle('benchmarks');
+  benchmarkTitle(file: 'benchmarks');
 
   title('Sample:');
 
   // CustomLogger:
   line('CustomLogger:');
   log
-    ..builder = builder
-    ..printer = print
+    ..publisher = const BenchmarkLogPrinter()
     ..i('Info message')
-    ..printer = (_) {};
+    ..publisher = const BenchmarkLogFormatter();
 
   // logging
   //
@@ -152,14 +169,14 @@ Future<void> main() async {
 
   subtitle('logging:');
   l.Logger.root.level = l.Level.OFF;
-  runTest((count) {
+  runTest(mode: BenchmarkMode.worst, (count) {
     for (var i = 0; i < count; i++) {
       logLog.info('Info message #${++counter}');
     }
   });
 
   subtitle('talker:');
-  runTest((count) {
+  runTest(mode: BenchmarkMode.worst, (count) {
     for (var i = 0; i < count; i++) {
       talkLogOff.info('Info message #${++counter}');
     }
@@ -230,9 +247,32 @@ Future<void> main() async {
   );
 
   subtitle('CustomLogger:');
-  runTest((count) {
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+      (count) {
     for (var i = 0; i < count; i++) {
       assert(log.i(evaluateMessage));
+    }
+  });
+
+  subtitle('logging:');
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+      (count) {
+    for (var i = 0; i < count; i++) {
+      assert(() {
+        logLog.info(evaluateMessage);
+        return true;
+      }());
+    }
+  });
+
+  subtitle('talker:');
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+      (count) {
+    for (var i = 0; i < count; i++) {
+      assert(() {
+        talkLogOn.info(evaluateMessage);
+        return true;
+      }());
     }
   });
 
@@ -251,22 +291,15 @@ Future<void> main() async {
     }
   });
 
-  subtitle('CustomLogger:');
-  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
-    for (var i = 0; i < count; i++) {
-      if (logging) log.i(evaluateMessage);
-    }
-  });
-
   subtitle('logging:');
-  runTest((count) {
+  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
     for (var i = 0; i < count; i++) {
       if (logging) logLog.info(evaluateMessage);
     }
   });
 
   subtitle('talker:');
-  runTest((count) {
+  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
     for (var i = 0; i < count; i++) {
       if (logging) talkLogOn.info(evaluateMessage);
     }
@@ -287,14 +320,16 @@ Future<void> main() async {
   });
 
   subtitle('logging:');
-  runTest((count) {
+  // ignore: avoid_redundant_argument_values
+  runTest(mode: !logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
     for (var i = 0; i < count; i++) {
       if (!logging) logLog.info(evaluateMessage);
     }
   });
 
   subtitle('talker:');
-  runTest((count) {
+  // ignore: avoid_redundant_argument_values
+  runTest(mode: !logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
     for (var i = 0; i < count; i++) {
       if (!logging) talkLogOn.info(evaluateMessage);
     }

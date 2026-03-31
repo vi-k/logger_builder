@@ -1,10 +1,8 @@
 # TODO
 
 - Саблогеры другого типа
-- AsyncLogBuilder
 
 ## README.md
-- AsyncLogPrinter
 - Использование в пакетах
 - Почему не if (logging)?
 - Добавить секцию "Common Mistakes" с наглядными примерами:

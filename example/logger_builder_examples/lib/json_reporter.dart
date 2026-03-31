@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:logger_builder/logger_builder.dart';
 
 final class JsonReportNoData {
@@ -11,19 +9,19 @@ final class JsonReportNoData {
 
 const _noData = JsonReportNoData._();
 
-typedef JsonReport = bool Function(
+typedef JsonReporterFn = bool Function(
   String event, {
   Object? data,
   Object? error,
   StackTrace? stackTrace,
 });
 
-final class JsonReportEntry extends CustomLogEntry {
+final class JsonReport extends CustomLog {
   final DateTime timestamp;
   final String event;
   final Lazy _lazyData;
 
-  JsonReportEntry(
+  JsonReport(
     super.levelLogger, {
     super.error,
     super.stackTrace,
@@ -36,35 +34,34 @@ final class JsonReportEntry extends CustomLogEntry {
 }
 
 final class JsonLevelReporter extends CustomLevelLogger<JsonReporter,
-    JsonLevelReporter, JsonReport, JsonReportEntry, Map<String, Object?>> {
+    JsonLevelReporter, JsonReporterFn, JsonReport> {
   JsonLevelReporter({
     required super.level,
     required super.name,
     super.shortName,
   }) : super(
           noLog: (_, {data, error, stackTrace}) => true,
-          builder: JsonReporter.defaultBuilder,
-          printer: JsonReporter.defaultPrinter,
         );
 
   @override
-  JsonReport get processLog => (event, {data = _noData, error, stackTrace}) {
-        final entry = JsonReportEntry(
-          this,
-          error: error,
-          stackTrace: stackTrace,
-          event: event,
-          data: data,
+  JsonReporterFn get processLog =>
+      (event, {data = _noData, error, stackTrace}) {
+        publisher.publish(
+          JsonReport(
+            this,
+            error: error,
+            stackTrace: stackTrace,
+            event: event,
+            data: data,
+          ),
         );
-
-        printer(builder(entry));
 
         return true;
       };
 }
 
 final class JsonReporter extends CustomLogger<JsonReporter, JsonLevelReporter,
-    JsonReport, JsonReportEntry, Map<String, Object?>> {
+    JsonReporterFn, JsonReport> {
   JsonReporter();
 
   final JsonLevelReporter _d = JsonLevelReporter(
@@ -80,43 +77,14 @@ final class JsonReporter extends CustomLogger<JsonReporter, JsonLevelReporter,
     name: 'error',
   );
 
-  JsonReport get d => _d.log;
-  JsonReport get i => _i.log;
-  JsonReport get e => _e.log;
+  JsonReporterFn get d => _d.log;
+  JsonReporterFn get i => _i.log;
+  JsonReporterFn get e => _e.log;
 
   @override
   void registerLevels() {
     registerLevel(_d);
     registerLevel(_i);
     registerLevel(_e);
-  }
-
-  static Map<String, Object?> defaultBuilder(JsonReportEntry entry) {
-    final json = <String, Object?>{
-      'level': entry.levelName,
-      'timestamp': entry.timestamp.microsecondsSinceEpoch,
-      'event': entry.event,
-    };
-    if (entry.data is! JsonReportNoData) {
-      json['data'] = entry.data;
-    }
-
-    return json;
-  }
-
-  static String jsonToString(Map<String, Object?> json) => jsonEncode(
-        json,
-        toEncodable: (nonEncodable) {
-          try {
-            return (nonEncodable as dynamic).toJson();
-            // ignore: avoid_catching_errors
-          } on NoSuchMethodError {
-            return nonEncodable.toString();
-          }
-        },
-      );
-
-  static void defaultPrinter(Map<String, Object?> json) {
-    print(jsonToString(json));
   }
 }

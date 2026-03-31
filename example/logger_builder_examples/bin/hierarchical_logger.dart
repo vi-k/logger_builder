@@ -3,8 +3,19 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/console.dart';
 import 'package:logger_builder_examples/hierarchical_logger.dart';
 
-String alternativeBuilder(LogEntry entry) =>
-    '${entry.levelName.toUpperCase()}: ${entry.message}';
+final class DefaultLogPublisher implements CustomLogPublisher<Log> {
+  const DefaultLogPublisher();
+
+  static String format(Log log) =>
+      '[${log.shortLevelName}] ${log.path} | ${log.message}';
+
+  static void output(String out) => print(out);
+
+  @override
+  void publish(Log log) {
+    output(format(log));
+  }
+}
 
 /// Usage:
 ///
@@ -12,7 +23,9 @@ String alternativeBuilder(LogEntry entry) =>
 /// dart compile exe example/logger_builder_examples/bin/hierarchical_logger.dart && ./example/logger_builder_examples/bin/hierarchical_logger.exe
 /// ```
 Future<void> main() async {
-  final log1 = Logger('unit')..level = Levels.all;
+  final log1 = Logger('unit')
+    ..level = Levels.all
+    ..publisher = const DefaultLogPublisher();
   final log2 = log1.withAddedName('feature');
   final log3 = log2.withAddedName('class');
 
@@ -56,105 +69,36 @@ Future<void> main() async {
   log1.level = Levels.all;
 
   //
-  title('change common builder:');
-  log1.builder = alternativeBuilder;
-
-  description('log1');
-  log1.d('Debug message');
-  log1.i('Info message');
-  log1.e('Error message');
-
-  description('log2');
-  log2.d('Debug message');
-  log2.i('Info message');
-  log2.e('Error message');
-
-  description('log3');
-  log3.d('Debug message');
-  log3.i('Info message');
-  log3.e('Error message');
-
-  log1.builder = Logger.defaultBuilder;
-
-  //
-  title('change info builder only:');
-  log1[Levels.info].builder = alternativeBuilder;
-
-  description('log1');
-  log1.d('Debug message');
-  log1.i('Info message');
-  log1.e('Error message');
-
-  description('log2');
-  log2.d('Debug message');
-  log2.i('Info message');
-  log2.e('Error message');
-
-  description('log3');
-  log3.d('Debug message');
-  log3.i('Info message');
-  log3.e('Error message');
-
-  log1.builder = Logger.defaultBuilder;
-
-  //
-  title('change log2 builder:');
-  box(
-    'After installing its own builder on the'
-    '\nsublogger, builder unlinks from the parent.'
-    '\n${bold}This cannot be restored.$resetBoldAndDim',
-  );
-  log2.builder = alternativeBuilder;
-
-  description('log1');
-  log1.d('Debug message');
-  log1.i('Info message');
-  log1.e('Error message');
-
-  description('log2');
-  log2.d('Debug message');
-  log2.i('Info message');
-  log2.e('Error message');
-
-  description('log3');
-  log3.d('Debug message');
-  log3.i('Info message');
-  log3.e('Error message');
-
-  log1.builder = Logger.defaultBuilder;
-
-  //
-  title('change common printer and error printer:');
-
-  log1.printer = (text) => print('$fgGreen$text$reset');
-  log1[Levels.error].printer = (text) => print('$fgRed$text$reset');
-
-  description('log1');
-  log1.d('Debug message');
-  log1.i('Info message');
-  log1.e('Error message');
-
-  description('log2');
-  log2.d('Debug message');
-  log2.i('Info message');
-  log2.e('Error message');
-
-  description('log3');
-  log3.d('Debug message');
-  log3.i('Info message');
-  log3.e('Error message');
-
-  log1.printer = print;
-
-  //
-  title('change log3 printer:');
-  box(
-    'After installing its own printer on the'
-    '\nsublogger, printer unlinks from the parent.'
-    '\n${bold}This cannot be restored.$resetBoldAndDim',
+  title('change common formatter:');
+  log1.publisher = CustomLogFormatter(
+    format: (log) => '${log.levelName.toUpperCase()}: ${log.message}',
+    output: DefaultLogPublisher.output,
   );
 
-  log3.printer = (_) {};
+  description('log1');
+  log1.d('Debug message');
+  log1.i('Info message');
+  log1.e('Error message');
+
+  description('log2');
+  log2.d('Debug message');
+  log2.i('Info message');
+  log2.e('Error message');
+
+  description('log3');
+  log3.d('Debug message');
+  log3.i('Info message');
+  log3.e('Error message');
+
+  log1.publisher = const DefaultLogPublisher();
+
+  //
+  title('change error printer:');
+
+  log1[Levels.error].publisher = CustomLogFormatter(
+    format: DefaultLogPublisher.format,
+    output: (str) => DefaultLogPublisher.output('$fgRed$str$reset'),
+  );
 
   description('log1');
   log1.d('Debug message');
@@ -171,5 +115,66 @@ Future<void> main() async {
   log3.i('Info message');
   log3.e('Error message');
 
-  log1.printer = print;
+  log1.publisher = const DefaultLogPublisher();
+
+  //
+  title('change log2 publisher:');
+  box(
+    'After installing its own publisher on the sublogger, publisher'
+    '\nunlinks from the parent.'
+    ' ${bold}This cannot be restored.$resetBoldAndDim',
+  );
+  log2.publisher = CustomLogFormatter(
+    format: DefaultLogPublisher.format,
+    output: (str) => DefaultLogPublisher.output('$fgWhite$str$reset'),
+  );
+
+  description('log1');
+  log1.d('Debug message');
+  log1.i('Info message');
+  log1.e('Error message');
+
+  description('log2');
+  log2.d('Debug message');
+  log2.i('Info message');
+  log2.e('Error message');
+
+  description('log3');
+  log3.d('Debug message');
+  log3.i('Info message');
+  log3.e('Error message');
+
+  // This change will not affect log2
+  log1.publisher = const DefaultLogPublisher();
+
+  //
+  title('change log3 publisher:');
+  box(
+    'After installing its own publisher on the sublogger, publisher'
+    '\nunlinks from the parent.'
+    ' ${bold}This cannot be restored.$resetBoldAndDim',
+  );
+
+  log3.publisher = CustomLogFormatter(
+    format: DefaultLogPublisher.format,
+    output: (str) => DefaultLogPublisher.output('$fgYellow$str$reset'),
+  );
+
+  description('log1');
+  log1.d('Debug message');
+  log1.i('Info message');
+  log1.e('Error message');
+
+  description('log2');
+  log2.d('Debug message');
+  log2.i('Info message');
+  log2.e('Error message');
+
+  description('log3');
+  log3.d('Debug message');
+  log3.i('Info message');
+  log3.e('Error message');
+
+  // This change will not affect log2 and log3
+  log1.publisher = const DefaultLogPublisher();
 }

@@ -11,10 +11,12 @@ void main() {
     final buf = <String>[];
 
     setUp(() {
-      log =
-          Logger('root')
-            ..level = Levels.all
-            ..printer = buf.add;
+      log = Logger('root')
+        ..level = Levels.all
+        ..publisher = CustomLogFormatter(
+          format: Logger.defaultFormat,
+          output: buf.add,
+        );
       log2 = log.withAddedName('first');
       log3 = log2.withAddedName('second');
     });
@@ -249,7 +251,7 @@ void main() {
       });
     });
 
-    group('builder', () {
+    group('custom formatter', () {
       void logAll() {
         log.d('debug');
         log.i('info');
@@ -259,13 +261,16 @@ void main() {
         log3.i('info');
       }
 
-      String Function(LogEntry entry) customBuilder(String prefix) =>
-          (entry) => '$prefix ${Logger.defaultBuilder(entry)}';
+      CustomLogPublisher<Log> customFormatter(String prefix) =>
+          CustomLogFormatter(
+            format: (log) => '$prefix ${Logger.defaultFormat(log)}',
+            output: buf.add,
+          );
 
       test('initial state', () {
-        expect(log.builderLinked, isFalse);
-        expect(log2.builderLinked, isTrue);
-        expect(log3.builderLinked, isTrue);
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -278,10 +283,10 @@ void main() {
       });
 
       test('log=custom builder', () {
-        log.builder = customBuilder('+');
-        expect(log.builderLinked, isFalse);
-        expect(log2.builderLinked, isTrue);
-        expect(log3.builderLinked, isTrue);
+        log.publisher = customFormatter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '+ [d] root | debug',
@@ -294,10 +299,10 @@ void main() {
       });
 
       test('log2=custom builder', () {
-        log2.builder = customBuilder('+');
-        expect(log.builderLinked, isFalse);
-        expect(log2.builderLinked, isFalse);
-        expect(log3.builderLinked, isTrue);
+        log2.publisher = customFormatter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isFalse);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -310,10 +315,10 @@ void main() {
       });
 
       test('log3=custom builder', () {
-        log3.builder = customBuilder('+');
-        expect(log.builderLinked, isFalse);
-        expect(log2.builderLinked, isTrue);
-        expect(log3.builderLinked, isFalse);
+        log3.publisher = customFormatter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isFalse);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -328,12 +333,12 @@ void main() {
       test(
         'log3=custom builder + log2=custom builder + log=custom builder',
         () {
-          log3.builder = customBuilder('*');
-          log2.builder = customBuilder('+');
-          log.builder = customBuilder('#');
-          expect(log.builderLinked, isFalse);
-          expect(log2.builderLinked, isFalse);
-          expect(log3.builderLinked, isFalse);
+          log3.publisher = customFormatter('*');
+          log2.publisher = customFormatter('+');
+          log.publisher = customFormatter('#');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isFalse);
+          expect(log3.publisherLinked, isFalse);
           logAll();
           expect(buf, [
             '# [d] root | debug',
@@ -348,10 +353,10 @@ void main() {
 
       group('on levels', () {
         test('log.info=custom builder', () {
-          log[Levels.info].builder = customBuilder('+');
-          expect(log.builderLinked, isFalse);
-          expect(log2.builderLinked, isTrue);
-          expect(log3.builderLinked, isTrue);
+          log[Levels.info].publisher = customFormatter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isTrue);
+          expect(log3.publisherLinked, isTrue);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -364,10 +369,10 @@ void main() {
         });
 
         test('log2.info=custom builder', () {
-          log2[Levels.info].builder = customBuilder('+');
-          expect(log.builderLinked, isFalse);
-          expect(log2.builderLinked, isFalse);
-          expect(log3.builderLinked, isTrue);
+          log2[Levels.info].publisher = customFormatter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isFalse);
+          expect(log3.publisherLinked, isTrue);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -380,10 +385,10 @@ void main() {
         });
 
         test('log3.info=custom builder', () {
-          log3[Levels.info].builder = customBuilder('+');
-          expect(log.builderLinked, isFalse);
-          expect(log2.builderLinked, isTrue);
-          expect(log3.builderLinked, isFalse);
+          log3[Levels.info].publisher = customFormatter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isTrue);
+          expect(log3.publisherLinked, isFalse);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -398,12 +403,12 @@ void main() {
         test(
           'log3.info=custom builder + log2.info=custom builder + log.info=custom builder',
           () {
-            log3[Levels.info].builder = customBuilder('*');
-            log2[Levels.info].builder = customBuilder('+');
-            log[Levels.info].builder = customBuilder('#');
-            expect(log.builderLinked, isFalse);
-            expect(log2.builderLinked, isFalse);
-            expect(log3.builderLinked, isFalse);
+            log3[Levels.info].publisher = customFormatter('*');
+            log2[Levels.info].publisher = customFormatter('+');
+            log[Levels.info].publisher = customFormatter('#');
+            expect(log.publisherLinked, isFalse);
+            expect(log2.publisherLinked, isFalse);
+            expect(log3.publisherLinked, isFalse);
             logAll();
             expect(buf, [
               '[d] root | debug',
@@ -418,7 +423,7 @@ void main() {
       });
     });
 
-    group('printer', () {
+    group('custom printer', () {
       void logAll() {
         log.d('debug');
         log.i('info');
@@ -428,13 +433,16 @@ void main() {
         log3.i('info');
       }
 
-      void Function(String message) customPrinter(String prefix) =>
-          (message) => buf.add('$prefix $message');
+      CustomLogPublisher<Log> customPrinter(String prefix) =>
+          CustomLogFormatter(
+            format: Logger.defaultFormat,
+            output: (message) => buf.add('$prefix $message'),
+          );
 
       test('initial state', () {
-        expect(log.printerLinked, isFalse);
-        expect(log2.printerLinked, isTrue);
-        expect(log3.printerLinked, isTrue);
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -447,10 +455,10 @@ void main() {
       });
 
       test('log=custom builder', () {
-        log.printer = customPrinter('+');
-        expect(log.printerLinked, isFalse);
-        expect(log2.printerLinked, isTrue);
-        expect(log3.printerLinked, isTrue);
+        log.publisher = customPrinter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '+ [d] root | debug',
@@ -463,10 +471,10 @@ void main() {
       });
 
       test('log2=custom builder', () {
-        log2.printer = customPrinter('+');
-        expect(log.printerLinked, isFalse);
-        expect(log2.printerLinked, isFalse);
-        expect(log3.printerLinked, isTrue);
+        log2.publisher = customPrinter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isFalse);
+        expect(log3.publisherLinked, isTrue);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -479,10 +487,10 @@ void main() {
       });
 
       test('log3=custom builder', () {
-        log3.printer = customPrinter('+');
-        expect(log.printerLinked, isFalse);
-        expect(log2.printerLinked, isTrue);
-        expect(log3.printerLinked, isFalse);
+        log3.publisher = customPrinter('+');
+        expect(log.publisherLinked, isFalse);
+        expect(log2.publisherLinked, isTrue);
+        expect(log3.publisherLinked, isFalse);
         logAll();
         expect(buf, [
           '[d] root | debug',
@@ -497,12 +505,12 @@ void main() {
       test(
         'log3=custom builder + log2=custom builder + log=custom builder',
         () {
-          log3.printer = customPrinter('*');
-          log2.printer = customPrinter('+');
-          log.printer = customPrinter('#');
-          expect(log.printerLinked, isFalse);
-          expect(log2.printerLinked, isFalse);
-          expect(log3.printerLinked, isFalse);
+          log3.publisher = customPrinter('*');
+          log2.publisher = customPrinter('+');
+          log.publisher = customPrinter('#');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isFalse);
+          expect(log3.publisherLinked, isFalse);
           logAll();
           expect(buf, [
             '# [d] root | debug',
@@ -517,10 +525,10 @@ void main() {
 
       group('on levels', () {
         test('log.info=custom builder', () {
-          log[Levels.info].printer = customPrinter('+');
-          expect(log.printerLinked, isFalse);
-          expect(log2.printerLinked, isTrue);
-          expect(log3.printerLinked, isTrue);
+          log[Levels.info].publisher = customPrinter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isTrue);
+          expect(log3.publisherLinked, isTrue);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -533,10 +541,10 @@ void main() {
         });
 
         test('log2.info=custom builder', () {
-          log2[Levels.info].printer = customPrinter('+');
-          expect(log.printerLinked, isFalse);
-          expect(log2.printerLinked, isFalse);
-          expect(log3.printerLinked, isTrue);
+          log2[Levels.info].publisher = customPrinter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isFalse);
+          expect(log3.publisherLinked, isTrue);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -549,10 +557,10 @@ void main() {
         });
 
         test('log3.info=custom builder', () {
-          log3[Levels.info].printer = customPrinter('+');
-          expect(log.printerLinked, isFalse);
-          expect(log2.printerLinked, isTrue);
-          expect(log3.printerLinked, isFalse);
+          log3[Levels.info].publisher = customPrinter('+');
+          expect(log.publisherLinked, isFalse);
+          expect(log2.publisherLinked, isTrue);
+          expect(log3.publisherLinked, isFalse);
           logAll();
           expect(buf, [
             '[d] root | debug',
@@ -567,12 +575,12 @@ void main() {
         test(
           'log3.info=custom builder + log2.info=custom builder + log.info=custom builder',
           () {
-            log3[Levels.info].printer = customPrinter('*');
-            log2[Levels.info].printer = customPrinter('+');
-            log[Levels.info].printer = customPrinter('#');
-            expect(log.printerLinked, isFalse);
-            expect(log2.printerLinked, isFalse);
-            expect(log3.printerLinked, isFalse);
+            log3[Levels.info].publisher = customPrinter('*');
+            log2[Levels.info].publisher = customPrinter('+');
+            log[Levels.info].publisher = customPrinter('#');
+            expect(log.publisherLinked, isFalse);
+            expect(log2.publisherLinked, isFalse);
+            expect(log3.publisherLinked, isFalse);
             logAll();
             expect(buf, [
               '[d] root | debug',
