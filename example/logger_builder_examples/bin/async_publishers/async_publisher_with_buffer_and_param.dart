@@ -15,11 +15,6 @@ Future<void> defaultAsyncOutput(bool isError, String str) async {
   print(isError ? '$fgRed$str$reset' : str);
 }
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer_and_param.dart && ./example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer_and_param.exe
-/// ```
 Future<void> main() async {
   final log = Logger()..level = Levels.all;
 

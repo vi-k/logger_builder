@@ -17,11 +17,6 @@ final class DefaultLogPublisher implements CustomLogPublisher<Log> {
   }
 }
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/hierarchical_logger.dart && ./example/logger_builder_examples/bin/hierarchical_logger.exe
-/// ```
 Future<void> main() async {
   final log1 = Logger('unit')
     ..level = Levels.all

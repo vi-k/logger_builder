@@ -63,11 +63,6 @@ final class NonEncodableClass {
   String toString() => '$NonEncodableClass(id: $id, data: $data)';
 }
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/json_reporter.dart && ./example/logger_builder_examples/bin/json_reporter.exe
-/// ```
 Future<void> main() async {
   final log = JsonReporter()
     ..level = Levels.debug

@@ -5,6 +5,10 @@ import 'package:logger_builder_examples/hierarchical_logger.dart';
 import 'package:logging/logging.dart' as l;
 import 'package:talker_logger/talker_logger.dart' as t;
 
+// Usage:
+//
+// dart compile exe example/logger_builder_examples/bin/benchmarks.dart && ./example/logger_builder_examples/bin/benchmarks.exe
+
 String builder(Log log) => '[${log.levelName}] ${log.message}';
 
 final class BenchmarkLogFormatter implements CustomLogPublisher<Log> {
@@ -25,11 +29,6 @@ final class BenchmarkLogPrinter implements CustomLogPublisher<Log> {
   }
 }
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/benchmarks.dart && ./example/logger_builder_examples/bin/benchmarks.exe
-/// ```
 Future<void> main() async {
   final log = Logger('root')..level = Levels.all;
 

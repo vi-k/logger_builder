@@ -1,12 +1,8 @@
 import 'package:ansi_escape_codes/ansi_escape_codes.dart';
 import 'package:logger_builder/logger_builder.dart';
+import 'package:logger_builder_examples/console.dart';
 import 'package:logger_builder_examples/simple_logger.dart';
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/async_printers/async_builder.dart && ./example/logger_builder_examples/bin/async_printers/async_builder.exe
-/// ```
 Future<void> main() async {
   final log = Logger()..level = Levels.all;
 
@@ -48,5 +44,5 @@ Future<void> main() async {
 
   await multiPublisher.flush();
 
-  print('end of main');
+  title('end of main');
 }

@@ -14,11 +14,6 @@ Future<void> defaultAsyncOutput(String str) async {
   print(str);
 }
 
-/// Usage:
-///
-/// ```bash
-/// dart compile exe example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer.dart && ./example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer.exe
-/// ```
 Future<void> main() async {
   final log = Logger()..level = Levels.all;
 
