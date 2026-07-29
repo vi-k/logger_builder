@@ -1,3 +1,13 @@
+## 0.3.2
+
+* `MultiPublisher`: an exception thrown by one publisher no longer interrupts
+  publishing to the remaining publishers and no longer propagates to the
+  logging call site. The new `onError` callback receives the failing publisher
+  along with the error; without it, the error is reported to the current zone
+  as an uncaught asynchronous error.
+* `MultiPublisher.flush`: a synchronous throw from one publisher's `flush` no
+  longer prevents flushing the others.
+
 ## 0.3.0-0.3.1
 
 * [breaking changes] Refactor a builder and a printer to one publisher.

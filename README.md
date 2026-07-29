@@ -803,6 +803,23 @@ log.publisher = multiPublisher;
 await multiPublisher.flush();
 ```
 
+An exception thrown by one publisher does not interrupt publishing: the
+remaining publishers still receive the log. Pass `onError` to handle such
+errors yourself — it receives the failing publisher along with the error:
+
+```dart
+final multiPublisher = MultiPublisher(
+  [consolePrinter, filePrinter],
+  onError: (publisher, error, stackTrace) =>
+      print('$publisher failed: $error'),
+);
+```
+
+Without `onError`, the error is reported to the current zone as an uncaught
+asynchronous error (in Flutter it ends up in `PlatformDispatcher.onError`,
+inside `runZonedGuarded` — in its handler). Note that a plain Dart program
+without an error zone terminates the isolate on such errors by default.
+
 See also an example:
 [multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
 
