@@ -1,6 +1,9 @@
 import 'dart:async';
 
-import 'package:logger_builder/logger_builder.dart';
+import '../custom_logger/custom_log.dart';
+import '../custom_logger/custom_log_publisher.dart';
+import 'async_publisher.dart';
+import 'internal/buffered_pipeline.dart';
 
 /// A base class for asynchronous publishers that buffer log events before
 /// processing them together as a batch list.
@@ -26,62 +29,55 @@ import 'package:logger_builder/logger_builder.dart';
 /// ```
 abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
     implements CustomLogPublisher<Log>, HasFlush {
+  /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
-  final StreamController<void> _controller;
-  List<Log> _logs = [];
-  Completer<void>? _flushCompleter;
 
-  AsyncPublisherWithBufferBase({this.sync = false})
-      : _controller = StreamController<void>(sync: sync) {
-    _controller.stream.asyncMap(_handleData).listen(_next);
-  }
+  /// Called when [handle] throws.
+  ///
+  /// When `null`, the error is reported to the current zone via
+  /// [Zone.handleUncaughtError]. In either case the retry buffer contents
+  /// are returned to the queue and processing continues.
+  final void Function(Object error, StackTrace stackTrace)? onError;
 
+  late final BufferedPipeline<Log> _pipeline = BufferedPipeline<Log>(
+    handle: handle,
+    sync: sync,
+    onError: onError,
+  );
+
+  AsyncPublisherWithBufferBase({this.sync = false, this.onError});
+
+  /// Processes a batch of buffered [logs].
+  ///
+  /// Logs added to [retryBuffer] are placed back at the front of the queue
+  /// and retried with the next batch.
   FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer);
 
-  @override
-  void publish(Log log) {
-    final isEmpty = _logs.isEmpty;
-    _logs.add(log);
-    if (isEmpty) {
-      _controller.add(null);
-    }
-  }
+  /// Whether [close] has been called.
+  bool get isClosed => _pipeline.isClosed;
 
   @override
-  Future<void> flush() async {
-    final completer = _flushCompleter ??= Completer<void>();
-    return completer.future;
-  }
+  void publish(Log log) => _pipeline.add(log);
 
-  Future<void> close() async {
-    await _controller.close();
-  }
+  /// Completes when the queue has been fully drained.
+  ///
+  /// Drain semantics: the returned future also waits for logs published
+  /// after this call, until the buffer becomes empty. Completes immediately
+  /// when the publisher is idle or closed.
+  @override
+  Future<void> flush() => _pipeline.flush();
 
-  FutureOr<void> _handleData(void _) {
-    final retryBuffer = <Log>[];
-    final logs = _logs;
-    _logs = [];
-
-    if (logs.isNotEmpty) {
-      final result = handle(logs, retryBuffer);
-      if (result is Future<void>) {
-        return result.then((_) {
-          _logs.insertAll(0, retryBuffer);
-        });
-      }
-
-      _logs.insertAll(0, retryBuffer);
-    }
-  }
-
-  void _next(void _) {
-    if (_logs.isNotEmpty) {
-      _controller.add(null);
-    } else {
-      _flushCompleter?.complete();
-      _flushCompleter = null;
-    }
-  }
+  /// Closes the publisher after draining the queue: every log accepted
+  /// before closing is processed, including logs published while a batch
+  /// was in flight. Logs returned to the retry buffer after closing are
+  /// dropped.
+  ///
+  /// After closing, [publish] throws a [StateError] and [flush] completes
+  /// immediately. Repeated calls return the same future.
+  ///
+  /// Do not await this (or [flush]) from inside [handle]: closing waits for
+  /// the running batch to complete, so it would deadlock.
+  Future<void> close() => _pipeline.close();
 }
 
 /// An asynchronous publisher that buffers log events and processes them in
@@ -107,9 +103,10 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
 /// ```
 final class AsyncPublisherWithBuffer<Log extends CustomLog>
     extends AsyncPublisherWithBufferBase<Log> {
+  /// The function that processes a batch of buffered logs.
   final FutureOr<void> Function(List<Log> logs, List<Log> retryBuffer) handler;
 
-  AsyncPublisherWithBuffer(this.handler, {super.sync});
+  AsyncPublisherWithBuffer(this.handler, {super.sync, super.onError});
 
   @override
   FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer) =>
@@ -143,7 +140,13 @@ final class AsyncPublisherWithBuffer<Log extends CustomLog>
 /// ```
 final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
     extends AsyncPublisherWithBufferBase<Log> {
+  /// Transforms a batch of logs into an [Out] object.
+  ///
+  /// Logs added to the retry buffer during formatting are excluded from the
+  /// batch passed to [output] and retried with the next batch.
   final FutureOr<Out> Function(List<Log> logs, List<Log> retryBuffer) format;
+
+  /// Receives the formatted [Out] object along with the logs it covers.
   final FutureOr<void> Function(Out out, List<Log> logs, List<Log> retryBuffer)
       output;
 
@@ -151,18 +154,29 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
     required this.format,
     required this.output,
     super.sync,
+    super.onError,
   });
 
   @override
-  FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer) {
-    final out = format(logs, retryBuffer);
-    final remainingLogs = List.of(logs)..removeWhere(retryBuffer.contains);
+  FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer) =>
+      switch (format(logs, retryBuffer)) {
+        final Future<Out> future => future.then(
+            (out) =>
+                output(out, _remainingLogs(logs, retryBuffer), retryBuffer),
+          ),
+        final Out out =>
+          output(out, _remainingLogs(logs, retryBuffer), retryBuffer),
+      };
 
-    return switch (out) {
-      final Out out => output(out, remainingLogs, retryBuffer),
-      final Future<Out> future => future.then(
-          (out) => output(out, remainingLogs, retryBuffer),
-        ),
-    };
+  List<Log> _remainingLogs(List<Log> logs, List<Log> retryBuffer) {
+    if (retryBuffer.isEmpty) {
+      return logs;
+    }
+
+    final retried = Set<Log>.identity()..addAll(retryBuffer);
+    return [
+      for (final log in logs)
+        if (!retried.contains(log)) log,
+    ];
   }
 }

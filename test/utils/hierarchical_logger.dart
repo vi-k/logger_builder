@@ -86,17 +86,3 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   static String defaultFormat(Log log) =>
       '[${log.shortLevelName}] ${log.path} | ${log.message}';
 }
-
-// final class DefaultLogPublisher implements CustomLogPublisher<Log> {
-//   const DefaultLogPublisher();
-
-//   static String format(Log log) =>
-//       '[${log.shortLevelName}] ${log.path} | ${log.message}';
-
-//   static void output(String out) => print(out);
-
-//   @override
-//   void publish(Log log) {
-//     output(format(log));
-//   }
-// }

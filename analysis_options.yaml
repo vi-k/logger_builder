@@ -1,8 +1,5 @@
 include: package:lints/recommended.yaml
 
-formatter:
-  # trailing_commas: preserve
-
 analyzer:
   exclude:
     # Web
@@ -32,9 +29,7 @@ analyzer:
     close_sinks: error
     empty_catches: warning
     flutter_style_todos: warning
-    no_logic_in_create_state: warning
     prefer_relative_imports: warning
-    unsafe_html: warning
 
     # Error
     avoid_relative_lib_imports: error
@@ -72,7 +67,7 @@ linter:
     no_adjacent_strings_in_list: true
     # no_duplicate_case_values: true # [core]
     # no_logic_in_create_state: true # [flutter]
-    # prefer_relative_imports: true
+    prefer_relative_imports: true # DO avoid absolute imports for files in lib/.
     # prefer_void_to_null: true # [recommended]
     test_types_in_equals: true
     throw_in_finally: true

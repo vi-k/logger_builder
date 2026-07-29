@@ -25,6 +25,15 @@ abstract base class CustomLog {
   final StackTrace? stackTrace;
 
   /// The asynchronous [Zone] in which this log event was produced.
+  ///
+  /// The library itself never reads this field — it exists for custom
+  /// formatters and handlers. Typical uses inside your `handle`/`format`:
+  /// reading zone-local values (`log.zone[#requestId]`) or running code in
+  /// the zone of the logging call site (`log.zone.run(() => ...)`).
+  ///
+  /// Note that the zone (and everything it captured) is retained as long as
+  /// the log object is alive — for buffered publishers, until the batch is
+  /// processed.
   final Zone zone;
 
   /// Creates a [CustomLog] instance tied to the given [levelLogger].

@@ -29,10 +29,6 @@ abstract base class CustomLogger<
     LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
     LogFn extends Function,
     Log extends CustomLog> {
-  static final Finalizer<CustomLogger> _finalizer = Finalizer((logger) {
-    logger._subloggers.removeWhere((subLogger) => subLogger.target == null);
-  });
-
   int _level = Levels.off;
   final Map<int, LevelLogger> _levelLoggers = {};
   final List<WeakReference<Logger>> _subloggers = [];
@@ -73,15 +69,31 @@ abstract base class CustomLogger<
   }
 
   /// Returns the number of directly attached subloggers.
+  ///
+  /// For tests only; not intended for production use.
   @visibleForTesting
   int get subLoggersCount => _subloggers.length;
 
+  /// Removes references to subloggers that have already been garbage
+  /// collected.
+  ///
+  /// Called automatically before every traversal of the subloggers, so the
+  /// internal list does not grow unboundedly. Exposed for deterministic
+  /// tests.
+  @visibleForTesting
+  void pruneSubloggers() =>
+      _subloggers.removeWhere((sublogger) => sublogger.target == null);
+
   /// Returns `true` if this logger's level is synchronized with its parent.
+  ///
+  /// For tests only; not intended for production use.
   @visibleForTesting
   bool get levelLinked => _levelLinked;
 
   /// Returns `true` if this logger's publisher is synchronized with its
   /// parent.
+  ///
+  /// For tests only; not intended for production use.
   @visibleForTesting
   bool get publisherLinked => _publisherLinked;
 
@@ -127,6 +139,7 @@ abstract base class CustomLogger<
       levelLogger._toggle(value <= levelLogger.level);
     }
 
+    pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger? when sublogger._levelLinked) {
         sublogger
@@ -150,6 +163,7 @@ abstract base class CustomLogger<
       logger._publisher = publisher;
     }
 
+    pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
           when sublogger._publisherLinked) {
@@ -163,12 +177,25 @@ abstract base class CustomLogger<
   void _setLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;
     this[level]._publisher = publisher;
+    _propagateLevelPublisher(level, publisher);
+  }
 
+  /// Same as [_setLevelPublisher], but silently skips this logger when it
+  /// did not register [level]: a sublogger is not required to have all the
+  /// levels of its parent.
+  void _inheritLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
+    _publisherLinked = false;
+    _levelLoggers[level]?._publisher = publisher;
+    _propagateLevelPublisher(level, publisher);
+  }
+
+  void _propagateLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
+    pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
           when sublogger._publisherLinked) {
         sublogger
-          .._setLevelPublisher(level, publisher)
+          .._inheritLevelPublisher(level, publisher)
           .._publisherLinked = true;
       }
     }
@@ -180,7 +207,7 @@ abstract base class CustomLogger<
   /// they are discarded elsewhere in the application.
   @protected
   void registerSublogger(Logger sublogger) {
+    pruneSubloggers();
     _subloggers.add(WeakReference(sublogger));
-    _finalizer.attach(sublogger, this);
   }
 }

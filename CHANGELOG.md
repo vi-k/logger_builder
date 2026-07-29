@@ -1,3 +1,54 @@
+## 0.3.3
+
+* `AsyncPublisherWithBuffer`/`AsyncPublisherWithBufferAndParam`: `flush()` no
+  longer hangs on an idle queue — it completes immediately. Flush has drain
+  semantics: it also waits for logs published after the call, until the
+  buffer becomes empty.
+* All async publishers: a new optional `onError` callback receives errors
+  thrown by the handler; without it, the error is reported to the current
+  zone (same as `MultiPublisher`). A throwing handler no longer stalls the
+  queue, loses the retry buffer, or leaves `flush()` hanging.
+* All async publishers: a new `isClosed` getter. `publish` after `close()`
+  now always throws a `StateError` (buffered publishers used to silently
+  accept logs into a dead buffer); `flush()` after `close()` completes
+  immediately instead of resurrecting the publisher; repeated `close()`
+  calls are no-ops returning the same future.
+* `AsyncPublisher`/`AsyncPublisherWithParam`: concurrent `flush()` calls are
+  now serialized — an overlapping flush no longer hangs forever and no
+  longer loses queued logs.
+* Buffered publishers: `close()` now drains the queue completely — logs
+  published while a batch was in flight are processed instead of being
+  silently dropped. Entries returned to the retry buffer after closing are
+  dropped by design (documented).
+* All async publishers: an `onError` callback that itself throws can no
+  longer stall the queue; the secondary error is reported to the current
+  zone and processing continues.
+* `AsyncFormatter` family: when `Out` is `Object?`/`dynamic`, an
+  asynchronous `format` result is now awaited instead of being passed to
+  `output` as an unresolved `Future`.
+* `AsyncFormatterWithBuffer`/`AsyncFormatterWithBufferAndParam`: the batch
+  passed to `output` now reflects retry-buffer additions made during an
+  asynchronous `format`.
+* `TypedLazy` (`LazyString`, `LazyStringOrNull`): reading `resolved` after
+  `value` now returns the converted value instead of leaking an internal
+  sentinel object.
+* `LazyString.resolved`: the default `fallbackValue` is now `'null'`, same
+  as the main constructor.
+* `CustomLevelLogger`: an empty `name` now throws an `ArgumentError` in all
+  build modes (previously an assert, and a `RangeError` in release); the
+  default `shortName` is the first code point of the name, correct for
+  non-BMP characters.
+* Hierarchy: setting a per-level publisher on a logger no longer throws
+  mid-propagation when a sublogger did not register that level.
+* Hierarchy: sublogger bookkeeping no longer uses a `Finalizer` that kept
+  the parent logger strongly reachable through its live subloggers; dead
+  weak references are pruned automatically during traversals.
+* Internal stream subscriptions are now stored and cancelled on `close()`.
+* Docs: dartdoc for `HasFlush`, async publisher members, the `Lazy` family,
+  `Levels` constants and `CustomLog.zone`.
+* Tests: the async publisher family, the `Lazy` family, and level/hierarchy
+  edge cases are now covered (63 new tests).
+
 ## 0.3.2
 
 * `MultiPublisher`: an exception thrown by one publisher no longer interrupts
@@ -11,6 +62,9 @@
 ## 0.3.0-0.3.1
 
 * [breaking changes] Refactor a builder and a printer to one publisher.
+* Add the async publisher family: `AsyncPublisher`, `AsyncPublisherWithParam`,
+  `AsyncPublisherWithBuffer`, `AsyncPublisherWithBufferAndParam` and
+  `MultiPublisher` (recorded retroactively).
 * Upgrade ansi_escape_codes to 3.0.2 for examples.
 
 ## 0.2.0

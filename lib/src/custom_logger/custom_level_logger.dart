@@ -53,17 +53,33 @@ abstract class CustomLevelLogger<
   /// Current publisher.
   CustomLogPublisher<Log> _publisher;
 
+  /// Creates a level logger.
+  ///
+  /// The [name] must not be empty, otherwise an [ArgumentError] is thrown.
+  /// When [shortName] is omitted, the first character (code point) of [name]
+  /// is used.
   CustomLevelLogger({
     required this.level,
-    required this.name,
+    required String name,
     String? shortName,
     required LogFn noLog,
     CustomLogPublisher<Log>? publisher,
-  })  : assert(name.isNotEmpty, 'name must be non-empty'),
-        shortName = shortName ?? name[0],
+  })  : name = _checkName(name),
+        shortName = shortName ?? _firstCharacter(name),
         _noLog = noLog,
         _log = noLog,
         _publisher = publisher ?? const CustomLogPublisher.noOp();
+
+  static String _checkName(String name) {
+    if (name.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'must not be empty');
+    }
+
+    return name;
+  }
+
+  static String _firstCharacter(String name) =>
+      String.fromCharCodes(name.runes.take(1));
 
   /// Generates or executes the actual logging procedure when this level is
   /// active.

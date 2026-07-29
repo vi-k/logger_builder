@@ -1,11 +1,16 @@
 import 'dart:async';
 
-import 'package:logger_builder/src/custom_logger/custom_log_publisher.dart';
-
 import '../custom_logger/custom_log.dart';
+import '../custom_logger/custom_log_publisher.dart';
 
+/// An interface for publishers that can be flushed.
+///
+/// Flushing returns a future that completes when every log event accepted so
+/// far (and, for buffered publishers, any events accepted while the flush is
+/// in progress) has been processed.
 // ignore: one_member_abstracts
 abstract interface class HasFlush {
+  /// Completes when the publisher's queue has been fully processed.
   Future<void> flush();
 }
 
@@ -28,39 +33,129 @@ abstract interface class HasFlush {
 /// ```
 abstract base class AsyncPublisherBase<Log extends CustomLog>
     implements CustomLogPublisher<Log>, HasFlush {
+  /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
-  StreamController<Log> _controller;
 
-  AsyncPublisherBase({this.sync = false})
+  /// Called when [handle] throws.
+  ///
+  /// When `null`, the error is reported to the current zone via
+  /// [Zone.handleUncaughtError]. In either case the queue keeps processing
+  /// subsequent log events.
+  final void Function(Object error, StackTrace stackTrace)? onError;
+
+  StreamController<Log> _controller;
+  StreamSubscription<void>? _subscription;
+  Future<void>? _flushFuture;
+  Future<void>? _closeFuture;
+
+  AsyncPublisherBase({this.sync = false, this.onError})
       : _controller = StreamController<Log>(sync: sync) {
     _listen();
   }
 
+  /// Processes a single log event.
+  ///
+  /// Events are processed strictly sequentially: the next event is not
+  /// handled until the future returned by this method completes.
   FutureOr<void> handle(Log log);
+
+  /// Whether [close] has been called.
+  bool get isClosed => _closeFuture != null;
 
   @override
   void publish(Log log) {
-    if (_controller.isClosed) {
+    if (isClosed) {
       throw StateError('The publisher is closed');
     }
 
     _controller.add(log);
   }
 
+  /// Completes when every log event queued before this call has been
+  /// processed.
+  ///
+  /// Concurrent calls are serialized: a later flush first waits for the
+  /// earlier one and then drains the events queued in between. Note that
+  /// the internal queue listener is re-created in the zone of this call, so
+  /// subsequent zone-reported handler errors go to that zone.
   @override
-  Future<void> flush() async {
+  Future<void> flush() {
+    if (isClosed) {
+      return Future<void>.value();
+    }
+
+    final previous = _flushFuture;
+    return _flushFuture = _flush(previous);
+  }
+
+  Future<void> _flush(Future<void>? previous) async {
+    if (previous != null) {
+      try {
+        await previous;
+      } on Object {
+        // The previous flush already reported its failure to its caller.
+      }
+      if (isClosed) {
+        return;
+      }
+    }
+
     final oldController = _controller;
+    final oldSubscription = _subscription;
     _controller = StreamController<Log>(sync: sync);
     await oldController.close();
+    await oldSubscription?.cancel();
     _listen();
   }
 
-  Future<void> close() async {
+  /// Closes the publisher after processing the already queued log events.
+  ///
+  /// After closing, [publish] throws a [StateError] and [flush] completes
+  /// immediately. Repeated calls return the same future.
+  ///
+  /// Do not await this (or [flush]) from inside [handle]: closing waits for
+  /// the running handler to complete, so it would deadlock.
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
     await _controller.close();
+    await _subscription?.cancel();
   }
 
   void _listen() {
-    _controller.stream.asyncMap(handle).listen((_) {});
+    _subscription = _controller.stream
+        .asyncMap(_guardedHandle)
+        .listen((_) {}, onError: _lastResortError);
+  }
+
+  /// Last-resort guard for errors that escape [_guardedHandle]
+  /// (they should not — errors are routed via the `onError` callback).
+  void _lastResortError(Object error, StackTrace stackTrace) {
+    Zone.current.handleUncaughtError(error, stackTrace);
+  }
+
+  FutureOr<void> _guardedHandle(Log log) {
+    try {
+      final result = handle(log);
+      if (result is Future<void>) {
+        return result.onError<Object>(_reportError);
+      }
+    } on Object catch (error, stackTrace) {
+      _reportError(error, stackTrace);
+    }
+  }
+
+  void _reportError(Object error, StackTrace stackTrace) {
+    if (onError case final onError?) {
+      try {
+        onError(error, stackTrace);
+      } on Object catch (handlerError, handlerStackTrace) {
+        // A throwing error handler must not break the queue.
+        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
+      }
+    } else {
+      Zone.current.handleUncaughtError(error, stackTrace);
+    }
   }
 }
 
@@ -82,9 +177,10 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
 /// ```
 final class AsyncPublisher<Log extends CustomLog>
     extends AsyncPublisherBase<Log> {
+  /// The function that processes a single log event.
   final FutureOr<void> Function(Log log) handler;
 
-  AsyncPublisher(this.handler, {super.sync});
+  AsyncPublisher(this.handler, {super.sync, super.onError});
 
   @override
   FutureOr<void> handle(Log log) => handler(log);
@@ -113,18 +209,22 @@ final class AsyncPublisher<Log extends CustomLog>
 /// ```
 final class AsyncFormatter<Log extends CustomLog, Out extends Object?>
     extends AsyncPublisherBase<Log> {
+  /// Transforms a log event into an [Out] object.
   final FutureOr<Out> Function(Log log) format;
+
+  /// Receives the formatted [Out] object.
   final FutureOr<void> Function(Out out) output;
 
   AsyncFormatter({
     required this.format,
     required this.output,
     super.sync,
+    super.onError,
   });
 
   @override
   FutureOr<void> handle(Log log) => switch (format(log)) {
-        final Out out => output(out),
         final Future<Out> future => future.then(output),
+        final Out out => output(out),
       };
 }

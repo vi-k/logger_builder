@@ -1,6 +1,8 @@
 import 'dart:async';
 
-import 'package:logger_builder/logger_builder.dart';
+import '../custom_logger/custom_log.dart';
+import '../custom_logger/custom_log_publisher.dart';
+import 'async_publisher.dart';
 
 /// A handler that delegates an event to multiple publishers simultaneously.
 ///
