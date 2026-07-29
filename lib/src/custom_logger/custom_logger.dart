@@ -32,6 +32,7 @@ abstract base class CustomLogger<
   int _level = Levels.off;
   final Map<int, LevelLogger> _levelLoggers = {};
   final List<WeakReference<Logger>> _subloggers = [];
+  WeakReference<Logger>? _parent;
   bool _levelLinked = false;
   bool _publisherLinked = false;
 
@@ -54,18 +55,11 @@ abstract base class CustomLogger<
     assert(this is Logger);
     registerLevels();
 
+    _parent = WeakReference(parent);
     parent.registerSublogger(this as Logger);
-
-    level = parent.level;
-    for (final parentLevelLogger in parent._levelLoggers.values) {
-      final levelLogger = _levelLoggers[parentLevelLogger.level];
-      if (levelLogger != null) {
-        levelLogger.publisher = parentLevelLogger.publisher;
-      }
-    }
-
-    _levelLinked = true;
-    _publisherLinked = true;
+    // The private counterpart of [relink]: a virtual call here would reach
+    // subclass overrides before their constructor bodies have run.
+    _relink();
   }
 
   /// Returns the number of directly attached subloggers.
@@ -104,6 +98,42 @@ abstract base class CustomLogger<
       _levelLoggers[level] ??
       (throw StateError('Level $level is not registered'));
 
+  /// The numeric values of the registered levels.
+  ///
+  /// A live view in registration order, not a snapshot.
+  Iterable<int> get levels => _levelLoggers.keys;
+
+  /// Re-attaches this sublogger to its parent: re-inherits the parent's
+  /// current [level] and per-level publishers, and turns propagation of
+  /// future parent updates back on.
+  ///
+  /// A sublogger detaches implicitly when its [level] or [publisher] is
+  /// assigned directly (`child.level = child.level` is the idiom to unlink
+  /// without changing the value); this method is the reverse operation.
+  ///
+  /// Returns `false` when this logger has no parent (a root logger) or the
+  /// parent has already been garbage collected.
+  bool relink() => _relink();
+
+  bool _relink() {
+    final parent = _parent?.target;
+    if (parent == null) {
+      return false;
+    }
+
+    level = parent.level;
+    for (final parentLevelLogger in parent._levelLoggers.values) {
+      _inheritLevelPublisher(
+        parentLevelLogger.level,
+        parentLevelLogger._publisher,
+      );
+    }
+
+    _levelLinked = true;
+    _publisherLinked = true;
+    return true;
+  }
+
   /// Registers all the log levels supported by this logger.
   ///
   /// Implementations must use the [registerLevel] method within this method
@@ -130,7 +160,9 @@ abstract base class CustomLogger<
   ///
   /// Enables all level loggers with a level equal to or exceeding [value],
   /// and disables the others. Propagates the level change down to linked
-  /// subloggers. Detaches this logger's level link if it is a sublogger.
+  /// subloggers. Detaches this logger's level link if it is a sublogger
+  /// (`child.level = child.level` unlinks without changing the value;
+  /// use [relink] to re-attach).
   set level(int value) {
     _level = value;
     _levelLinked = false;
@@ -154,7 +186,9 @@ abstract base class CustomLogger<
 
   /// Assigns a common [CustomLogPublisher] to all registered log levels.
   ///
-  /// Propagates the publisher change to linked subloggers.
+  /// Propagates the publisher change to linked subloggers. Detaches this
+  /// logger's publisher link if it is a sublogger (use [relink] to
+  /// re-attach).
   // ignore: avoid_setters_without_getters
   set publisher(CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;

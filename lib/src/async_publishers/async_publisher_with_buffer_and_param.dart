@@ -32,7 +32,7 @@ import 'internal/buffered_pipeline.dart';
 /// log.publisher = asyncPublisher.withParam(source);
 /// ```
 abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
-    Log extends CustomLog> implements HasFlush {
+    Log extends CustomLog> implements Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -50,6 +50,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
     onError: onError,
   );
 
+  /// Creates the publisher and its buffered processing queue.
   AsyncPublisherWithBufferAndParamBase({this.sync = false, this.onError});
 
   /// Processes a batch of buffered parameter-log [entries].
@@ -87,6 +88,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running batch to complete, so it would deadlock.
+  @override
   Future<void> close() => _pipeline.close();
 
   void _publish(Param param, Log log) => _pipeline.add((param, log));
@@ -121,6 +123,7 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
     List<(Param, Log)> retryBuffer,
   ) handler;
 
+  /// Creates a publisher backed by [handler].
   AsyncPublisherWithBufferAndParam(this.handler, {super.sync, super.onError});
 
   @override
@@ -173,6 +176,8 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     List<(Param, Log)> retryBuffer,
   ) output;
 
+  /// Creates a publisher that formats batches via [format] and hands the
+  /// result to [output].
   AsyncFormatterWithBufferAndParam({
     required this.format,
     required this.output,

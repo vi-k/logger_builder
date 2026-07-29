@@ -25,17 +25,17 @@ final class VarLevelLogger
       };
 }
 
-final class VarLogger
+base class VarLogger
     extends CustomLogger<VarLogger, VarLevelLogger, VarLogFn, VarLog> {
-  final List<int> levels;
+  final List<int> levelValues;
 
-  VarLogger(this.levels);
+  VarLogger(this.levelValues);
 
-  VarLogger.sub(super.parent, this.levels) : super.sub();
+  VarLogger.sub(super.parent, this.levelValues) : super.sub();
 
   @override
   void registerLevels() {
-    for (final level in levels) {
+    for (final level in levelValues) {
       registerLevel(VarLevelLogger(level: level, name: 'L$level'));
     }
   }

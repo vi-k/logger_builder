@@ -28,7 +28,7 @@ import 'internal/buffered_pipeline.dart';
 /// }
 /// ```
 abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
-    implements CustomLogPublisher<Log>, HasFlush {
+    implements CustomLogPublisher<Log>, Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -45,6 +45,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
     onError: onError,
   );
 
+  /// Creates the publisher and its buffered processing queue.
   AsyncPublisherWithBufferBase({this.sync = false, this.onError});
 
   /// Processes a batch of buffered [logs].
@@ -77,6 +78,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running batch to complete, so it would deadlock.
+  @override
   Future<void> close() => _pipeline.close();
 }
 
@@ -106,6 +108,7 @@ final class AsyncPublisherWithBuffer<Log extends CustomLog>
   /// The function that processes a batch of buffered logs.
   final FutureOr<void> Function(List<Log> logs, List<Log> retryBuffer) handler;
 
+  /// Creates a publisher backed by [handler].
   AsyncPublisherWithBuffer(this.handler, {super.sync, super.onError});
 
   @override
@@ -150,6 +153,8 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
   final FutureOr<void> Function(Out out, List<Log> logs, List<Log> retryBuffer)
       output;
 
+  /// Creates a publisher that formats batches via [format] and hands the
+  /// result to [output].
   AsyncFormatterWithBuffer({
     required this.format,
     required this.output,

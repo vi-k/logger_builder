@@ -6,6 +6,25 @@ import 'utils/variable_logger.dart';
 WeakReference<VarLogger> createDiscardedSublogger(VarLogger parent) =>
     WeakReference(VarLogger.sub(parent, [Levels.info]));
 
+/// Overrides [VarLogger.relink] with a body that touches a `late` field
+/// initialized in the constructor body — a legal subclass that would crash
+/// if `relink` were virtually dispatched during superclass construction.
+final class _RelinkOverridingLogger extends VarLogger {
+  final relinkTags = <String>[];
+  late final String tag;
+
+  _RelinkOverridingLogger.sub(VarLogger parent)
+      : super.sub(parent, [Levels.info]) {
+    tag = 'ready';
+  }
+
+  @override
+  bool relink() {
+    relinkTags.add(tag);
+    return super.relink();
+  }
+}
+
 /// Tries to provoke a garbage collection until [probe] is cleared.
 Future<bool> tryCollectGarbage(WeakReference<Object> probe) async {
   for (var i = 0; i < 50 && probe.target != null; i++) {
@@ -45,6 +64,65 @@ void main() {
       expect(childWithout.publisherLinked, isTrue);
       childWith.logAt(Levels.error)('oops');
       expect(published, ['parent:oops']);
+    });
+  });
+
+  // Regression: D7 (0.4.0)
+  group('hierarchy management API', () {
+    test('levels lists the registered levels', () {
+      expect(
+        VarLogger([Levels.info, Levels.error]).levels,
+        unorderedEquals([Levels.info, Levels.error]),
+      );
+    });
+
+    test('relink re-attaches an unlinked sublogger to its parent', () {
+      final parentPublished = <String?>[];
+      final parent = VarLogger([Levels.info])..level = Levels.off;
+      // Created linked, then immediately unlinked (level and publisher).
+      final child = VarLogger.sub(parent, [Levels.info])
+        ..level = Levels.all
+        ..publisher = const CustomLogPublisher.noOp();
+      expect(child.levelLinked, isFalse);
+      expect(child.publisherLinked, isFalse);
+
+      parent
+        ..level = Levels.all
+        ..publisher =
+            CustomLogPublisher((log) => parentPublished.add(log.message));
+      child.logAt(Levels.info)('before relink');
+      expect(parentPublished, isEmpty);
+
+      expect(child.relink(), isTrue);
+
+      expect(child.levelLinked, isTrue);
+      expect(child.publisherLinked, isTrue);
+      expect(child.level, parent.level);
+      child.logAt(Levels.info)('after relink');
+      expect(parentPublished, ['after relink']);
+
+      // Parent updates propagate again.
+      parent.level = Levels.off;
+      expect(child.level, Levels.off);
+    });
+
+    test('relink returns false for a root logger', () {
+      expect(VarLogger([Levels.info]).relink(), isFalse);
+    });
+
+    // Regression: CR8 (cross-review 0.4.0)
+    test('construction does not dispatch relink to subclass overrides', () {
+      final parent = VarLogger([Levels.info]);
+
+      late _RelinkOverridingLogger child;
+      expect(
+        () => child = _RelinkOverridingLogger.sub(parent),
+        returnsNormally,
+      );
+
+      expect(child.levelLinked, isTrue);
+      expect(child.relink(), isTrue);
+      expect(child.relinkTags, ['ready']);
     });
   });
 

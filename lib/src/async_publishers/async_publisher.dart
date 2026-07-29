@@ -9,9 +9,23 @@ import '../custom_logger/custom_log_publisher.dart';
 /// far (and, for buffered publishers, any events accepted while the flush is
 /// in progress) has been processed.
 // ignore: one_member_abstracts
-abstract interface class HasFlush {
+abstract interface class Flushable {
   /// Completes when the publisher's queue has been fully processed.
   Future<void> flush();
+}
+
+/// The old name of [Flushable].
+@Deprecated('Use Flushable instead')
+typedef HasFlush = Flushable;
+
+/// An interface for log-event handlers that can be closed.
+///
+/// Closing is terminal: after the returned future completes, the handler no
+/// longer accepts log events.
+// ignore: one_member_abstracts
+abstract interface class Closable {
+  /// Closes the handler after processing the already accepted log events.
+  Future<void> close();
 }
 
 /// A base class for publishers that process log events asynchronously.
@@ -32,7 +46,7 @@ abstract interface class HasFlush {
 /// }
 /// ```
 abstract base class AsyncPublisherBase<Log extends CustomLog>
-    implements CustomLogPublisher<Log>, HasFlush {
+    implements CustomLogPublisher<Log>, Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -48,6 +62,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   Future<void>? _flushFuture;
   Future<void>? _closeFuture;
 
+  /// Creates the publisher and starts its processing queue.
   AsyncPublisherBase({this.sync = false, this.onError})
       : _controller = StreamController<Log>(sync: sync) {
     _listen();
@@ -115,6 +130,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running handler to complete, so it would deadlock.
+  @override
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
@@ -180,6 +196,7 @@ final class AsyncPublisher<Log extends CustomLog>
   /// The function that processes a single log event.
   final FutureOr<void> Function(Log log) handler;
 
+  /// Creates a publisher backed by [handler].
   AsyncPublisher(this.handler, {super.sync, super.onError});
 
   @override
@@ -215,6 +232,8 @@ final class AsyncFormatter<Log extends CustomLog, Out extends Object?>
   /// Receives the formatted [Out] object.
   final FutureOr<void> Function(Out out) output;
 
+  /// Creates a publisher that formats logs via [format] and hands the
+  /// result to [output].
   AsyncFormatter({
     required this.format,
     required this.output,

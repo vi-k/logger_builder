@@ -45,9 +45,14 @@ final class _CustomLogPublisherImpl<Log extends CustomLog>
 /// passed into [output] for actual logging (e.g. printing).
 final class CustomLogFormatter<Log extends CustomLog, Out extends Object?>
     implements CustomLogPublisher<Log> {
+  /// Transforms a log event into an [Out] object.
   final Out Function(Log log) format;
+
+  /// Receives the formatted [Out] object.
   final void Function(Out out) output;
 
+  /// Creates a publisher that formats a log via [format] and hands the
+  /// result to [output].
   const CustomLogFormatter({
     required this.format,
     required this.output,

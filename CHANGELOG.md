@@ -1,3 +1,33 @@
+## 0.4.0
+
+* [breaking changes] Publisher lifecycle interfaces: `HasFlush` is renamed
+  to `Flushable` (`HasFlush` remains as a deprecated alias), and the new
+  `Closable` interface exposes `close()`. All async publishers implement
+  both; `MultiPublisher.close()` closes every `Closable` publisher in its
+  list.
+* [breaking changes] `MultiPublisher.flush` with `onError` set now routes
+  each publisher's error to the callback and completes normally; without
+  `onError` the previous behavior (`ParallelWaitError`) is preserved.
+  `close` errors are routed the same way.
+* [breaking changes] `MultiPublisher` copies the publisher list at
+  construction; mutating the original list no longer affects the publisher.
+* [breaking changes] `CustomLevelLogger` is now an `abstract base class`:
+  it can be extended, but no longer implemented outside the package.
+* New hierarchy management API: `CustomLogger.levels` lists the registered
+  level values (a live view); `CustomLogger.relink()` re-attaches an
+  unlinked sublogger to its parent (re-inheriting the level and publishers).
+  The unlink idiom (`child.level = child.level`) is now documented.
+  Note: a subclass that already declares a compatible member named `levels`
+  or `relink` will silently override the new API — rename such members.
+* `MultiPublisher` now has a closed state: `publish` after `close()` throws
+  a `StateError`, repeated `close()` calls return the same future, and
+  a new `isClosed` getter reports the state. A throwing `onError` callback
+  no longer escapes to the logging call site or replaces the original
+  error in `flush`/`close` — the secondary error is reported to the
+  current zone.
+* The `public_member_api_docs` lint is enabled; every public member is
+  documented.
+
 ## 0.3.3
 
 * `AsyncPublisherWithBuffer`/`AsyncPublisherWithBufferAndParam`: `flush()` no

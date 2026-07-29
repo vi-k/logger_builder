@@ -1,3 +1,6 @@
+// Not part of the public API: not exported by the package barrel.
+// ignore_for_file: public_member_api_docs
+
 import 'dart:async';
 
 /// Internal engine shared by the buffered async publishers: a tick-driven

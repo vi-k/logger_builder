@@ -26,7 +26,7 @@ import 'internal/async_param_publisher.dart';
 /// log.publisher = publisher.withParam('app.log');
 /// ```
 abstract base class AsyncPublisherWithParamBase<Param extends Object?,
-    Log extends CustomLog> implements HasFlush {
+    Log extends CustomLog> implements Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -42,6 +42,7 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   Future<void>? _flushFuture;
   Future<void>? _closeFuture;
 
+  /// Creates the publisher and starts its processing queue.
   AsyncPublisherWithParamBase({this.sync = false, this.onError})
       : _controller = StreamController<(Param, Log)>(sync: sync) {
     _listen();
@@ -105,6 +106,7 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running handler to complete, so it would deadlock.
+  @override
   Future<void> close() => _closeFuture ??= _close();
 
   Future<void> _close() async {
@@ -178,6 +180,7 @@ final class AsyncPublisherWithParam<Param extends Object?,
   /// The function that processes a single log event with its parameter.
   final FutureOr<void> Function(Param param, Log log) handler;
 
+  /// Creates a publisher backed by [handler].
   AsyncPublisherWithParam(this.handler, {super.sync, super.onError});
 
   @override
@@ -216,6 +219,8 @@ final class AsyncFormatterWithParam<
   /// Receives the formatted [Out] object along with the parameter.
   final FutureOr<void> Function(Param param, Out out) output;
 
+  /// Creates a publisher that formats logs via [format] and hands the
+  /// result to [output].
   AsyncFormatterWithParam({
     required this.format,
     required this.output,

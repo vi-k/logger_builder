@@ -12,7 +12,7 @@ part of 'custom_logger.dart';
 /// unnecessary computations.
 ///
 /// It takes the same generic type parameters as [CustomLogger].
-abstract class CustomLevelLogger<
+abstract base class CustomLevelLogger<
     Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log>,
     LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
     LogFn extends Function,
