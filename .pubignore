@@ -1,0 +1,9 @@
+# .pubignore replaces .gitignore for publishing — keep its entries duplicated.
+.dart_tool/
+pubspec.lock
+*.exe
+
+# Internal working documents, not part of the published package.
+TODO.md
+REVIEW.md
+SPEC.md
