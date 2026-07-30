@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'custom_logger.dart';
 
 /// A base representation of a single log event.
@@ -52,6 +54,23 @@ abstract base class CustomLog {
         shortLevelName = levelLogger.shortName,
         stackTrace = stackTrace ?? stackTraceFromError(error),
         zone = zone ?? Zone.current;
+
+  /// Creates a copy of [original] with the given [error] and [stackTrace].
+  ///
+  /// [level], [levelName], [shortLevelName] and [zone] are taken from
+  /// [original]; [error] and [stackTrace] are assigned verbatim — unlike
+  /// the main constructor, no stack trace is derived from [error]. Intended
+  /// for subclass `copyWith` implementations: a copy is not a new log
+  /// event, so no new identity (number, time) should be minted.
+  @protected
+  CustomLog.copy(
+    CustomLog original, {
+    required this.error,
+    required this.stackTrace,
+  })  : level = original.level,
+        levelName = original.levelName,
+        shortLevelName = original.shortLevelName,
+        zone = original.zone;
 
   /// Attempts to extract a [StackTrace] securely from an [error] object
   /// if it is of type [Error].

@@ -21,6 +21,22 @@ final class Log extends CustomLog {
         _lazyPath = path,
         _lazyMessage = LazyStringOrNull(message);
 
+  // ignore: use_super_parameters
+  Log.copy(
+    Log original, {
+    Object? message,
+    Object? error,
+    StackTrace? stackTrace,
+  })  : timestamp = original.timestamp,
+        _lazyPath = original._lazyPath,
+        _lazyMessage =
+            message != null ? LazyStringOrNull(message) : original._lazyMessage,
+        super.copy(
+          original,
+          error: error,
+          stackTrace: stackTrace,
+        );
+
   String get path => _lazyPath.value;
   String? get message => _lazyMessage.value;
 }
