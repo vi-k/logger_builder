@@ -37,12 +37,14 @@ void main() {
     });
 
     test('assigns error and stackTrace verbatim', () {
-      late final Object error;
+      late final Error error;
       try {
-        throw Exception('boom');
-      } on Exception catch (e) {
+        throw StateError('boom');
+        // ignore: avoid_catching_errors
+      } on StateError catch (e) {
         error = e;
       }
+      expect(error.stackTrace, isNotNull);
 
       final original = capture(
         (logger) => logger.e(
@@ -53,9 +55,11 @@ void main() {
       );
       expect(original.stackTrace, isNotNull);
 
-      // Копия с error, но без stackTrace НЕ выводит трейс заново и не
-      // подхватывает трейс оригинала — значения присваиваются дословно.
-      final copy = Log.copy(original, error: error);
+      // Копия с error, но без stackTrace НЕ выводит трейс заново (даже
+      // из error.stackTrace) и не подхватывает трейс оригинала —
+      // значения присваиваются дословно.
+      // ignore: avoid_redundant_argument_values
+      final copy = Log.copy(original, error: error, stackTrace: null);
 
       expect(copy.error, same(error));
       expect(copy.stackTrace, isNull);
