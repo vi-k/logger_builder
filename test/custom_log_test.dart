@@ -7,9 +7,8 @@ void main() {
   group('CustomLog.copy', () {
     Log capture(void Function(Logger logger) emit) {
       final logs = <Log>[];
-      // Порог 0 включает все уровни (уровни всегда > 0).
       final logger = Logger('test')
-        ..level = 0
+        ..level = Levels.all
         ..publisher = CustomLogPublisher(logs.add);
       emit(logger);
 

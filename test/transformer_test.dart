@@ -13,7 +13,7 @@ void main() {
     setUp(() {
       published = <Log>[];
       logger = Logger('app')
-        ..level = 0
+        ..level = Levels.all
         ..publisher = CustomLogPublisher(published.add);
     });
 

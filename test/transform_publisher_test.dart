@@ -33,7 +33,7 @@ void main() {
     void setUpLogger(CustomLogPublisher<Log> publisher) {
       published = <Log>[];
       logger = Logger('test')
-        ..level = 0
+        ..level = Levels.all
         ..publisher = publisher;
     }
 
