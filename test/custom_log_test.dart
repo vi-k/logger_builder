@@ -37,7 +37,13 @@ void main() {
     });
 
     test('assigns error and stackTrace verbatim', () {
-      final error = StateError('boom');
+      late final Object error;
+      try {
+        throw Exception('boom');
+      } on Exception catch (e) {
+        error = e;
+      }
+
       final original = capture(
         (logger) => logger.e(
           'fail',
