@@ -1,3 +1,22 @@
+## 0.5.0
+
+* Pre-publication log processing: the new `LogTransformer` typedef
+  (`Log? Function(Log)`), the `CustomLogger.transformer` property applied
+  to every log right before publishing (inherited by subloggers like
+  `level`/`publisher`, same link/unlink/`relink` semantics), and the
+  `TransformPublisher` wrapper for per-destination transformation.
+  Returning `null` drops the log. Fail-closed: a throwing transformer
+  drops the log and reports the error to `onError`
+  (`TransformPublisher`) or the current zone.
+* [breaking changes] `CustomLevelLogger` gains the protected `publishLog`:
+  `processLog` implementations must call it instead of
+  `publisher.publish(...)`, otherwise `CustomLogger.transformer` is
+  ignored.
+* The new protected `CustomLog.copy` copies level fields and the zone from
+  an existing log and assigns `error`/`stackTrace` verbatim — the building
+  block for `copyWith` in subclasses (a copy keeps the log's identity: no
+  new number or time should be minted).
+
 ## 0.4.0
 
 * [breaking changes] Publisher lifecycle interfaces: `HasFlush` is renamed
