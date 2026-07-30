@@ -118,6 +118,40 @@ abstract base class CustomLevelLogger<
     logger._setLevelPublisher(level, publisher);
   }
 
+  /// Publishes [log], first applying the logger's
+  /// [CustomLogger.transformer].
+  ///
+  /// Returning `null` from the transformer drops the log. A throwing
+  /// transformer also drops it (fail-closed: the untransformed log is
+  /// never published) and reports the error to the current zone via
+  /// [Zone.handleUncaughtError].
+  ///
+  /// Subclasses must call this from [processLog] instead of
+  /// `publisher.publish(...)` — otherwise [CustomLogger.transformer] is
+  /// ignored.
+  @protected
+  void publishLog(Log log) {
+    var published = log;
+
+    if (logger._transformer case final transformer?) {
+      final Log? transformed;
+      try {
+        transformed = transformer(log);
+      } on Object catch (error, stackTrace) {
+        Zone.current.handleUncaughtError(error, stackTrace);
+
+        return;
+      }
+
+      if (transformed == null) {
+        return;
+      }
+      published = transformed;
+    }
+
+    _publisher.publish(published);
+  }
+
   void _attach(Logger logger) {
     _logger = logger;
     _toggle(logger.level <= level);

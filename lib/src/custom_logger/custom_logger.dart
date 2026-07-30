@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 
 import '../utils/levels.dart';
@@ -35,6 +37,8 @@ abstract base class CustomLogger<
   WeakReference<Logger>? _parent;
   bool _levelLinked = false;
   bool _publisherLinked = false;
+  LogTransformer<Log>? _transformer;
+  bool _transformerLinked = false;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
   ///
@@ -91,6 +95,13 @@ abstract base class CustomLogger<
   @visibleForTesting
   bool get publisherLinked => _publisherLinked;
 
+  /// Returns `true` if this logger's transformer is synchronized with its
+  /// parent.
+  ///
+  /// For tests only; not intended for production use.
+  @visibleForTesting
+  bool get transformerLinked => _transformerLinked;
+
   /// Retrieves the [LevelLogger] associated with the given numerical [level].
   ///
   /// Throws a [StateError] if the exact [level] is not registered.
@@ -128,9 +139,11 @@ abstract base class CustomLogger<
         parentLevelLogger._publisher,
       );
     }
+    transformer = parent._transformer;
 
     _levelLinked = true;
     _publisherLinked = true;
+    _transformerLinked = true;
     return true;
   }
 
@@ -204,6 +217,40 @@ abstract base class CustomLogger<
         sublogger
           ..publisher = publisher
           .._publisherLinked = true;
+      }
+    }
+  }
+
+  /// The transformer applied to every log of this logger right before it
+  /// is handed to the publisher (see [CustomLevelLogger.publishLog]).
+  ///
+  /// Intended primarily for security: masking secrets and PII, or dropping
+  /// forbidden logs entirely (`null` return). `null` (the default) means
+  /// no transformation.
+  ///
+  /// Fail-closed: if the transformer throws, the log is NOT published and
+  /// the error is reported to the current zone via
+  /// [Zone.handleUncaughtError]. Use `TransformPublisher` with its
+  /// `onError` for a custom error callback.
+  LogTransformer<Log>? get transformer => _transformer;
+
+  /// Sets the log [transformer].
+  ///
+  /// Propagates the change to linked subloggers. Detaches this logger's
+  /// transformer link if it is a sublogger
+  /// (`child.transformer = child.transformer` unlinks without changing the
+  /// value; use [relink] to re-attach).
+  set transformer(LogTransformer<Log>? value) {
+    _transformer = value;
+    _transformerLinked = false;
+
+    pruneSubloggers();
+    for (final sublogger in _subloggers) {
+      if (sublogger.target case final sublogger?
+          when sublogger._transformerLinked) {
+        sublogger
+          ..transformer = value
+          .._transformerLinked = true;
       }
     }
   }
