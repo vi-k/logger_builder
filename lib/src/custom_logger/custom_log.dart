@@ -77,3 +77,11 @@ abstract base class CustomLog {
   static StackTrace? stackTraceFromError(Object? error) =>
       error is Error ? error.stackTrace : null;
 }
+
+/// Transforms a log event before it is published.
+///
+/// Returning a (possibly modified) log publishes it instead of the
+/// original; returning `null` drops the log entirely. Used by
+/// `CustomLogger.transformer` and `TransformPublisher` — primarily for
+/// security: masking secrets and PII before the log reaches any output.
+typedef LogTransformer<Log extends CustomLog> = Log? Function(Log log);
