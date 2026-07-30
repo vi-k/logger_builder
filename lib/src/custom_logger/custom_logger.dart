@@ -133,13 +133,13 @@ abstract base class CustomLogger<
     }
 
     level = parent.level;
+    transformer = parent._transformer;
     for (final parentLevelLogger in parent._levelLoggers.values) {
       _inheritLevelPublisher(
         parentLevelLogger.level,
         parentLevelLogger._publisher,
       );
     }
-    transformer = parent._transformer;
 
     _levelLinked = true;
     _publisherLinked = true;
