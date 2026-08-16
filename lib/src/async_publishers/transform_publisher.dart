@@ -25,6 +25,9 @@ import 'async_publisher.dart';
 ///
 /// [flush] and [close] are delegated to the wrapped publisher when it
 /// implements [Flushable]/[Closable], and complete immediately otherwise.
+/// [close] is terminal and idempotent regardless of what the wrapped
+/// publisher is: afterwards [publish] throws a [StateError] and repeated
+/// calls return the same future.
 ///
 /// > [!WARNING]
 /// > The [transformer] must not log into a logger that publishes through
@@ -48,6 +51,7 @@ final class TransformPublisher<Log extends CustomLog>
   final void Function(Object error, StackTrace stackTrace)? onError;
 
   bool _transforming = false;
+  Future<void>? _closeFuture;
 
   /// Creates a publisher that transforms every log before [inner].
   TransformPublisher(
@@ -56,8 +60,15 @@ final class TransformPublisher<Log extends CustomLog>
     this.onError,
   }) : _inner = inner;
 
+  /// Whether [close] has been called.
+  bool get isClosed => _closeFuture != null;
+
   @override
   void publish(Log log) {
+    if (isClosed) {
+      throw StateError('The publisher is closed');
+    }
+
     if (_transforming) {
       _reportError(
         StateError(
@@ -79,8 +90,9 @@ final class TransformPublisher<Log extends CustomLog>
 
       return;
     } finally {
-      // Released before publishing, so a nested TransformPublisher is not
-      // mistaken for a reentrant call.
+      // Scoped to this publisher's own transformer. A chained
+      // TransformPublisher keeps its own flag, on its own object, so the
+      // release point does not affect it either way.
       _transforming = false;
     }
 
@@ -109,7 +121,7 @@ final class TransformPublisher<Log extends CustomLog>
       };
 
   @override
-  Future<void> close() => switch (_inner) {
+  Future<void> close() => _closeFuture ??= switch (_inner) {
         final Closable closable => closable.close(),
         _ => Future.value(),
       };

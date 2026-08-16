@@ -204,5 +204,39 @@ void main() {
       await publisher.flush();
       await publisher.close();
     });
+
+    // Regression: M8 (project review 2026-08-16[4]) — close was neither
+    // terminal nor idempotent, and what happened after it depended on
+    // whether the wrapped publisher happened to implement Closable.
+    test('close is terminal regardless of the inner publisher', () async {
+      late Log sample;
+      Logger('sampler')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher<Log>((log) => sample = log)
+        ..i('sample');
+
+      final delivered = <Log>[];
+      final publisher = TransformPublisher<Log>(
+        CustomLogPublisher(delivered.add),
+        transformer: (log) => log,
+      );
+
+      await publisher.close();
+
+      expect(publisher.isClosed, isTrue);
+      expect(() => publisher.publish(sample), throwsStateError);
+      expect(delivered, isEmpty);
+    });
+
+    // Regression: M8
+    test('close is idempotent and delegates once', () async {
+      final inner = _LifecyclePublisher();
+      final publisher = TransformPublisher(inner, transformer: (log) => log);
+
+      await publisher.close();
+      await publisher.close();
+
+      expect(inner.closeCount, 1);
+    });
   });
 }

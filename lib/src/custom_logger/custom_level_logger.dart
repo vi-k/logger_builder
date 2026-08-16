@@ -19,7 +19,10 @@ abstract base class CustomLevelLogger<
     Log extends CustomLog> {
   /// Numerical value of the level of this [LevelLogger] logger.
   ///
-  /// Greater than 0 and less than 2000.
+  /// Must be greater than [Levels.all] (0) and less than [Levels.off]
+  /// (2000) — checked in the constructor. Those two are thresholds, not
+  /// levels: a level logger registered at [Levels.off] would still be
+  /// enabled with `logger.level = Levels.off`.
   ///
   /// See some examples here: [Levels].
   final int level;
@@ -57,20 +60,38 @@ abstract base class CustomLevelLogger<
 
   /// Creates a level logger.
   ///
-  /// The [name] must not be empty, otherwise an [ArgumentError] is thrown.
-  /// When [shortName] is omitted, the first character (code point) of [name]
-  /// is used.
+  /// The [level] must lie strictly between [Levels.all] and [Levels.off],
+  /// and the [name] must not be empty; otherwise an [ArgumentError] is
+  /// thrown. When [shortName] is omitted, the first character (code point)
+  /// of [name] is used.
   CustomLevelLogger({
-    required this.level,
+    required int level,
     required String name,
     String? shortName,
     required LogFn noLog,
     CustomLogPublisher<Log>? publisher,
-  })  : name = _checkName(name),
+  })  : level = _checkLevel(level),
+        name = _checkName(name),
         shortName = shortName ?? _firstCharacter(name),
         _noLog = noLog,
         _log = noLog,
         _publisher = publisher ?? const CustomLogPublisher.noOp();
+
+  static int _checkLevel(int level) {
+    // Checked in every build mode, like the name: Levels.all and Levels.off
+    // are thresholds, not levels, and a level logger sitting on one of them
+    // silently defeats `logger.level = Levels.off`.
+    if (level <= Levels.all || level >= Levels.off) {
+      throw ArgumentError.value(
+        level,
+        'level',
+        'must be greater than Levels.all (${Levels.all}) and less than '
+            'Levels.off (${Levels.off})',
+      );
+    }
+
+    return level;
+  }
 
   static String _checkName(String name) {
     if (name.isEmpty) {
@@ -138,23 +159,24 @@ abstract base class CustomLevelLogger<
   /// ignored.
   @protected
   void publishLog(Log log) {
+    // Captured once: re-reading `logger` would let a level logger that got
+    // re-attached mid-transform clear the guard on the wrong owner and leave
+    // the original latched forever.
+    final owner = logger;
     var published = log;
 
-    if (logger._transformer case final transformer?) {
-      if (logger._transforming) {
-        Zone.current.handleUncaughtError(
-          StateError(
-            'A log transformer must not log through its own logger; '
-            'the nested log was dropped',
-          ),
-          StackTrace.current,
+    if (owner._transformer case final transformer?) {
+      if (owner._transforming) {
+        _reportGuardViolation(
+          'A log transformer must not log through its own logger; '
+          'the nested log was dropped',
         );
 
         return;
       }
 
       final Log? transformed;
-      logger._transforming = true;
+      owner._transforming = true;
       try {
         transformed = transformer(log);
       } on Object catch (error, stackTrace) {
@@ -162,9 +184,10 @@ abstract base class CustomLevelLogger<
 
         return;
       } finally {
-        // Released before publishing, so a TransformPublisher further down
-        // the chain is not mistaken for a reentrant call.
-        logger._transforming = false;
+        // Scoped to the transformer alone; the publish path below has its
+        // own guard. (A chained TransformPublisher was never at risk here:
+        // it keeps its own flag, on its own object.)
+        owner._transforming = false;
       }
 
       if (transformed == null) {
@@ -173,10 +196,35 @@ abstract base class CustomLevelLogger<
       published = transformed;
     }
 
-    _publisher.publish(published);
+    if (owner._publishing) {
+      _reportGuardViolation(
+        'A publisher must not log through the logger it publishes for; '
+        'the nested log was dropped',
+      );
+
+      return;
+    }
+
+    owner._publishing = true;
+    try {
+      _publisher.publish(published);
+    } finally {
+      owner._publishing = false;
+    }
+  }
+
+  static void _reportGuardViolation(String message) {
+    Zone.current.handleUncaughtError(StateError(message), StackTrace.current);
   }
 
   void _attach(Logger logger) {
+    if (_logger case final attached? when !identical(attached, logger)) {
+      throw StateError(
+        'This level logger is already registered in another logger; '
+        'sharing one would route this logger through the publisher and '
+        'transformer of the other',
+      );
+    }
     _logger = logger;
     _toggle(logger.level <= level);
   }

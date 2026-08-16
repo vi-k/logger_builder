@@ -41,6 +41,39 @@ void main() {
         throwsStateError,
       );
     });
+
+    // Regression: M1 (project review 2026-08-16[4]) — Levels.all and
+    // Levels.off are thresholds, not levels: a level logger registered at
+    // Levels.off stayed enabled with `logger.level = Levels.off`, silently
+    // defeating "logging is completely disabled".
+    test('a level at or beyond the thresholds throws ArgumentError', () {
+      expect(
+        () => LevelLogger(level: Levels.off, name: 'nope'),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelLogger(level: Levels.all, name: 'nope'),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelLogger(level: -1, name: 'nope'),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelLogger(level: 5000, name: 'nope'),
+        throwsArgumentError,
+      );
+    });
+
+    // Regression: M2 (project review 2026-08-16[4]) — one level logger
+    // registered in two loggers used to hand the first logger's logs to the
+    // second one's publisher and transformer, without a word.
+    test('registering one level logger in two loggers throws StateError', () {
+      final shared = VarLevelLogger(level: Levels.info, name: 'info');
+
+      expect(() => SharedLevelLogger(shared), returnsNormally);
+      expect(() => SharedLevelLogger(shared), throwsStateError);
+    });
   });
 
   group('CustomLogger', () {

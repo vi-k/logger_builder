@@ -167,7 +167,11 @@ void main() {
         (error, stackTrace) => errors.add(error),
       );
 
-      expect(published, hasLength(1));
+      // The outer log is the one that must survive: a guard firing inside
+      // out — dropping the outer log and publishing the nested one — would
+      // be the worst possible outcome for a masking transformer, and
+      // hasLength(1) alone cannot tell the two apart.
+      expect(published.single.message, 'secret');
       expect(errors.single, isA<StateError>());
     });
 
@@ -290,6 +294,89 @@ void main() {
       );
 
       expect(published.single.message, 'm/log/pub');
+      expect(errors, isEmpty);
+    });
+
+    // Regression: M7 (project review 2026-08-16[4]) — a publisher logging
+    // into its own logger recursed about 2570 frames into a
+    // StackOverflowError, running the transformer once per frame.
+    test('a publisher logging into its own logger drops the nested log', () {
+      final errors = <Object>[];
+      var publishes = 0;
+      runZonedGuarded(
+        () {
+          logger
+            ..publisher = CustomLogPublisher<Log>((log) {
+              publishes++;
+              published.add(log);
+              logger.i('from inside the publisher');
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(publishes, 1);
+      expect(published.single.message, 'outer');
+      expect(errors.single, isA<StateError>());
+    });
+
+    // Regression: M7 — the same cycle with a transformer installed used to
+    // run the transformer once per frame all the way down.
+    test('the publisher guard also holds with a transformer installed', () {
+      final errors = <Object>[];
+      var transformerRuns = 0;
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              transformerRuns++;
+
+              return log;
+            })
+            ..publisher = CustomLogPublisher<Log>((log) {
+              published.add(log);
+              logger.i('from inside the publisher');
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(transformerRuns, 2, reason: 'outer log plus the nested attempt');
+      expect(published.single.message, 'outer');
+      expect(errors.single, isA<StateError>());
+    });
+
+    // Regression: M5 (project review 2026-08-16[4]) — documents a real limit
+    // of the guard rather than a fix: a sublogger is a separate logger with
+    // its own flag, so a transformer logging through a linked sublogger is
+    // not reentrancy and the nested log IS published.
+    test('logging through a linked sublogger is not treated as reentrant', () {
+      final errors = <Object>[];
+      final child = logger.withAddedName('child');
+      var transformerRuns = 0;
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              transformerRuns++;
+              if (transformerRuns == 1) {
+                child.i('via child');
+              }
+
+              return log;
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(
+        published.map((log) => log.message),
+        ['via child', 'outer'],
+        reason: 'the nested log goes through and is published first',
+      );
       expect(errors, isEmpty);
     });
   });

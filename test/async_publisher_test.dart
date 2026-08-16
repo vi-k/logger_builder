@@ -10,6 +10,32 @@ Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..publisher = publisher;
 
 void main() {
+  // Regression: M15 (project review 2026-08-16[4]) — both "sync mode" tests
+  // only checked ordering, which is identical in async mode, so hardcoding
+  // sync: false in every controller kept the whole suite green.
+  group('sync flag', () {
+    test('sync: true runs the handler before publish returns', () {
+      final handled = <String?>[];
+      final publisher = AsyncPublisher<Log>(
+        (log) => handled.add(log.message),
+        sync: true,
+      );
+      makeLogger(publisher).i('a');
+
+      expect(handled, ['a']);
+    });
+
+    test('sync: false defers the handler', () {
+      final handled = <String?>[];
+      final publisher = AsyncPublisher<Log>(
+        (log) => handled.add(log.message),
+      );
+      makeLogger(publisher).i('a');
+
+      expect(handled, isEmpty);
+    });
+  });
+
   group('AsyncPublisher', () {
     test('processes logs sequentially in publish order', () async {
       final handled = <String?>[];

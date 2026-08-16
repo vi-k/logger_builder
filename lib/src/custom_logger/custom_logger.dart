@@ -41,9 +41,13 @@ abstract base class CustomLogger<
   Logger? _parent;
   bool _levelLinked = false;
   bool _publisherLinked = false;
+  // The last publisher assigned through `publisher =`, kept so that levels
+  // registered later do not silently stay on the no-op publisher.
+  CustomLogPublisher<Log>? _defaultPublisher;
   LogTransformer<Log>? _transformer;
   bool _transformerLinked = false;
   bool _transforming = false;
+  bool _publishing = false;
   int _prunedAt = 0;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
@@ -145,9 +149,9 @@ abstract base class CustomLogger<
   /// `child[level].publisher = child[level].publisher`); this method is the
   /// reverse operation.
   ///
-  /// Levels this logger registered but the parent did not keep whatever
-  /// publisher they already had: only the parent's own levels are
-  /// re-inherited.
+  /// Levels this logger registered but the parent did not are given the
+  /// parent's common publisher, if it ever assigned one; the parent's
+  /// per-level publishers are then applied on top.
   ///
   /// Returns `false` only when this logger has no parent, i.e. it is a root
   /// logger. A sublogger holds its parent strongly, so the link can never be
@@ -160,8 +164,15 @@ abstract base class CustomLogger<
       return false;
     }
 
-    level = parent.level;
-    transformer = parent._transformer;
+    // Private setters throughout: the public ones are overridable, and this
+    // runs from the `sub` constructor, before a subclass body has executed.
+    _setLevel(parent.level);
+    _setTransformer(parent._transformer);
+    // Levels this logger has and the parent does not would otherwise keep
+    // whatever publisher they were left with.
+    if (parent._defaultPublisher case final publisher?) {
+      _setPublisher(publisher);
+    }
     for (final parentLevelLogger in parent._levelLoggers.values) {
       _inheritLevelPublisher(
         parentLevelLogger.level,
@@ -184,7 +195,14 @@ abstract base class CustomLogger<
 
   /// Registers a specific [levelLogger] dynamically.
   ///
-  /// Throws a [StateError] if this level value is already registered.
+  /// Throws a [StateError] if this level value is already registered, or if
+  /// [levelLogger] already belongs to another logger — sharing one level
+  /// logger between loggers would silently hand this logger's logs to the
+  /// other one's publisher and transformer.
+  ///
+  /// A level registered after [publisher] was assigned inherits that
+  /// publisher; otherwise it would look enabled and publish into the no-op
+  /// publisher.
   @protected
   void registerLevel(LevelLogger levelLogger) {
     if (_levelLoggers.containsKey(levelLogger.level)) {
@@ -192,6 +210,9 @@ abstract base class CustomLogger<
     }
     _levelLoggers[levelLogger.level] = levelLogger;
     levelLogger._attach(this as Logger);
+    if (_defaultPublisher case final publisher?) {
+      levelLogger._publisher = publisher;
+    }
   }
 
   /// The overall log level threshold of this logger.
@@ -204,7 +225,9 @@ abstract base class CustomLogger<
   /// subloggers. Detaches this logger's level link if it is a sublogger
   /// (`child.level = child.level` unlinks without changing the value;
   /// use [relink] to re-attach).
-  set level(int value) {
+  set level(int value) => _setLevel(value);
+
+  void _setLevel(int value) {
     _level = value;
     _levelLinked = false;
 
@@ -216,7 +239,7 @@ abstract base class CustomLogger<
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger? when sublogger._levelLinked) {
         sublogger
-          ..level = value
+          .._setLevel(value)
           .._levelLinked = true;
       }
     }
@@ -235,8 +258,11 @@ abstract base class CustomLogger<
   /// logger's publisher link if it is a sublogger (use [relink] to
   /// re-attach).
   // ignore: avoid_setters_without_getters
-  set publisher(CustomLogPublisher<Log> publisher) {
+  set publisher(CustomLogPublisher<Log> publisher) => _setPublisher(publisher);
+
+  void _setPublisher(CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;
+    _defaultPublisher = publisher;
 
     for (final logger in _levelLoggers.values) {
       logger._publisher = publisher;
@@ -247,7 +273,7 @@ abstract base class CustomLogger<
       if (sublogger.target case final sublogger?
           when sublogger._publisherLinked) {
         sublogger
-          ..publisher = publisher
+          .._setPublisher(publisher)
           .._publisherLinked = true;
       }
     }
@@ -266,14 +292,23 @@ abstract base class CustomLogger<
   /// `onError` for a custom error callback.
   ///
   /// > [!WARNING]
-  /// > A transformer must not log through its own logger: the nested call
-  /// > would re-enter the transformer and recurse until the stack is
-  /// > exhausted. Such a call is detected — the nested log is dropped and
-  /// > a [StateError] is reported to the current zone. Treat that as
-  /// > a guard against runaway recursion, not as a supported way to log
-  /// > from a transformer. It covers any cycle that comes back to a logger
-  /// > whose transformer is already running, cycles through several
-  /// > loggers included; logging into an unrelated logger is untouched.
+  /// > A transformer must not log through its own logger, and neither must
+  /// > a publisher: the nested call comes straight back and recurses until
+  /// > the stack is exhausted. Both cycles are detected — the nested log is
+  /// > dropped and a [StateError] is reported to the current zone. Treat
+  /// > that as a guard against runaway recursion, not as a supported way to
+  /// > log from a transformer or a publisher.
+  /// >
+  /// > The guard is synchronous and per logger. It catches any cycle that
+  /// > comes back to the same logger while its transformer or its publisher
+  /// > is still running, cycles through several loggers included. It does
+  /// > **not** catch two things. A cycle through a sublogger that inherited
+  /// > the same transformer: a sublogger is a separate logger with its own
+  /// > guard, so the nested log is transformed again and published. And an
+  /// > asynchronous hop: a transformer that defers the nested log with
+  /// > `scheduleMicrotask` or a `Future` is outside the guard entirely, and
+  /// > an unconditional one will loop forever. Logging into an unrelated
+  /// > logger is untouched.
   LogTransformer<Log>? get transformer => _transformer;
 
   /// Sets the log [transformer].
@@ -282,7 +317,9 @@ abstract base class CustomLogger<
   /// transformer link if it is a sublogger
   /// (`child.transformer = child.transformer` unlinks without changing the
   /// value; use [relink] to re-attach).
-  set transformer(LogTransformer<Log>? value) {
+  set transformer(LogTransformer<Log>? value) => _setTransformer(value);
+
+  void _setTransformer(LogTransformer<Log>? value) {
     _transformer = value;
     _transformerLinked = false;
 
@@ -291,7 +328,7 @@ abstract base class CustomLogger<
       if (sublogger.target case final sublogger?
           when sublogger._transformerLinked) {
         sublogger
-          ..transformer = value
+          .._setTransformer(value)
           .._transformerLinked = true;
       }
     }

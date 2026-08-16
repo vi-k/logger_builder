@@ -25,6 +25,32 @@ final class _RelinkOverridingLogger extends VarLogger {
   }
 }
 
+/// Overrides the public [level] and [transformer] setters with bodies that
+/// touch a `late` field initialized in the constructor body — legal
+/// subclassing that crashes if the setters are dispatched virtually while
+/// the superclass is still constructing.
+final class _SetterOverridingLogger extends VarLogger {
+  final observed = <String>[];
+  late final String tag;
+
+  _SetterOverridingLogger.sub(VarLogger parent)
+      : super.sub(parent, [Levels.info]) {
+    tag = 'ready';
+  }
+
+  @override
+  set level(int value) {
+    observed.add(tag);
+    super.level = value;
+  }
+
+  @override
+  set transformer(LogTransformer<VarLog>? value) {
+    observed.add(tag);
+    super.transformer = value;
+  }
+}
+
 /// Tries to provoke a garbage collection until [probe] is cleared.
 Future<bool> tryCollectGarbage(WeakReference<Object> probe) async {
   for (var i = 0; i < 50 && probe.target != null; i++) {
@@ -49,6 +75,41 @@ void main() {
       expect(child.publisherLinked, isTrue);
       parent.logAt(Levels.error)('oops');
       expect(published, ['oops']);
+    });
+
+    // Regression: M4 (project review 2026-08-16[4]) — a level registered
+    // after the publisher was assigned kept the no-op publisher while
+    // reporting itself enabled, so its logs vanished without a trace.
+    test('a level registered after the publisher inherits it', () {
+      final published = <String?>[];
+      final logger = VarLogger([Levels.info])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => published.add(log.message))
+        ..addLevel(Levels.error)
+        ..level = Levels.all;
+
+      logger.logAt(Levels.error)('late level');
+
+      expect(logger[Levels.error].isEnabled, isTrue);
+      expect(published, ['late level']);
+    });
+
+    // Regression: M4 — relink used to walk only the parent's own levels, so
+    // a level the child has and the parent lacks kept a stale publisher.
+    test('relink gives the parent common publisher to extra child levels', () {
+      final published = <String?>[];
+      final parent = VarLogger([Levels.info])..level = Levels.all;
+      final child = VarLogger.sub(parent, [Levels.info, Levels.error])
+        ..level = Levels.all
+        ..publisher = const CustomLogPublisher.noOp();
+
+      parent.publisher =
+          CustomLogPublisher((log) => published.add(log.message));
+
+      expect(child.relink(), isTrue);
+      child.logAt(Levels.error)('extra level');
+
+      expect(published, ['extra level']);
     });
 
     // Regression: B6
@@ -123,6 +184,36 @@ void main() {
       expect(child.levelLinked, isTrue);
       expect(child.relink(), isTrue);
       expect(child.relinkTags, ['ready']);
+    });
+
+    // Regression: M3 (project review 2026-08-16[4]) — the CR8 fix covered
+    // relink() but _relink itself still went through the public, overridable
+    // level and transformer setters, so the same crash was one override away.
+    test('construction does not dispatch level or transformer setters', () {
+      final parent = VarLogger([Levels.info]);
+
+      late _SetterOverridingLogger child;
+      expect(
+        () => child = _SetterOverridingLogger.sub(parent),
+        returnsNormally,
+      );
+      expect(child.observed, isEmpty);
+
+      // Direct assignment still reaches the override.
+      child.level = Levels.all;
+      expect(child.observed, ['ready']);
+    });
+
+    // Regression: M3 — propagation from the parent must not reach subclass
+    // setter overrides either, for the same reason.
+    test('propagation does not dispatch subclass setter overrides', () {
+      final parent = VarLogger([Levels.info]);
+      final child = _SetterOverridingLogger.sub(parent);
+
+      parent.level = Levels.all;
+
+      expect(child.level, Levels.all);
+      expect(child.observed, isEmpty);
     });
   });
 

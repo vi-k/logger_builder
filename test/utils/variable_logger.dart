@@ -41,4 +41,23 @@ base class VarLogger
   }
 
   VarLogFn logAt(int level) => this[level].log;
+
+  /// Exposes the protected [registerLevel] so tests can add a level after
+  /// construction.
+  void addLevel(int level) =>
+      registerLevel(VarLevelLogger(level: level, name: 'L$level'));
+}
+
+/// Registers a level logger handed in from outside, so a test can try to
+/// register the same instance in two loggers.
+///
+/// [shared] is an initializing formal, so it is assigned before the
+/// superclass constructor calls [registerLevels].
+final class SharedLevelLogger extends VarLogger {
+  final VarLevelLogger shared;
+
+  SharedLevelLogger(this.shared) : super(const []);
+
+  @override
+  void registerLevels() => registerLevel(shared);
 }

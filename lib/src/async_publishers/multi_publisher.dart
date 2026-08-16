@@ -106,8 +106,13 @@ base class MultiPublisher<Log extends CustomLog>
   /// With [onError] set, a throwing `flush` is reported there and this
   /// future completes normally; without it, the errors surface as
   /// a [ParallelWaitError] after all publishers have been flushed.
+  ///
+  /// After [close] this completes immediately without touching the wrapped
+  /// publishers, matching the asynchronous publishers.
   @override
-  Future<void> flush() => _waitAll<Flushable>((flushable) => flushable.flush());
+  Future<void> flush() => isClosed
+      ? Future<void>.value()
+      : _waitAll<Flushable>((flushable) => flushable.flush());
 
   /// Closes every [Closable] publisher in the list and this publisher
   /// itself: afterwards [publish] throws a [StateError] and repeated calls
