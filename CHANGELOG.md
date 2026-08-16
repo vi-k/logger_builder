@@ -1,4 +1,79 @@
-## 0.5.1
+## 0.6.0
+
+The 0.5.1 work below was never published; an independent review of the
+whole code base then found defects that need behaviour changes, so the
+unreleased section became a minor bump instead.
+
+**[breaking changes]**
+
+* `CustomLevelLogger` now rejects a `level` outside `(Levels.all,
+  Levels.off)` with an `ArgumentError`, in every build mode. Those two are
+  thresholds, not levels: a level logger registered at `Levels.off` stayed
+  enabled with `logger.level = Levels.off`, silently defeating "logging is
+  completely disabled".
+* Registering one `CustomLevelLogger` instance in two loggers now throws a
+  `StateError`. It used to succeed and hand the first logger's logs to the
+  second one's publisher and transformer.
+* `TransformPublisher.close()` is terminal and idempotent, like every other
+  publisher: `publish` afterwards throws a `StateError` and repeated calls
+  return the same future. Previously logs still went through, unless the
+  wrapped publisher happened to implement `Closable`.
+* A sublogger now holds its parent with a strong reference (the parent
+  still holds subloggers weakly). An intermediate logger the caller did not
+  keep used to be collected, after which `level`, `publisher` and
+  `transformer` changes stopped reaching its descendants while they still
+  reported themselves linked and `relink()` returned `false` forever.
+
+**Fixes**
+
+* A buffered publisher whose handler keeps returning its batch through the
+  retry buffer no longer starves the event loop. Retries were re-ticked
+  through the microtask queue, which never yields: with the sink down,
+  timers, I/O and the application's own `close()` never got a turn and the
+  isolate wedged. Retries now go through the event loop, and the new
+  `retryDelay` (default `Duration.zero`) spaces them out.
+* A publisher that logs through the logger it publishes for is now caught
+  the same way a reentrant transformer is: the nested log is dropped and a
+  `StateError` is reported. It used to recurse about 2570 frames into a
+  `StackOverflowError`, running the transformer and the publisher's side
+  effects once per frame.
+* A throwing `format` in `AsyncFormatterWithBuffer` and
+  `AsyncFormatterWithBufferAndParam` returns the whole batch to the retry
+  buffer instead of dropping it. There was no other point at which the
+  caller could hand it back, so the batch vanished silently.
+* Retrying one copy of a log that appears twice in a batch no longer
+  withdraws the other copy from `output`.
+* A level registered after `publisher` was assigned inherits it, and
+  `relink()` applies the parent's common publisher to levels the parent
+  does not have. Such a level reported itself enabled while publishing into
+  the no-op publisher.
+* `CustomLogger.sub` and `relink()` no longer dispatch through the
+  overridable `level`/`publisher`/`transformer` setters, so a subclass that
+  overrides one no longer crashes while the superclass is still
+  constructing.
+* Creating subloggers is no longer quadratic: registration pruned the whole
+  list every time. Creating 16k subloggers under one parent went from 916ms
+  to 6ms.
+* `MultiPublisher.flush()` after `close()` completes immediately instead of
+  cascading into the wrapped publishers.
+
+**Documentation**
+
+* New README sections: "Hierarchical Loggers" (including `CustomLogger.sub`,
+  which was never documented) and "Transformers" (the 0.5.0 headline feature,
+  previously mentioned only under "Common Mistakes").
+* The "How to make your own logger?" tutorial did not compile: step 4
+  defined `debug`/`info`/`error` getters while step 5 called `i`/`e`. The
+  prose also swapped `Levels.all` with `Levels.off` and named the `CustomLog`
+  field `levelShortName` instead of `shortLevelName`.
+* The reentrancy guard is documented at its real reach: it is synchronous
+  and per logger, so it does not catch a cycle through a sublogger that
+  inherited the same transformer, nor one that crosses an asynchronous hop.
+* The unbounded queues, the dropped retry buffer on `close`, the lazily
+  created buffered queue and its zone, and `Lazy` calling any zero-argument
+  value are all documented now.
+
+## 0.5.1 (unreleased, folded into 0.6.0)
 
 * A log transformer that logs through its own logger — or into its own
   `TransformPublisher` — no longer recurses: the reentrant call is

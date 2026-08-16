@@ -34,6 +34,12 @@ abstract interface class Closable {
 /// stream and processing them sequentially, forming the foundation for
 /// avoiding blocking operations during application execution.
 ///
+/// > [!IMPORTANT]
+/// > The queue is unbounded: if [handle] is slower than the rate of logging,
+/// > pending events accumulate until the process runs out of memory. There
+/// > is no overflow policy and no dropped-log counter — bound the input
+/// > yourself if the destination can stall.
+///
 /// Example usage:
 ///
 /// ```dart
@@ -98,6 +104,10 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// earlier one and then drains the events queued in between. Note that
   /// the internal queue listener is re-created in the zone of this call, so
   /// subsequent zone-reported handler errors go to that zone.
+  ///
+  /// Each call replaces the internal [StreamController] and its
+  /// subscription, so flushing after every single log is measurably more
+  /// expensive than letting the queue drain on its own.
   @override
   Future<void> flush() {
     if (isClosed) {

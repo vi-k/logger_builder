@@ -15,7 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  # The strict gate: latest stable, newest dependencies, every check.
+  verify:
     runs-on: ubuntu-latest
     # A runaway retry loop in a buffered publisher starves the event loop
     # instead of failing a test, so an unbounded job would hang for hours.
@@ -24,9 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Note: This workflow uses the latest stable version of the Dart SDK.
-      # You can specify other versions if desired, see documentation here:
-      # https://github.com/dart-lang/setup-dart/blob/main/README.md
       - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
 
       - name: Install dependencies
@@ -42,6 +40,39 @@ jobs:
       # reported as info, so a plain `dart analyze` exits 0 on all of them.
       - name: Analyze project source
         run: dart analyze --fatal-infos
+
+      - name: Run tests
+        run: dart test
+
+  # The floor. `environment.sdk` claims ^3.2.0, and for a consumer that is
+  # true — the only runtime dependency is meta and the code uses no language
+  # feature newer than Dart 3.0. But the dev toolchain cannot go that low
+  # (lints 5.x needs ^3.6.0), so 3.6.0 is the oldest SDK this package can be
+  # tested on at all. Without this job nothing ever exercises an SDK other
+  # than whatever `stable` happens to be on the day.
+  #
+  # No `dart pub downgrade` here: it resolves every transitive dependency to
+  # its minimum, which drags in file 6.0.0 — a dependency of the test runner
+  # that no longer compiles against modern dart:io. That says nothing about
+  # this package's own bounds, so the check would only produce noise.
+  oldest-supported:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+        with:
+          sdk: "3.6.0"
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Analyze project source
+        # Not --fatal-infos here: an older analyzer ships a different lint
+        # set, and the strict gate above is what enforces the rules.
+        run: dart analyze
 
       - name: Run tests
         run: dart test

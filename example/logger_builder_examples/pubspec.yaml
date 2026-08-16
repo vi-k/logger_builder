@@ -1,7 +1,6 @@
 name: logger_builder_examples
-description: A sample command-line application.
+description: Runnable examples for the logger_builder package.
 version: 1.0.0
-# repository: https://github.com/my_org/my_repo
 publish_to: none
 
 environment:
@@ -12,7 +11,6 @@ dependencies:
   logger_builder:
     path: ../../
   logging: ^1.3.0
-  meta: ^1.16.0
   talker_logger: ^5.1.13
 
 dev_dependencies:

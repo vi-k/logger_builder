@@ -1,5 +1,6 @@
 # .pubignore replaces .gitignore for publishing — keep its entries duplicated.
 .dart_tool/
+doc/api/
 pubspec.lock
 *.exe
 
@@ -7,3 +8,11 @@ pubspec.lock
 AGENTS.md
 CLAUDE.md
 docs/
+
+# The test suite is of no use to a consumer and is half the uncompressed
+# archive.
+test/
+
+# Do NOT add analysis_options.yaml here: example/logger_builder_examples
+# includes it through a relative path, and the published example would stop
+# analysing without it.

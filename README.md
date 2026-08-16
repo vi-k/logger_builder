@@ -16,9 +16,12 @@ with good performance when disabled.
 - **Lazy Evaluation**: Includes utilities like `Lazy` and `LazyString` to avoid
   expensive operations (like string interpolations or JSON encoding) when
   a logging level is disabled.
-- **Async & Buffered Publishers**: Base classes like `AsyncPublisher` for
+- **Async & Buffered Publishers**: Base classes like `AsyncPublisherBase` for
   printing logs asynchronously or buffering them before sending (e.g., to an
   analytics service).
+- **Transformers**: A `LogTransformer` on the logger or on a single
+  destination masks secrets and PII, or drops forbidden logs entirely,
+  before they reach any output.
 - **Flexible Formatting & Output**: Loggers decouple the **format** step (which
   formats the entry into a string or other object) and the **output** step
   (which decides what to do with the formatted object, like printing to the
@@ -35,6 +38,8 @@ with good performance when disabled.
 - [Custom Publishers](#custom-publishers)
 - [Async Publishers](#async-publishers)
 - [Several Publishers](#several-publishers)
+- [Hierarchical Loggers](#hierarchical-loggers)
+- [Transformers](#transformers)
 - [Common Scenarios](#common-scenarios)
 - [Common Mistakes](#common-mistakes)
 - [Using logger_builder in your own package](#using-logger_builder-in-your-own-package)
@@ -44,6 +49,13 @@ with good performance when disabled.
 
 Next, there will be examples of logger implementations: what can be done. How
 to do them will be explained below.
+
+> [!NOTE]
+> The snippets below show the output you get **once logging is switched on**.
+> A freshly built logger starts at `Levels.off` and prints nothing, so every
+> one of them needs `..level = Levels.all` (or any other threshold) before it
+> says a word. That default is deliberate — see
+> [Using logger_builder in your own package](#using-logger_builder-in-your-own-package).
 
 **Custom logging methods**
 
@@ -93,10 +105,12 @@ log.i(
 
 **Hierarchical loggers**
 
-You can create nested loggers associated with the main one. In this case,
-nested loggers do not need to be disposed of: when they leave the scope, they
-are automatically removed from the main logger. Therefore, you can safely
-create them in each function or unit where needed.
+You can create nested loggers associated with the main one. Nested loggers do
+not need to be disposed of: the parent holds them through weak references, so
+once you stop referencing a sublogger it is collected and dropped from the
+parent on the next traversal. Therefore, you can safely create them in each
+function or unit where needed. See
+[Hierarchical Loggers](#hierarchical-loggers) for the inheritance rules.
 
 ```dart
 final log = Logger('app');
@@ -358,6 +372,17 @@ final class Log extends CustomLog {
     super.zone,
   }) : _lazyMessage = LazyString(message);
 
+  /// A copy is not a new log event: `CustomLog.copy` keeps the level, the
+  /// zone and any identity your subclass adds. Transformers need this.
+  Log.copy(Log original, {Object? message})
+      : _lazyMessage =
+            message != null ? LazyString(message) : original._lazyMessage,
+        super.copy(
+          original,
+          error: original.error,
+          stackTrace: original.stackTrace,
+        );
+
   String get message => _lazyMessage.value;
 }
 ```
@@ -470,7 +495,7 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   event. Typically, the publisher handles formatting and outputting the
   results. However, it may also forward the log to other publishers
   (`MultiPublisher`) or place the event processing in an asynchronous queue
-  (`AsyncPublisher`). By default, `CustomLogPublisher.noOp` is used, which does
+  (`AsyncPublisher`). By default, `CustomLogPublisher.noOp()` is used, which does
   nothing.
 
   ```dart
@@ -876,6 +901,138 @@ without an error zone terminates the isolate on such errors by default.
 
 See also an example:
 [multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
+
+
+## Hierarchical Loggers
+
+A sublogger is created through the protected `CustomLogger.sub` constructor.
+Since it is protected, you expose it the way that suits your logger — usually
+a named constructor plus a method that reads well at the call site:
+
+```dart
+final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
+  final String name;
+
+  Logger(this.name);
+
+  Logger._sub(Logger parent, this.name) : super.sub(parent);
+
+  Logger child(String name) => Logger._sub(this, '${this.name}.$name');
+
+  // registerLevels(), getters, ... as before
+}
+```
+
+```dart
+final root = Logger('app')
+  ..level = Levels.info
+  ..publisher = const DefaultLogPublisher();
+
+final db = root.child('db');       // inherits level and publisher
+final http = root.child('http');
+```
+
+**What is inherited.** Three things, each with its own link: the `level`, the
+per-level publishers, and the `transformer`. A change on the parent reaches
+every sublogger whose corresponding link is still up:
+
+```dart
+root.level = Levels.debug; // db and http switch to debug too
+```
+
+**How a sublogger detaches.** Assigning any of the three directly on the
+sublogger drops that link — from then on the sublogger keeps its own value
+and ignores the parent:
+
+```dart
+http.level = Levels.all;   // http is now independent, db still follows root
+root.level = Levels.error; // db → error, http stays at all
+```
+
+Assigning the same value is the idiom for unlinking without changing
+anything: `child.level = child.level`, `child.transformer =
+child.transformer`, and, for publishers, `child[Levels.info].publisher =
+child[Levels.info].publisher`.
+
+**How to re-attach.** `relink()` re-inherits all three from the parent and
+turns propagation back on. It returns `false` only for a root logger:
+
+```dart
+http.relink(); // follows root again
+```
+
+A parent keeps its subloggers through weak references, so subloggers never
+need disposing — an abandoned branch is collected whole. A sublogger, on the
+other hand, holds its parent strongly, so a logger you keep never loses the
+chain it inherits from.
+
+A sublogger is not required to register the same levels as its parent. A
+per-level publisher for a level the sublogger does not have is skipped
+silently; reaching for an unregistered level through `operator []` throws a
+`StateError`.
+
+See also an example:
+[hierarchical_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart).
+
+
+## Transformers
+
+A transformer runs on every log right before it is handed to the publisher.
+Returning a log publishes it instead of the original; returning `null` drops
+the log entirely. It exists mainly for security — masking secrets and PII
+before they reach any output:
+
+```dart
+final log = Logger('app')
+  ..level = Levels.all
+  ..publisher = const DefaultLogPublisher()
+  ..transformer = (log) {
+    final message = log.message;
+
+    return message.contains('token=')
+        ? Log.copy(
+            log,
+            message: message.replaceAll(RegExp(r'token=\S+'), 'token=***'),
+          )
+        : log;
+  };
+
+log.i('GET /api?token=abcdef'); // [i] GET /api?token=***
+```
+
+Transformers are inherited by subloggers and follow the same link rules as
+the level and the publishers (see above).
+
+**Fail-closed.** If the transformer throws, the log is **not** published —
+the untransformed log never leaks — and the error goes to the current zone.
+
+**Per destination: `TransformPublisher`.** `CustomLogger.transformer` applies
+to everything the logger publishes. To mask for one destination only, wrap
+that destination:
+
+```dart
+log.publisher = MultiPublisher([
+  consolePrinter,                                   // verbatim
+  TransformPublisher(fileStorage, transformer: redact), // masked
+]);
+```
+
+`TransformPublisher` takes its own `onError`; without it, errors go to the
+current zone. `flush` and `close` are delegated to the wrapped publisher.
+
+> [!WARNING]
+> A transformer must not log through its own logger, and neither must a
+> publisher: the nested call comes straight back and would recurse until the
+> stack is exhausted. Both cycles are detected — the nested log is dropped
+> and a `StateError` is reported. Treat that as a guard against runaway
+> recursion, not as a way to log from a transformer.
+>
+> The guard is synchronous and per logger. It does not catch a cycle that
+> goes through a **sublogger** which inherited the same transformer (a
+> sublogger is a separate logger with its own guard), and it does not survive
+> an **asynchronous hop** — a transformer that defers the nested log with
+> `scheduleMicrotask` or a `Future` is outside the guard entirely, and an
+> unconditional one will loop forever.
 
 
 ## Common Scenarios

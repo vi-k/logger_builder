@@ -16,12 +16,16 @@ analyzer:
 
   errors:
     # Ignore
-    # invalid_annotation_target: ignore ???
+    #
+    # CI runs `dart analyze --fatal-infos`, so everything left at the default
+    # info severity fails the build. An unfinished TODO must not — but when
+    # one is written, flutter_style_todos below still requires the standard
+    # form.
+    todo: ignore
 
-    # Info
-    todo: info
-    directives_ordering: info
-    always_declare_return_types: info
+    # Note: there is no "Info" group here on purpose. Lints report as info by
+    # default, so demoting one to `info` changes nothing and only reads like
+    # a deliberate decision.
 
     # Warning
     avoid_slow_async_io: warning

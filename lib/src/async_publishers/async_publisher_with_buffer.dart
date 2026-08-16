@@ -12,6 +12,19 @@ import 'internal/buffered_pipeline.dart';
 /// Implementations collect logs into an internal list, and flush them in
 /// sequences rather than individually, allowing for batch processing logic.
 ///
+/// > [!IMPORTANT]
+/// > The buffer is unbounded. If the handler cannot keep up — or keeps
+/// > handing batches back through the retry buffer while the sink is down —
+/// > the queue grows until the process runs out of memory. There is no
+/// > overflow policy and no dropped-log counter; bound the input yourself if
+/// > the sink can stall for long. Logs still in the retry buffer when
+/// > [close] is called are dropped silently.
+/// >
+/// > The queue is created lazily, on the first [publish], [flush], [close]
+/// > or [isClosed], not in the constructor. Without an `onError` the zone
+/// > that receives handler errors is therefore the one that touched the
+/// > publisher first, not the one that built it.
+///
 /// Example usage:
 ///
 /// ```dart

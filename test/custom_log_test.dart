@@ -54,9 +54,9 @@ void main() {
       );
       expect(original.stackTrace, isNotNull);
 
-      // Копия с error, но без stackTrace НЕ выводит трейс заново (даже
-      // из error.stackTrace) и не подхватывает трейс оригинала —
-      // значения присваиваются дословно.
+      // A copy with an error but no stackTrace does NOT derive the trace
+      // again (not even from error.stackTrace) and does not pick up the
+      // original's trace — both are assigned verbatim.
       // ignore: avoid_redundant_argument_values
       final copy = Log.copy(original, error: error, stackTrace: null);
 

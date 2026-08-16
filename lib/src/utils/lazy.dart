@@ -24,6 +24,18 @@
 /// > if a closure was passed as the value, all variables it captured will be
 /// > freed.
 ///
+/// > [!WARNING]
+/// > Resolution is a type test, not a declaration of intent: **any** value
+/// > that happens to be a zero-argument function is called. `log.i(
+/// > controller.dispose)` runs `dispose` instead of logging the tear-off —
+/// > and it runs it inside the publisher, which for a buffered publisher is
+/// > later in time and in a different zone than the logging call. Wrap such
+/// > a value (`log.i(() => controller.dispose)`) or log something else.
+/// >
+/// > Until it is resolved, a `Lazy` also keeps its closure alive together
+/// > with everything the closure captured — for buffered publishers, until
+/// > the batch is processed.
+///
 /// See also [TypedLazy], [LazyString] and [LazyStringOrNull].
 base class Lazy {
   /// Holds the source (a direct value or a function) before resolution and
