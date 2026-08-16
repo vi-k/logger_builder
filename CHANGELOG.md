@@ -11,6 +11,9 @@
   transformer is already running is covered; logging into an unrelated
   logger is unaffected, and chained transform publishers do not trip the
   guard. There is no cost when `transformer` is `null` (the default).
+* New README sections: "Why not just `if (logging)`?", "Common Scenarios"
+  (stdout/stderr, files, timestamps, colour), "Common Mistakes" and
+  "Using logger_builder in your own package".
 * The README and the bundled examples now publish via
   `CustomLevelLogger.publishLog` instead of `publisher.publish`. They had
   been left on the pre-0.5.0 form, so loggers copied from them ignored

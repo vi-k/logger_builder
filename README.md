@@ -29,11 +29,15 @@ with good performance when disabled.
 
 - [What can this toolkit do?](#what-can-this-toolkit-do)
 - [Performance](#performance)
+- [Why not just `if (logging)`?](#why-not-just-if-logging)
 - [How to make your own logger?](#how-to-make-your-own-logger)
 - [Lazy Evaluation](#lazy-evaluation)
 - [Custom Publishers](#custom-publishers)
 - [Async Publishers](#async-publishers)
 - [Several Publishers](#several-publishers)
+- [Common Scenarios](#common-scenarios)
+- [Common Mistakes](#common-mistakes)
+- [Using logger_builder in your own package](#using-logger_builder-in-your-own-package)
 - [Examples](#examples)
 
 ## What can this toolkit do?
@@ -262,6 +266,53 @@ constant, the logging code will be removed by the compiler. This is not just
 `if (false)`. This is a full reset.
 
 Benchmarks can be seen here: [benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart).
+
+
+## Why not just `if (logging)`?
+
+If your needs are covered by
+
+```dart
+const logging = bool.fromEnvironment('logging');
+if (logging) print('User $id logged in');
+```
+
+then keep doing that. It costs nothing, and this package does not ask you
+to give it up — as shown above, `logging && log.i(...)` is the same trick
+and compiles away just as completely.
+
+The difference is *when* the switch is thrown.
+
+`if (logging)` is a **compile-time** switch. One constant turns the whole
+program's logging on or off, and the destination — `print` — is written
+into every call site. That is fine while the only reader is you, at your
+own terminal, right now.
+
+A logger is a **runtime** switch, and that buys four things a bare `print`
+cannot:
+
+- **Granularity.** `Levels.off` for the app and `Levels.all` for
+  `authLog`: one noisy subsystem, without recompiling and without
+  drowning in everything else.
+- **Levels.** `print` has exactly one severity. Someone chasing a bug
+  wants debug output; the same person in production wants errors only.
+- **A destination you can change later.** The call site says *what*
+  happened; the publisher decides where that goes. Console today, a file
+  or an analytics service tomorrow, both at once when you need it — and
+  not one call site changes.
+- **Something to hand your users.** A package built on
+  `if (logging) print(...)` offers its users nothing: they cannot turn
+  its logs on, cannot format them, cannot fold them into their own log
+  stream. See
+  [Using logger_builder in your own package](#using-logger_builder-in-your-own-package).
+
+And none of it is paid for while logging is off: a disabled level is one
+call to an empty function, and under `assert` or a constant the call
+disappears entirely.
+
+So it is not one or the other. Use `assert(log.d(...))` for what should be
+gone from release builds, and levels and publishers for what should stay
+switchable at runtime.
 
 
 ## How to make your own logger?
@@ -824,6 +875,277 @@ without an error zone terminates the isolate on such errors by default.
 
 See also an example:
 [multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
+
+
+## Common Scenarios
+
+The snippets below use the logger built in
+[simple_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart):
+a `Log` carrying a `message`, and a `Logger` with `d`, `i` and `e`.
+
+### How to log to stdout and stderr
+
+`print` always writes to stdout, so error output ends up mixed into the
+program's normal output. Give the error level its own publisher:
+
+```dart
+import 'dart:io';
+
+String format(Log log) => '[${log.shortLevelName}] ${log.message}';
+
+final log = Logger()
+  ..level = Levels.all
+  ..publisher = CustomLogFormatter(format: format, output: stdout.writeln)
+  ..[Levels.error].publisher =
+      CustomLogFormatter(format: format, output: stderr.writeln);
+```
+
+### How to log to a file
+
+Writing to a file is asynchronous, and the writes must not interleave, so
+use a buffered async publisher: it gathers logs into batches and processes
+one batch at a time.
+
+```dart
+import 'dart:io';
+
+final file = File('app.log');
+
+final filePublisher = AsyncPublisherWithBuffer<Log>((logs, retryBuffer) async {
+  final batch =
+      logs.map((log) => '[${log.shortLevelName}] ${log.message}\n').join();
+  try {
+    await file.writeAsString(batch, mode: FileMode.append);
+  } on Object catch (error) {
+    // Keep the batch for the next attempt instead of losing it.
+    retryBuffer.addAll(logs);
+    stderr.writeln('cannot write to ${file.path}: $error');
+  }
+});
+
+final log = Logger()
+  ..level = Levels.all
+  ..publisher = filePublisher;
+```
+
+Drain the queue before the program exits, or the last batch never reaches
+the disk:
+
+```dart
+await filePublisher.close();
+```
+
+`close()` is terminal: it processes everything accepted so far and then
+refuses new logs. Use `flush()` when you only want to wait for the queue
+to empty and keep logging afterwards.
+
+### How to add a timestamp
+
+Record the time in the log, not in the formatter:
+
+```dart
+final class Log extends CustomLog {
+  final DateTime time;
+  final LazyString _lazyMessage;
+
+  Log(
+    super.levelLogger, {
+    required Object? message,
+    super.error,
+    super.stackTrace,
+  })  : time = DateTime.now(),
+        _lazyMessage = LazyString(message);
+
+  String get message => _lazyMessage.value;
+}
+
+String format(Log log) =>
+    '${log.time} [${log.shortLevelName}] ${log.message}';
+```
+
+`DateTime.now()` inside the formatter only tells the truth for synchronous
+publishers. As soon as the output is asynchronous or buffered, formatting
+happens when the batch is processed rather than when the event occurred —
+and every log in a batch ends up with nearly the same, wrong, timestamp.
+
+### How to colour the logs
+
+Colour is part of formatting, so it belongs in the publisher:
+
+```dart
+import 'package:ansi_escape_codes/style.dart';
+
+String format(Log log) => '[${log.shortLevelName}] ${log.message}';
+
+final log = Logger()
+  ..level = Levels.all
+  ..publisher = CustomLogFormatter(format: format, output: print)
+  ..[Levels.error].publisher =
+      CustomLogFormatter(format: format, output: (str) => print(red(str)));
+```
+
+Escape codes are for terminals, not for files: colouring the shared
+formatter would put `\x1b[31m` into your log file too. When a log goes to
+both, give each destination its own publisher:
+
+```dart
+final log = Logger()
+  ..level = Levels.all
+  ..publisher = MultiPublisher<Log>([
+    // Terminal: coloured.
+    CustomLogFormatter(format: format, output: (str) => print(red(str))),
+    // File: plain text.
+    filePublisher,
+  ]);
+```
+
+
+## Common Mistakes
+
+**Building the message eagerly**
+
+```dart
+log.d('Cache state: ${jsonEncode(cache)}'); // BAD
+```
+
+The interpolation runs before `log.d` is even called, so `jsonEncode` runs
+whether or not the debug level is enabled — the exact cost this package
+exists to avoid. Pass a closure and it is evaluated only if the level is
+on:
+
+```dart
+log.d(() => 'Cache state: ${jsonEncode(cache)}'); // GOOD
+```
+
+See [Lazy Evaluation](#lazy-evaluation).
+
+**Deferring what is never deferred**
+
+The mirror image of the same mistake. A closure pays off only for a level
+that can actually be off — on a level you keep enabled at all times it is
+evaluated on every call anyway, and all it adds is an allocation:
+
+```dart
+log.i(() => 'User $id logged in'); // pointless if `i` is always on
+log.i('User $id logged in');       // just pass the value
+```
+
+**Exposing `processLog` instead of `log`**
+
+```dart
+LogFn get d => _d.processLog; // BAD: always logs
+LogFn get d => _d.log;        // GOOD: switches with the level
+```
+
+`log` is the field the package swaps between `processLog` and the no-op
+function. Handing out `processLog` directly gives you a level that can
+never be turned off — and none of the performance the switch exists for.
+
+**Publishing with `publisher.publish` instead of `publishLog`**
+
+```dart
+@override
+LogFn get processLog => (message, {error, stackTrace}) {
+      publisher.publish(Log(this, message: message)); // BAD
+      publishLog(Log(this, message: message));        // GOOD
+      return true;
+    };
+```
+
+`publishLog` is what applies `CustomLogger.transformer` before handing the
+log on. Going straight to the publisher silently skips it, so masking and
+filtering never run.
+
+**Timestamping in the formatter**
+
+`DateTime.now()` in a formatter is the time the log was *printed*, which
+stops matching the time it *happened* the moment a buffered or async
+publisher is involved. See
+[How to add a timestamp](#how-to-add-a-timestamp).
+
+**Exiting without draining an async publisher**
+
+```dart
+log.i('done');
+exit(0); // BAD: the queued logs are still in memory
+```
+
+Async and buffered publishers process logs after the call returns. Await
+`flush()` or `close()` before the program ends.
+
+**Logging from inside a transformer**
+
+```dart
+log.transformer = (entry) {
+  log.d('masking $entry'); // BAD: re-enters the transformer
+  return mask(entry);
+};
+```
+
+The nested call runs the transformer again, and again. Such a call is
+detected and dropped with a `StateError`, but the log you meant to write
+is lost — collect what you need into a plain list instead, or use
+a logger that this transformer never reaches.
+
+
+## Using logger_builder in your own package
+
+A package that logs through `print` gives its users nothing to work with:
+they cannot turn the output on, cannot change its shape, cannot route it
+anywhere. Exposing a logger instead costs you one public field and gives
+them all three.
+
+**Expose the logger, leave it off**
+
+```dart
+// lib/src/log.dart
+final packageLog = Logger('my_package');
+```
+
+A freshly built logger starts at `Levels.off`, so a user who never touches
+it never sees your output — which is what a well-behaved dependency does.
+Log freely inside your package; nothing is published until someone asks
+for it.
+
+**Let the user decide everything about the output**
+
+```dart
+// The user's app:
+import 'package:my_package/my_package.dart';
+
+void main() {
+  packageLog
+    ..level = Levels.info
+    ..publisher = myAppPublisher; // their format, their destination
+}
+```
+
+Do not install a publisher yourself, do not wrap anything in
+`runZonedGuarded` on the user's behalf, and do not decide that errors
+belong on stderr. Those are application decisions, and taking them makes
+your logs a foreign body in someone else's log stream instead of a part
+of it.
+
+**Give the hierarchy to the user, too**
+
+Subloggers inherit level and publisher from their parent, so one
+assignment configures your whole package — while a user who wants only
+your HTTP layer can still say so:
+
+```dart
+final httpLog = packageLog.withAddedName('http');
+final cacheLog = packageLog.withAddedName('cache');
+
+// In the app: everything at warning level, the HTTP layer in full.
+packageLog.level = Levels.warning;
+httpLog.level = Levels.all;
+```
+
+**Remember that your `Log` type is public API**
+
+Users write formatters against it, so its fields are part of your
+package's contract: adding one is safe, renaming or removing one is
+a breaking change. Keep the type exported and documented.
 
 
 ## Examples
