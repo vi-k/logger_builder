@@ -3,11 +3,11 @@ include: package:lints/recommended.yaml
 analyzer:
   exclude:
     # Web
-    "web/**": true
+    - "web/**"
     # Build
-    "build/**": true
+    - "build/**"
     # Assets
-    "assets/**": true
+    - "assets/**"
 
   language:
     strict-casts: true
@@ -25,8 +25,6 @@ analyzer:
 
     # Warning
     avoid_slow_async_io: warning
-    cancel_subscriptions: error
-    close_sinks: error
     empty_catches: warning
     flutter_style_todos: warning
     prefer_relative_imports: warning
@@ -34,6 +32,8 @@ analyzer:
     # Error
     avoid_relative_lib_imports: error
     avoid_types_as_parameter_names: error
+    cancel_subscriptions: error
+    close_sinks: error
     valid_regexps: error
 
 linter:

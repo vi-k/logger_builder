@@ -70,8 +70,10 @@ Future<void> main() async {
     format: (logs, retryBuffer) async {
       description('Format ${logs.length} message(s)');
       try {
-        // Formatting in parallel.
-        return logs.map(defaultAsyncFormat).wait;
+        // Formatting in parallel. Awaited inside the try, otherwise
+        // a failure would escape the catch below and the logs would
+        // never reach retryBuffer.
+        return await logs.map(defaultAsyncFormat).wait;
       } on Object {
         retryBuffer.addAll(logs);
         return [];
