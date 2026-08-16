@@ -52,9 +52,9 @@ abstract base class CustomLogger<
 
   /// Creates a sublogger linked to a [parent] logger.
   ///
-  /// This sublogger initially inherits the [level] and applicable publishers
-  /// from the [parent]. Updates to the parent's level and publisher will
-  /// propagate to this sublogger, unless overridden manually on this instance.
+  /// This sublogger initially inherits the [level], the applicable publishers
+  /// and the [transformer] from the [parent]. Updates to all three propagate
+  /// to this sublogger, unless overridden manually on this instance.
   @protected
   CustomLogger.sub(Logger parent) {
     assert(this is Logger);
@@ -116,12 +116,19 @@ abstract base class CustomLogger<
   Iterable<int> get levels => _levelLoggers.keys;
 
   /// Re-attaches this sublogger to its parent: re-inherits the parent's
-  /// current [level] and per-level publishers, and turns propagation of
-  /// future parent updates back on.
+  /// current [level], per-level publishers and [transformer], and turns
+  /// propagation of future parent updates back on.
   ///
-  /// A sublogger detaches implicitly when its [level] or [publisher] is
-  /// assigned directly (`child.level = child.level` is the idiom to unlink
-  /// without changing the value); this method is the reverse operation.
+  /// A sublogger detaches implicitly when its [level], [publisher] or
+  /// [transformer] is assigned directly (`child.level = child.level` and
+  /// `child.transformer = child.transformer` are the idioms to unlink
+  /// without changing the value; for publishers, assign
+  /// `child[level].publisher = child[level].publisher`); this method is the
+  /// reverse operation.
+  ///
+  /// Levels this logger registered but the parent did not keep whatever
+  /// publisher they already had: only the parent's own levels are
+  /// re-inherited.
   ///
   /// Returns `false` when this logger has no parent (a root logger) or the
   /// parent has already been garbage collected.
@@ -199,6 +206,10 @@ abstract base class CustomLogger<
   bool isLoggable(int level) => _level <= level;
 
   /// Assigns a common [CustomLogPublisher] to all registered log levels.
+  ///
+  /// This overwrites any per-level publisher set earlier through
+  /// `logger[level].publisher`, so assign the common publisher first and the
+  /// per-level exceptions after it.
   ///
   /// Propagates the publisher change to linked subloggers. Detaches this
   /// logger's publisher link if it is a sublogger (use [relink] to

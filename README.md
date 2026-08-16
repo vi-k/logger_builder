@@ -118,9 +118,10 @@ The output type does not necessarily have to be a `String`. It can be, for
 example, ready-made json or a type prepared for conversion to json:
 
 ```dart
-final log = Logger();
-log.i('event', 'Hello', data: {'a': 1});
-// {"level":"info","name":"event","message":"Hello","data":{"a":1}}
+final log = JsonReporter()..level = Levels.all;
+log.i('info-event', data: {'id': 2, 'data': 'Info data'});
+// {"level":"info","timestamp":1786903488805201,"event":"info-event",
+//  "data":{"id":2,"data":"Info data"}}
 ```
 
 See example: [json_reporter.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/json_reporter.dart).
@@ -366,7 +367,7 @@ will be obtained from the `LogFn` function or calculated independently.
 
 The constructor always requires a reference to `levelLogger` (more on that
 below). But in fact, the reference to `levelLogger` is only needed to extract
-the data about the level from it: `level`, `levelName`, `levelShortName`. The
+the data about the level from it: `level`, `levelName`, `shortLevelName`. The
 reference itself is not saved.
 
 Also, the base class `CustomLog` already has ready-made fields `error` and
@@ -426,8 +427,8 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   values. In it there are and those that use `developer.log` and the `logging`
   package: `finest`, `finer`, `fine`, `config`, `info`, `warning`, `severe`,
   `shout`. But there are also additional `trace`, `verbose`, `debug`, `error`,
-  `critical`. In any case, it is just numbers: greater than 0 (`Levels.off`)
-  and less than 2000 (`Levels.all`). You can use your own values.
+  `critical`. In any case, it is just numbers: greater than 0 (`Levels.all`)
+  and less than 2000 (`Levels.off`). You can use your own values.
 
 - `name` - the name of the log level. This is a string value that you can
   use to output the log. The parameter is mandatory, although it is not
@@ -437,7 +438,7 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
 - `shortName` - short name of the log level. This is an optional parameter. If
   it is not specified, the first character of `name` will be used as
   `shortName`. In the `CustomLog` structure, this value is stored with the
-  name `levelShortName`. You can use this value as you wish.
+  name `shortLevelName`. You can use this value as you wish.
 
 - `noLog` is a no-op function that will be called when this log level is not
   enabled. Since you yourself define the signature of the log function, you
@@ -571,9 +572,9 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   final _info = LevelLogger(level: Levels.info, name: 'info');
   final _error = LevelLogger(level: Levels.error, name: 'error');
 
-  LogFn get debug => _debug.log;
-  LogFn get info => _info.log;
-  LogFn get error => _error.log;
+  LogFn get d => _debug.log;
+  LogFn get i => _info.log;
+  LogFn get e => _error.log;
 }
 ```
 

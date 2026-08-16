@@ -55,6 +55,11 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// When `null`, the error is reported to the current zone via
   /// [Zone.handleUncaughtError]. In either case the queue keeps processing
   /// subsequent log events.
+  ///
+  /// Note: in a plain Dart program without an error zone, an uncaught
+  /// asynchronous error terminates the isolate by default — and then nothing
+  /// keeps processing. Provide [onError] or wrap the app in
+  /// [runZonedGuarded].
   final void Function(Object error, StackTrace stackTrace)? onError;
 
   StreamController<Log> _controller;

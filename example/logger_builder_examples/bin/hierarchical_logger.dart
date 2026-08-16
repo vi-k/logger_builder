@@ -117,7 +117,7 @@ Future<void> main() async {
   box(
     'After installing its own publisher on the sublogger, publisher'
     '\nunlinks from the parent.'
-    ' ${bold}This cannot be restored.$resetBoldAndDim',
+    ' ${bold}relink() restores the link.$resetBoldAndDim',
   );
   log2.publisher = CustomLogFormatter(
     format: DefaultLogPublisher.format,
@@ -147,7 +147,7 @@ Future<void> main() async {
   box(
     'After installing its own publisher on the sublogger, publisher'
     '\nunlinks from the parent.'
-    ' ${bold}This cannot be restored.$resetBoldAndDim',
+    ' ${bold}relink() restores the link.$resetBoldAndDim',
   );
 
   log3.publisher = CustomLogFormatter(

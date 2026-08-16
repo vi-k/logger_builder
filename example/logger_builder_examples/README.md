@@ -1,2 +1,2 @@
-A sample command-line application with an entrypoint in `bin/`, library code
-in `lib/`, and example unit test in `test/`.
+Runnable examples for `logger_builder`: loggers in `lib/`, entrypoints in
+`bin/`. Run any of them with `dart run bin/<name>.dart`.

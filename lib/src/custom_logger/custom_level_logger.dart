@@ -34,8 +34,10 @@ abstract base class CustomLevelLogger<
 
   /// Plug function when logging is disabled for this level.
   ///
-  /// The function must be passed through the constructor and for this reason
-  /// must be static or global.
+  /// Stored once and compared by identity in [isEnabled], so any function
+  /// works — static, global or a closure created inline in the constructor
+  /// call. A static or global one merely avoids allocating a closure per
+  /// level logger.
   final LogFn _noLog;
 
   /// Link to [CustomLogger] logger.
@@ -110,8 +112,13 @@ abstract base class CustomLevelLogger<
   /// Sets the log message publisher for a specific level.
   ///
   /// ```dart
-  /// log[Levels.info].publisher = print; // +++
+  /// log[Levels.info].publisher = CustomLogPublisher((log) => print(log));
   /// ```
+  ///
+  /// Assigning here also detaches the whole logger from its parent's
+  /// publishers — the link flag is per logger, not per level — so a single
+  /// per-level assignment stops this logger from inheriting any publisher
+  /// change from the parent until [CustomLogger.relink] is called.
   set publisher(CustomLogPublisher<Log> publisher) {
     // We set the publisher via the logger to update the publisher in the
     // subloggers.
