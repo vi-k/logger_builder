@@ -86,6 +86,7 @@ abstract base class CustomLog {
 /// security: masking secrets and PII before the log reaches any output.
 ///
 /// A transformer must not log into the pipeline it is part of: the nested
-/// call re-enters the transformer and recurses until the stack is
-/// exhausted. See `CustomLogger.transformer` for what that costs.
+/// call would re-enter the transformer and recurse until the stack is
+/// exhausted. Such a call is detected and dropped with a [StateError] —
+/// see `CustomLogger.transformer` and `TransformPublisher`.
 typedef LogTransformer<Log extends CustomLog> = Log? Function(Log log);

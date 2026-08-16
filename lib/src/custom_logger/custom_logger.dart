@@ -39,6 +39,7 @@ abstract base class CustomLogger<
   bool _publisherLinked = false;
   LogTransformer<Log>? _transformer;
   bool _transformerLinked = false;
+  bool _transforming = false;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
   ///
@@ -234,15 +235,14 @@ abstract base class CustomLogger<
   /// `onError` for a custom error callback.
   ///
   /// > [!WARNING]
-  /// > Never log through this logger (or any logger that shares this
-  /// > transformer) from inside the transformer. Each nested call re-enters
-  /// > the transformer and recurses until the stack is exhausted. The
-  /// > resulting [StackOverflowError] is caught like any other transformer
-  /// > failure and reported once, so the isolate survives — but every
-  /// > unwinding frame then goes on to publish its own log, turning a
-  /// > single logging call into thousands of published duplicates.
-  /// > Collect diagnostics into a plain list instead, or hand them to
-  /// > a logger that this transformer never reaches.
+  /// > A transformer must not log through its own logger: the nested call
+  /// > would re-enter the transformer and recurse until the stack is
+  /// > exhausted. Such a call is detected — the nested log is dropped and
+  /// > a [StateError] is reported to the current zone. Treat that as
+  /// > a guard against runaway recursion, not as a supported way to log
+  /// > from a transformer. It covers any cycle that comes back to a logger
+  /// > whose transformer is already running, cycles through several
+  /// > loggers included; logging into an unrelated logger is untouched.
   LogTransformer<Log>? get transformer => _transformer;
 
   /// Sets the log [transformer].

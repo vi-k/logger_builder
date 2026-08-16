@@ -27,12 +27,12 @@ import 'async_publisher.dart';
 /// implements [Flushable]/[Closable], and complete immediately otherwise.
 ///
 /// > [!WARNING]
-/// > Never log into a logger that publishes through this publisher from
-/// > inside the [transformer]: the nested call comes back here, re-enters
-/// > the transformer and recurses until the stack is exhausted. The
-/// > resulting [StackOverflowError] is reported once via [onError], but
-/// > every unwinding frame still publishes its own log — a single logging
-/// > call becomes thousands of published duplicates.
+/// > The [transformer] must not log into a logger that publishes through
+/// > this publisher: the nested call would come back here, re-enter the
+/// > transformer and recurse until the stack is exhausted. Such a call is
+/// > detected — the nested log is dropped and a [StateError] goes to
+/// > [onError] (or to the current zone). Chained transform publishers are
+/// > not affected: the guard is released before the log is handed on.
 final class TransformPublisher<Log extends CustomLog>
     implements CustomLogPublisher<Log>, Flushable, Closable {
   final CustomLogPublisher<Log> _inner;
@@ -47,6 +47,8 @@ final class TransformPublisher<Log extends CustomLog>
   /// delivery: its own error is reported to the current zone.
   final void Function(Object error, StackTrace stackTrace)? onError;
 
+  bool _transforming = false;
+
   /// Creates a publisher that transforms every log before [inner].
   TransformPublisher(
     CustomLogPublisher<Log> inner, {
@@ -56,13 +58,30 @@ final class TransformPublisher<Log extends CustomLog>
 
   @override
   void publish(Log log) {
+    if (_transforming) {
+      _reportError(
+        StateError(
+          'A log transformer must not log into its own publisher; '
+          'the nested log was dropped',
+        ),
+        StackTrace.current,
+      );
+
+      return;
+    }
+
     final Log? transformed;
+    _transforming = true;
     try {
       transformed = transformer(log);
     } on Object catch (error, stackTrace) {
       _reportError(error, stackTrace);
 
       return;
+    } finally {
+      // Released before publishing, so a nested TransformPublisher is not
+      // mistaken for a reentrant call.
+      _transforming = false;
     }
 
     if (transformed != null) {

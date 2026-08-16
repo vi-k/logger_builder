@@ -134,13 +134,30 @@ abstract base class CustomLevelLogger<
     var published = log;
 
     if (logger._transformer case final transformer?) {
+      if (logger._transforming) {
+        Zone.current.handleUncaughtError(
+          StateError(
+            'A log transformer must not log through its own logger; '
+            'the nested log was dropped',
+          ),
+          StackTrace.current,
+        );
+
+        return;
+      }
+
       final Log? transformed;
+      logger._transforming = true;
       try {
         transformed = transformer(log);
       } on Object catch (error, stackTrace) {
         Zone.current.handleUncaughtError(error, stackTrace);
 
         return;
+      } finally {
+        // Released before publishing, so a TransformPublisher further down
+        // the chain is not mistaken for a reentrant call.
+        logger._transforming = false;
       }
 
       if (transformed == null) {

@@ -134,6 +134,56 @@ void main() {
       expect(published.single.message, 'fine');
     });
 
+    test('a reentrant transformer drops the nested log', () {
+      final errors = <Object>[];
+      runZonedGuarded(
+        () {
+          setUpLogger(
+            TransformPublisher(
+              CustomLogPublisher((log) => published.add(log)),
+              transformer: (log) {
+                logger.i('from inside the transformer');
+
+                return Log.copy(log, message: '***');
+              },
+              onError: (error, stackTrace) => errors.add(error),
+            ),
+          );
+
+          logger.i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(published.single.message, '***');
+      expect(errors.single, isA<StateError>());
+    });
+
+    test('chained transform publishers do not trip the guard', () {
+      final errors = <Object>[];
+      runZonedGuarded(
+        () {
+          setUpLogger(
+            TransformPublisher(
+              TransformPublisher(
+                CustomLogPublisher((log) => published.add(log)),
+                transformer: (log) =>
+                    Log.copy(log, message: '${log.message}/inner'),
+              ),
+              transformer: (log) =>
+                  Log.copy(log, message: '${log.message}/outer'),
+            ),
+          );
+
+          logger.i('m');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(published.single.message, 'm/outer/inner');
+      expect(errors, isEmpty);
+    });
+
     test('flush and close are delegated to the inner publisher', () async {
       final inner = _LifecyclePublisher();
       final publisher = TransformPublisher(inner, transformer: (log) => log);
