@@ -11,18 +11,21 @@ final class BufferedPipeline<E> {
   final bool sync;
   final void Function(Object error, StackTrace stackTrace)? onError;
   final FutureOr<void> Function(List<E> entries, List<E> retryBuffer) handle;
+  final Duration retryDelay;
 
   final StreamController<void> _controller;
   StreamSubscription<void>? _subscription;
   List<E> _entries = [];
   Completer<void>? _flushCompleter;
   bool _isProcessing = false;
+  bool _batchWasRetried = false;
   Future<void>? _closeFuture;
 
   BufferedPipeline({
     required this.handle,
     this.sync = false,
     this.onError,
+    this.retryDelay = Duration.zero,
   }) : _controller = StreamController<void>(sync: sync) {
     _subscription = _controller.stream
         .asyncMap(_handleData)
@@ -105,17 +108,43 @@ final class BufferedPipeline<E> {
   void _finishBatch(List<E> retryBuffer) {
     // Entries retried after close() would never be processed — drop them.
     if (!isClosed) {
+      _batchWasRetried = retryBuffer.isNotEmpty;
       _entries.insertAll(0, retryBuffer);
     }
     _isProcessing = false;
   }
 
   void _next(void _) {
-    if (!_controller.isClosed && _entries.isNotEmpty) {
-      _controller.add(null);
-    } else {
+    if (_controller.isClosed || _entries.isEmpty) {
       _completeFlush();
+
+      return;
     }
+
+    if (_batchWasRetried) {
+      _batchWasRetried = false;
+      // A batch that handed entries back made no progress. Re-ticking through
+      // the microtask queue would spin without ever yielding: while the sink
+      // stays unavailable, timers, I/O and even the application's own close()
+      // call would never get a turn. Going through the event loop keeps the
+      // isolate responsive and lets close() stop the retries; retryDelay
+      // additionally spaces the attempts out.
+      Timer(retryDelay, _tick);
+
+      return;
+    }
+
+    _controller.add(null);
+  }
+
+  void _tick() {
+    if (_controller.isClosed || _entries.isEmpty) {
+      _completeFlush();
+
+      return;
+    }
+
+    _controller.add(null);
   }
 
   void _completeFlush() {

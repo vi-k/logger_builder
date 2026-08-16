@@ -145,10 +145,12 @@ void main() {
       expect(parent.subLoggersCount, 1);
 
       final collected = await tryCollectGarbage(probe);
-      if (!collected) {
-        markTestSkipped('GC did not collect the sublogger; cannot verify');
-        return;
-      }
+      expect(
+        collected,
+        isTrue,
+        reason: 'the parent must not keep a discarded sublogger alive; '
+            'skipping here would hide exactly the leak this test guards',
+      );
 
       parent.pruneSubloggers();
 
@@ -161,14 +163,44 @@ void main() {
       final probe = createDiscardedSublogger(parent);
 
       final collected = await tryCollectGarbage(probe);
-      if (!collected) {
-        markTestSkipped('GC did not collect the sublogger; cannot verify');
-        return;
-      }
+      expect(
+        collected,
+        isTrue,
+        reason: 'the parent must not keep a discarded sublogger alive; '
+            'skipping here would hide exactly the leak this test guards',
+      );
 
       parent.level = Levels.info;
 
       expect(parent.subLoggersCount, 0);
+    });
+
+    // Regression: H1 (project review 2026-08-16[4]) — the parent reference
+    // used to be weak too, so an intermediate logger the user did not keep
+    // was collected and its descendants silently stopped following the root
+    // while still reporting themselves as linked.
+    test('an unreferenced intermediate logger keeps the chain alive', () async {
+      final root = VarLogger([Levels.info]);
+      final leaf = VarLogger.sub(
+        VarLogger.sub(root, [Levels.info]),
+        [Levels.info],
+      );
+
+      root.level = Levels.all;
+      expect(leaf.level, Levels.all);
+
+      final collected = await tryCollectGarbage(WeakReference(Object()));
+      expect(collected, isTrue, reason: 'the probe should force a collection');
+
+      root.level = Levels.info;
+
+      expect(
+        leaf.level,
+        Levels.info,
+        reason: 'the leaf must keep following the root across a collection',
+      );
+      expect(root.subLoggersCount, 1);
+      expect(leaf.relink(), isTrue);
     });
   });
 }

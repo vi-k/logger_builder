@@ -141,5 +141,23 @@ void main() {
 
       expect(outputs, ['ctx:msg']);
     });
+
+    // Regression: H4 (project review 2026-08-16[4]) — the synchronous arm of
+    // the format switch was never executed by any test.
+    test('a synchronous format still reaches output', () async {
+      final outputs = <Object?>[];
+      final publisher = AsyncFormatterWithParam<String, Log, String>(
+        format: (param, log) => '$param:${log.message}',
+        output: (param, out) => outputs.add(out),
+      );
+      final log = Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher.withParam('ctx');
+
+      log.i('msg');
+      await publisher.flush();
+
+      expect(outputs, ['ctx:msg']);
+    });
   });
 }

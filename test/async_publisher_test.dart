@@ -243,5 +243,22 @@ void main() {
 
       expect(outputs, ['formatted:msg']);
     });
+
+    // Regression: H4 (project review 2026-08-16[4]) — the synchronous arm of
+    // the format switch was never executed by any test, so a regression there
+    // would have dropped every log without a trace.
+    test('a synchronous format still reaches output', () async {
+      final outputs = <String>[];
+      final publisher = AsyncFormatter<Log, String>(
+        format: (log) => 'formatted:${log.message}',
+        output: outputs.add,
+      );
+      final log = makeLogger(publisher);
+
+      log.i('msg');
+      await publisher.flush();
+
+      expect(outputs, ['formatted:msg']);
+    });
   });
 }

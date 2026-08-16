@@ -236,6 +236,70 @@ void main() {
       await publisher.close().timeout(const Duration(seconds: 2));
     });
 
+    // Regression: C1 (project review 2026-08-16[4]) — a handler that keeps
+    // handing the batch back used to re-tick through the microtask queue,
+    // which never yields: timers, I/O and close() itself were starved.
+    test('a permanently retrying handler does not starve the event loop',
+        () async {
+      var attempts = 0;
+      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
+        attempts++;
+        retry.addAll(logs);
+      });
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      // A timer at all is the assertion: while the retries were a microtask
+      // loop, this delay never completed and the test hung instead.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(attempts, greaterThan(1), reason: 'the batch should be retried');
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: C1 — close() used to be reachable only when called
+    // synchronously, before the first batch ever ran.
+    test('close from a later turn stops a permanently retrying handler',
+        () async {
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) => retry.addAll(logs),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(publisher.isClosed, isTrue);
+    });
+
+    // Regression: C1
+    test('retryDelay spaces out the attempts', () async {
+      var attempts = 0;
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          attempts++;
+          retry.addAll(logs);
+        },
+        retryDelay: const Duration(milliseconds: 10),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(attempts, greaterThan(0));
+      expect(
+        attempts,
+        lessThan(50),
+        reason: 'retryDelay should keep the queue from spinning',
+      );
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
     // Regression: B9
     test('publish after close throws StateError', () async {
       final publisher = AsyncPublisherWithBuffer<Log>(
@@ -317,6 +381,110 @@ void main() {
       await publisher.flush();
 
       expect(outputs, ['a']);
+    });
+
+    // Regression: H4 (project review 2026-08-16[4]) — the synchronous arm of
+    // the format switch was never executed by any test, so a regression there
+    // would have silently dropped every log.
+    test('a synchronous format still reaches output', () async {
+      final outputs = <String>[];
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) => messagesOf(logs).join(','),
+        output: (out, logs, retry) => outputs.add(out),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('a');
+      log.i('b');
+      await publisher.flush();
+
+      expect(outputs, ['a,b']);
+    });
+
+    // Regression: H3 (project review 2026-08-16[4]) — a throwing format left
+    // no point at which the caller could hand the batch back, so the batch
+    // was dropped silently.
+    test('a synchronously throwing format retries the whole batch', () async {
+      final outputs = <String>[];
+      final errors = <Object>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) {
+          if (first) {
+            first = false;
+            throw StateError('format boom');
+          }
+
+          return messagesOf(logs).join(',');
+        },
+        output: (out, logs, retry) => outputs.add(out),
+        onError: (error, stackTrace) => errors.add(error),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('a');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(errors.single, isStateError);
+      expect(outputs, ['a']);
+    });
+
+    // Regression: H3
+    test('a format whose future fails retries the whole batch', () async {
+      final outputs = <String>[];
+      final errors = <Object>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) async {
+          await Future<void>.delayed(Duration.zero);
+          if (first) {
+            first = false;
+            throw StateError('format boom');
+          }
+
+          return messagesOf(logs).join(',');
+        },
+        output: (out, logs, retry) => outputs.add(out),
+        onError: (error, stackTrace) => errors.add(error),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('a');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(errors.single, isStateError);
+      expect(outputs, ['a']);
+    });
+
+    // Regression: M9 (project review 2026-08-16[4]) — the remaining logs were
+    // computed as a set difference, so handing one copy of a duplicated log
+    // back withdrew the other copy from output as well.
+    test('retrying one copy of a duplicated log keeps the other', () async {
+      late Log sample;
+      makeLogger(CustomLogPublisher<Log>((log) => sample = log)).i('dup');
+
+      final batches = <List<String?>>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) {
+          if (first) {
+            first = false;
+            retry.add(logs.first);
+          }
+
+          return 'batch';
+        },
+        output: (out, remaining, retry) => batches.add(messagesOf(remaining)),
+      )
+        ..publish(sample)
+        ..publish(sample);
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(batches, [
+        ['dup'],
+        ['dup'],
+      ]);
     });
   });
 }

@@ -34,12 +34,17 @@ abstract base class CustomLogger<
   int _level = Levels.off;
   final Map<int, LevelLogger> _levelLoggers = {};
   final List<WeakReference<Logger>> _subloggers = [];
-  WeakReference<Logger>? _parent;
+  // Strong on purpose, while the list above is weak. A sublogger keeps its
+  // ancestors alive, so a live leaf never loses the chain it inherits from;
+  // an abandoned branch is still collected whole, because nothing points
+  // down into it.
+  Logger? _parent;
   bool _levelLinked = false;
   bool _publisherLinked = false;
   LogTransformer<Log>? _transformer;
   bool _transformerLinked = false;
   bool _transforming = false;
+  int _prunedAt = 0;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
   ///
@@ -60,7 +65,7 @@ abstract base class CustomLogger<
     assert(this is Logger);
     registerLevels();
 
-    _parent = WeakReference(parent);
+    _parent = parent;
     parent.registerSublogger(this as Logger);
     // The private counterpart of [relink]: a virtual call here would reach
     // subclass overrides before their constructor bodies have run.
@@ -80,8 +85,22 @@ abstract base class CustomLogger<
   /// internal list does not grow unboundedly. Exposed for deterministic
   /// tests.
   @visibleForTesting
-  void pruneSubloggers() =>
-      _subloggers.removeWhere((sublogger) => sublogger.target == null);
+  void pruneSubloggers() {
+    _subloggers.removeWhere((sublogger) => sublogger.target == null);
+    _prunedAt = _subloggers.length;
+  }
+
+  /// Prunes only once the list has doubled since the last prune.
+  ///
+  /// Registration must not scan the whole list every time: creating n
+  /// subloggers under one parent would then cost O(n²), and creating
+  /// a sublogger per request or per widget is the documented pattern.
+  /// Traversals still prune unconditionally — they are O(n) anyway.
+  void _pruneSubloggersIfGrown() {
+    if (_subloggers.length >= (_prunedAt < 16 ? 16 : _prunedAt * 2)) {
+      pruneSubloggers();
+    }
+  }
 
   /// Returns `true` if this logger's level is synchronized with its parent.
   ///
@@ -130,12 +149,13 @@ abstract base class CustomLogger<
   /// publisher they already had: only the parent's own levels are
   /// re-inherited.
   ///
-  /// Returns `false` when this logger has no parent (a root logger) or the
-  /// parent has already been garbage collected.
+  /// Returns `false` only when this logger has no parent, i.e. it is a root
+  /// logger. A sublogger holds its parent strongly, so the link can never be
+  /// lost to garbage collection.
   bool relink() => _relink();
 
   bool _relink() {
-    final parent = _parent?.target;
+    final parent = _parent;
     if (parent == null) {
       return false;
     }
@@ -310,7 +330,7 @@ abstract base class CustomLogger<
   /// they are discarded elsewhere in the application.
   @protected
   void registerSublogger(Logger sublogger) {
-    pruneSubloggers();
+    _pruneSubloggersIfGrown();
     _subloggers.add(WeakReference(sublogger));
   }
 }

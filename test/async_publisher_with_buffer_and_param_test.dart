@@ -134,5 +134,55 @@ void main() {
 
       expect(outputs, ['a']);
     });
+
+    // Regression: H4 (project review 2026-08-16[4]) — the synchronous arm of
+    // the format switch was never executed by any test.
+    test('a synchronous format still reaches output', () async {
+      final outputs = <Object?>[];
+      final publisher = AsyncFormatterWithBufferAndParam<String, Log, String>(
+        format: (entries, retry) =>
+            entries.map((entry) => entry.$2.message).join(','),
+        output: (out, entries, retry) => outputs.add(out),
+      );
+      final log = Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher.withParam('p');
+
+      log.i('a');
+      log.i('b');
+      await publisher.flush().timeout(const Duration(seconds: 1));
+
+      expect(outputs, ['a,b']);
+    });
+
+    // Regression: H3 (project review 2026-08-16[4]) — a throwing format used
+    // to drop the whole batch, with no point at which the caller could hand
+    // it back.
+    test('a throwing format retries the whole batch', () async {
+      final outputs = <Object?>[];
+      final errors = <Object>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBufferAndParam<String, Log, String>(
+        format: (entries, retry) {
+          if (first) {
+            first = false;
+            throw StateError('format boom');
+          }
+
+          return entries.map((entry) => entry.$2.message).join(',');
+        },
+        output: (out, entries, retry) => outputs.add(out),
+        onError: (error, stackTrace) => errors.add(error),
+      );
+      final log = Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher.withParam('p');
+
+      log.i('a');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(errors.single, isStateError);
+      expect(outputs, ['a']);
+    });
   });
 }

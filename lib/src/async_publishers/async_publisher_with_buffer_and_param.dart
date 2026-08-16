@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
@@ -48,15 +49,32 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// [runZonedGuarded].
   final void Function(Object error, StackTrace stackTrace)? onError;
 
+  /// How long to wait before retrying a batch that was handed back through
+  /// the retry buffer.
+  ///
+  /// Applies only after a batch returned entries, so a handler that keeps
+  /// up pays nothing. Retries always go through the event loop, never the
+  /// microtask queue, so a permanently unavailable sink can no longer starve
+  /// timers, I/O or the application's own [close] call — but with the
+  /// default [Duration.zero] the queue still retries as fast as the event
+  /// loop allows. Set a non-zero value when the sink can be down for a
+  /// while.
+  final Duration retryDelay;
+
   late final BufferedPipeline<(Param, Log)> _pipeline =
       BufferedPipeline<(Param, Log)>(
     handle: handle,
     sync: sync,
     onError: onError,
+    retryDelay: retryDelay,
   );
 
   /// Creates the publisher and its buffered processing queue.
-  AsyncPublisherWithBufferAndParamBase({this.sync = false, this.onError});
+  AsyncPublisherWithBufferAndParamBase({
+    this.sync = false,
+    this.onError,
+    this.retryDelay = Duration.zero,
+  });
 
   /// Processes a batch of buffered parameter-log [entries].
   ///
@@ -129,7 +147,12 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
   ) handler;
 
   /// Creates a publisher backed by [handler].
-  AsyncPublisherWithBufferAndParam(this.handler, {super.sync, super.onError});
+  AsyncPublisherWithBufferAndParam(
+    this.handler, {
+    super.sync,
+    super.onError,
+    super.retryDelay,
+  });
 
   @override
   FutureOr<void> handle(
@@ -169,6 +192,12 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
   ///
   /// Entries added to the retry buffer during formatting are excluded from
   /// the batch passed to [output] and retried with the next batch.
+  ///
+  /// A throwing [format] — synchronously or through its future — puts the
+  /// whole batch back into the retry buffer instead of dropping it, and the
+  /// error is routed to `onError` or the current zone. There is no other
+  /// point at which the caller could hand the batch back: [output] never
+  /// runs.
   final FutureOr<Out> Function(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
@@ -188,24 +217,55 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     required this.output,
     super.sync,
     super.onError,
+    super.retryDelay,
   });
 
   @override
   FutureOr<void> handle(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) =>
-      switch (format(entries, retryBuffer)) {
-        final Future<Out> future => future.then(
-            (out) => output(
-              out,
-              _remainingEntries(entries, retryBuffer),
-              retryBuffer,
-            ),
-          ),
-        final Out out =>
-          output(out, _remainingEntries(entries, retryBuffer), retryBuffer),
-      };
+  ) {
+    final FutureOr<Out> formatted;
+    try {
+      formatted = format(entries, retryBuffer);
+    } on Object {
+      // A throwing format leaves the caller no point at which it could hand
+      // the batch back, so retry it wholesale rather than dropping it.
+      _retryWholeBatch(entries, retryBuffer);
+      rethrow;
+    }
+
+    if (formatted is Future<Out>) {
+      return formatted.then(
+        (out) => output(
+          out,
+          _remainingEntries(entries, retryBuffer),
+          retryBuffer,
+        ),
+        onError: (Object error, StackTrace stackTrace) {
+          _retryWholeBatch(entries, retryBuffer);
+          Error.throwWithStackTrace(error, stackTrace);
+        },
+      );
+    }
+
+    return output(
+      formatted,
+      _remainingEntries(entries, retryBuffer),
+      retryBuffer,
+    );
+  }
+
+  /// The retry buffer can only ever hold entries from this batch, so
+  /// restoring the whole batch means replacing whatever [format] added.
+  void _retryWholeBatch(
+    List<(Param, Log)> entries,
+    List<(Param, Log)> retryBuffer,
+  ) {
+    retryBuffer
+      ..clear()
+      ..addAll(entries);
+  }
 
   List<(Param, Log)> _remainingEntries(
     List<(Param, Log)> entries,
@@ -216,11 +276,24 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     }
 
     // Records are compared structurally: `param ==` and `log ==` (identity
-    // unless the user's Log overrides `==`).
-    final retried = Set.of(retryBuffer);
-    return [
-      for (final entry in entries)
-        if (!retried.contains(entry)) entry,
-    ];
+    // unless the user's Log overrides `==`). Counted, not a set: a batch may
+    // hold equal entries twice, and handing one back must not withdraw the
+    // other from [output].
+    final retried = HashMap<(Param, Log), int>();
+    for (final entry in retryBuffer) {
+      retried[entry] = (retried[entry] ?? 0) + 1;
+    }
+
+    final remaining = <(Param, Log)>[];
+    for (final entry in entries) {
+      final count = retried[entry] ?? 0;
+      if (count > 0) {
+        retried[entry] = count - 1;
+      } else {
+        remaining.add(entry);
+      }
+    }
+
+    return remaining;
   }
 }
