@@ -84,4 +84,8 @@ abstract base class CustomLog {
 /// original; returning `null` drops the log entirely. Used by
 /// `CustomLogger.transformer` and `TransformPublisher` — primarily for
 /// security: masking secrets and PII before the log reaches any output.
+///
+/// A transformer must not log into the pipeline it is part of: the nested
+/// call re-enters the transformer and recurses until the stack is
+/// exhausted. See `CustomLogger.transformer` for what that costs.
 typedef LogTransformer<Log extends CustomLog> = Log? Function(Log log);

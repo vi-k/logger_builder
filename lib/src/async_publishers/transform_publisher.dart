@@ -25,6 +25,14 @@ import 'async_publisher.dart';
 ///
 /// [flush] and [close] are delegated to the wrapped publisher when it
 /// implements [Flushable]/[Closable], and complete immediately otherwise.
+///
+/// > [!WARNING]
+/// > Never log into a logger that publishes through this publisher from
+/// > inside the [transformer]: the nested call comes back here, re-enters
+/// > the transformer and recurses until the stack is exhausted. The
+/// > resulting [StackOverflowError] is reported once via [onError], but
+/// > every unwinding frame still publishes its own log — a single logging
+/// > call becomes thousands of published duplicates.
 final class TransformPublisher<Log extends CustomLog>
     implements CustomLogPublisher<Log>, Flushable, Closable {
   final CustomLogPublisher<Log> _inner;

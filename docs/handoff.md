@@ -34,7 +34,33 @@ Dart SDK 3.13.0 (stable):
 | `dart format --output=none --set-exit-if-changed .` | чисто |
 | `dart pub publish --dry-run` | 0 предупреждений |
 
+## В работе
+
+Взят пункт бэклога про реентерабельность `transformer`. Сделана
+и закоммичена **документационная часть**: предупреждения в dartdoc
+у `CustomLogger.transformer`, `TransformPublisher` и типа
+`LogTransformer`. Поведение проверено замером, а не по описанию: один
+реентерабельный вызов даёт ~2700 опубликованных дублей при одном
+`StackOverflowError` в зону (`TransformPublisher` — ~2000).
+
+Остаток пункта — опциональный guard, детектирующий реентерабельный
+`publishLog`, — ждёт решения владельца и лежит в `docs/backlog.md`.
+
+Изменение только в dartdoc, версия не поднята и `CHANGELOG.md` не
+тронут: до пользователей это доедет только релизом 0.5.1, решение
+о котором за владельцем.
+
 ## Открытые проблемы
+
+**README и все примеры учат обходить `transformer`.** Четыре логгера
+в `example/logger_builder_examples/lib/` (`simple_logger`,
+`complex_logger`, `hierarchical_logger`, `json_reporter`) и README
+(строки ~484 и ~496) в `processLog` вызывают `publisher.publish(...)`
+напрямую, а не `publishLog(...)`. Это ровно тот случай, про который
+предупреждает CHANGELOG 0.5.0: `CustomLogger.transformer` для таких
+логгеров молча не работает. Мигрирован только
+`test/utils/hierarchical_logger.dart`. Правки не заказывались —
+предложить владельцу.
 
 **У волны 0.5.0 нет записи в `docs/records/`.** Что вошло в релиз, видно
 по `CHANGELOG.md` (`LogTransformer`, `CustomLogger.transformer`,

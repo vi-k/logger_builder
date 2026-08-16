@@ -232,6 +232,17 @@ abstract base class CustomLogger<
   /// the error is reported to the current zone via
   /// [Zone.handleUncaughtError]. Use `TransformPublisher` with its
   /// `onError` for a custom error callback.
+  ///
+  /// > [!WARNING]
+  /// > Never log through this logger (or any logger that shares this
+  /// > transformer) from inside the transformer. Each nested call re-enters
+  /// > the transformer and recurses until the stack is exhausted. The
+  /// > resulting [StackOverflowError] is caught like any other transformer
+  /// > failure and reported once, so the isolate survives — but every
+  /// > unwinding frame then goes on to publish its own log, turning a
+  /// > single logging call into thousands of published duplicates.
+  /// > Collect diagnostics into a plain list instead, or hand them to
+  /// > a logger that this transformer never reaches.
   LogTransformer<Log>? get transformer => _transformer;
 
   /// Sets the log [transformer].
