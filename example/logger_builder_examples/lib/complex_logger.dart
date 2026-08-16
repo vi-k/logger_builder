@@ -42,7 +42,7 @@ final class LevelLogger
 
   @override
   LogFn get processLog => (source, message, {error, stackTrace}) {
-        publisher.publish(
+        publishLog(
           Log(
             this,
             error: error,

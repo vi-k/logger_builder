@@ -346,7 +346,7 @@ final class LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Lo
 
   @override
   LogFn get processLog => (message, {error, stackTrace}) {
-      publisher.publish(
+      publishLog(
         Log(
           this,
           message: message,
@@ -460,7 +460,7 @@ For example, using a closure:
 ```dart
 @override
 LogFn get processLog => (message, {error, stackTrace}) {
-      publisher.publish(
+      publishLog(
         Log(
           this,
           message: message,
@@ -481,7 +481,7 @@ LogFn get processLog => _processLog;
 
 bool _processLog(Object? message, {Object? error, StackTrace? stackTrace}) {
   final log = Log(this, message: message, error: error, stackTrace: stackTrace);
-  publisher.publish(log);
+  publishLog(log);
   return true;
 }
 ```
@@ -493,7 +493,9 @@ difference minimal.
 Inside `processLog`, you need to do three things:
 
 1. Create a `Log`.
-2. Publish the `Log` via `publisher.publish`.
+2. Publish the `Log` via `publishLog` — the protected method that applies
+   `CustomLogger.transformer` and then hands the log to the publisher.
+   Calling `publisher.publish` directly skips the transformer.
 3. Return `true` (if you decided to follow the advice and use `bool` as
    the return value).
 

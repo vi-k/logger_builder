@@ -34,7 +34,7 @@ final class LevelLogger
 
   @override
   LogFn get processLog => (message, {error, stackTrace}) {
-        publisher.publish(
+        publishLog(
           Log(
             this,
             path: logger._lazyPath,

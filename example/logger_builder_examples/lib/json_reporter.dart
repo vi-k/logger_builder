@@ -46,7 +46,7 @@ final class JsonLevelReporter extends CustomLevelLogger<JsonReporter,
   @override
   JsonReporterFn get processLog =>
       (event, {data = _noData, error, stackTrace}) {
-        publisher.publish(
+        publishLog(
           JsonReport(
             this,
             error: error,

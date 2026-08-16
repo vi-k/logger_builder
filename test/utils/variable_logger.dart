@@ -20,7 +20,7 @@ final class VarLevelLogger
 
   @override
   VarLogFn get processLog => (message) {
-        publisher.publish(VarLog(this, message: message));
+        publishLog(VarLog(this, message: message));
         return true;
       };
 }
