@@ -1,3 +1,22 @@
+## 0.5.1
+
+* A log transformer that logs through its own logger — or into its own
+  `TransformPublisher` — no longer recurses: the reentrant call is
+  detected, the nested log is dropped and a `StateError` is reported to
+  `onError` or the current zone. Previously such a call recursed until
+  the stack was exhausted; on the way out every frame published its own
+  log (measured: ~2700 duplicates from one logging call), and the
+  `StackOverflowError` could escape `Zone.handleUncaughtError` unhandled
+  and terminate the isolate. Any cycle that comes back to a logger whose
+  transformer is already running is covered; logging into an unrelated
+  logger is unaffected, and chained transform publishers do not trip the
+  guard. There is no cost when `transformer` is `null` (the default).
+* The README and the bundled examples now publish via
+  `CustomLevelLogger.publishLog` instead of `publisher.publish`. They had
+  been left on the pre-0.5.0 form, so loggers copied from them ignored
+  `CustomLogger.transformer` — exactly the pitfall the 0.5.0 note
+  described.
+
 ## 0.5.0
 
 * Pre-publication log processing: the new `LogTransformer` typedef
