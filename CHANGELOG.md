@@ -170,6 +170,11 @@ unreleased section became a minor bump instead.
   `lints/recommended` has since absorbed into the inherited block, marked the
   rules that are still experimental, and enabled `unnecessary_ignore` so the
   suppression list stays honest without a manual audit.
+* The `*Linked` flags double as in-progress markers — they are cleared before
+  propagation recurses and restored after — and that is the only thing
+  stopping a cycle in the sublogger graph from recursing until the stack is
+  exhausted. `registerSublogger` is protected, so a subclass can build one.
+  Nothing said so and no test covered it; both now do.
 * CI now validates the published archive, runs every example, and smoke-tests
   the web and wasm targets pub.dev advertises. Dependabot watches the `pub`
   dependencies as well as the actions, `actions/checkout` is SHA-pinned like

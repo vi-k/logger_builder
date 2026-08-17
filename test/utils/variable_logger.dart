@@ -46,6 +46,11 @@ base class VarLogger
   /// construction.
   void addLevel(int level) =>
       registerLevel(VarLevelLogger(level: level, name: 'L$level'));
+
+  /// Exposes the protected [registerSublogger] so a test can build a cyclic
+  /// sublogger graph, which is what the `*Linked` flags quietly protect
+  /// against.
+  void attach(VarLogger sublogger) => registerSublogger(sublogger);
 }
 
 /// Registers a level logger handed in from outside, so a test can try to

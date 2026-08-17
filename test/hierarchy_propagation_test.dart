@@ -301,6 +301,65 @@ void main() {
     });
   });
 
+  group('cycles in the sublogger graph', () {
+    // registerSublogger is @protected, so a subclass can build a cycle. What
+    // stops propagation from recursing until the stack is exhausted is not an
+    // explicit visited set: `_setLevel` and the other propagation methods
+    // clear their `*Linked` flag before recursing and restore it after, so a
+    // node already being walked has its flag down and is skipped. That is
+    // load-bearing and easy to break by moving the assignment, hence this
+    // test.
+    test('level propagation terminates on a cycle', () {
+      final root = VarLogger([Levels.info]);
+      final a = VarLogger.sub(root, [Levels.info]);
+      // `attach(a)` closes the loop: b now also has a as a sublogger.
+      final b = VarLogger.sub(a, [Levels.info])..attach(a);
+
+      expect(() => root.level = Levels.all, returnsNormally);
+      expect(a.level, Levels.all);
+      expect(b.level, Levels.all);
+    });
+
+    test('publisher propagation terminates on a cycle', () {
+      final published = <String?>[];
+      final root = VarLogger([Levels.info])..level = Levels.all;
+      final a = VarLogger.sub(root, [Levels.info]);
+      final b = VarLogger.sub(a, [Levels.info])..attach(a);
+
+      expect(
+        () => root.publisher =
+            CustomLogPublisher((log) => published.add(log.message)),
+        returnsNormally,
+      );
+      b.logAt(Levels.info)('through the cycle');
+
+      expect(published, ['through the cycle']);
+    });
+
+    test('transformer propagation terminates on a cycle', () {
+      final root = VarLogger([Levels.info]);
+      final a = VarLogger.sub(root, [Levels.info]);
+      VarLogger.sub(a, [Levels.info]).attach(a);
+
+      expect(
+        () => root.transformer = (log) => log,
+        returnsNormally,
+      );
+      expect(a.transformer, isNotNull);
+    });
+
+    test('per-level publisher propagation terminates on a cycle', () {
+      final root = VarLogger([Levels.info])..level = Levels.all;
+      final a = VarLogger.sub(root, [Levels.info]);
+      VarLogger.sub(a, [Levels.info]).attach(a);
+
+      expect(
+        () => root[Levels.info].publisher = const CustomLogPublisher.noOp(),
+        returnsNormally,
+      );
+    });
+  });
+
   group('sublogger pruning', () {
     // Regression: M1
     test('pruneSubloggers keeps live subloggers', () {

@@ -280,6 +280,14 @@ abstract base class CustomLogger<
   /// use [relink] to re-attach).
   set level(int value) => _setLevel(value);
 
+  // Load-bearing ordering, in this method and in the three propagation
+  // methods below: the `*Linked` flag is cleared *before* recursing and
+  // restored *after*, so while a subtree is being walked its own flag is
+  // down. That doubles as an in-progress marker and is the only thing that
+  // stops a cycle in the sublogger graph — `registerSublogger` is protected,
+  // so a subclass can build `root -> a -> b -> a` — from recursing until the
+  // stack is exhausted. Hoisting the assignment to the end of the method
+  // would reintroduce that crash, which is why it is spelled out here.
   void _setLevel(int value) {
     _level = value;
     _levelLinked = false;
@@ -321,6 +329,8 @@ abstract base class CustomLogger<
   // ignore: avoid_setters_without_getters
   set publisher(CustomLogPublisher<Log> publisher) => _setPublisher(publisher);
 
+  // The flag is cleared before recursing and restored after, which also
+  // breaks cycles in the sublogger graph — see the note on [_setLevel].
   void _setPublisher(CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;
     _defaultPublisher = publisher;
@@ -388,6 +398,8 @@ abstract base class CustomLogger<
   /// value; use [relink] to re-attach).
   set transformer(LogTransformer<Log>? value) => _setTransformer(value);
 
+  // The flag is cleared before recursing and restored after, which also
+  // breaks cycles in the sublogger graph — see the note on [_setLevel].
   void _setTransformer(LogTransformer<Log>? value) {
     _transformer = value;
     _transformerLinked = false;
@@ -445,6 +457,8 @@ abstract base class CustomLogger<
     _propagateLevelPublisher(level, publisher);
   }
 
+  // The flag is cleared before recursing and restored after, which also
+  // breaks cycles in the sublogger graph — see the note on [_setLevel].
   void _propagateLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     pruneSubloggers();
     for (final sublogger in _subloggers) {
