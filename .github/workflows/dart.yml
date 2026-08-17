@@ -10,9 +10,20 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  # Nothing pins the dependency versions — `pubspec.lock` is deliberately not
+  # committed for a library — so a bad upstream release would otherwise only
+  # surface on the next push. This is the compensating check.
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# A newer push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # The strict gate: latest stable, newest dependencies, every check.
@@ -23,7 +34,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
 
@@ -44,6 +55,36 @@ jobs:
       - name: Run tests
         run: dart test
 
+      # .pubignore is load-bearing here — the published example includes the
+      # root analysis_options.yaml through a relative path — and nothing but a
+      # dry run notices when it stops being right.
+      - name: Validate the published archive
+        run: dart pub publish --dry-run
+
+      # The examples are the package's primary documentation and were only
+      # ever type-checked. A deadlock or a runaway retry loop passes analysis
+      # and hangs here instead, which is what the job timeout is for.
+      # benchmarks.dart is excluded: it is long by design.
+      - name: Run the examples
+        working-directory: example/logger_builder_examples
+        run: |
+          set -e
+          for entry in bin/*.dart bin/async_publishers/*.dart; do
+            [ "$entry" = "bin/benchmarks.dart" ] && continue
+            echo "--- $entry"
+            dart run "$entry" > /dev/null
+          done
+
+      # pub.dev advertises platform:web, runtime:web and is:wasm-ready for
+      # this package. Nothing else would notice a dart:io import turning those
+      # badges into lies.
+      - name: Smoke-test the web and wasm targets
+        working-directory: example/logger_builder_examples
+        run: |
+          set -e
+          dart compile js bin/simple_logger.dart -o /tmp/out.js
+          dart compile wasm bin/simple_logger.dart -o /tmp/out.wasm
+
   # The floor. `environment.sdk` claims ^3.2.0, and for a consumer that is
   # true — the only runtime dependency is meta and the code uses no language
   # feature newer than Dart 3.0. But the dev toolchain cannot go that low
@@ -60,7 +101,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:

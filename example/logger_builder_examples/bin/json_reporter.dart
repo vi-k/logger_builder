@@ -5,6 +5,16 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:logger_builder_examples/console.dart';
 import 'package:logger_builder_examples/json_reporter.dart';
 
+/// The shape [DefaultJsonPublisher.jsonToString] probes for.
+///
+/// Declared rather than duck-typed through `dynamic` so the check is a plain
+/// type test: `try { (x as dynamic).toJson() } on NoSuchMethodError` also
+/// swallows a NoSuchMethodError thrown *inside* a toJson that does exist,
+/// turning a real failure into a silent `toString()`.
+abstract interface class _HasToJson {
+  Object? toJson();
+}
+
 final class DefaultJsonPublisher implements CustomLogPublisher<JsonReport> {
   const DefaultJsonPublisher();
 
@@ -23,14 +33,13 @@ final class DefaultJsonPublisher implements CustomLogPublisher<JsonReport> {
 
   static String jsonToString(Map<String, Object?> json) => jsonEncode(
         json,
-        toEncodable: (nonEncodable) {
-          try {
-            return (nonEncodable as dynamic).toJson();
-            // ignore: avoid_catching_errors
-          } on NoSuchMethodError {
-            return nonEncodable.toString();
-          }
-        },
+        // Duck-typed on purpose rather than `try/catch NoSuchMethodError`:
+        // that form also swallows a NoSuchMethodError thrown *inside* a
+        // toJson that does exist, silently replacing a real failure with
+        // toString().
+        toEncodable: (nonEncodable) => nonEncodable is _HasToJson
+            ? nonEncodable.toJson()
+            : nonEncodable.toString(),
       );
 
   static String format(JsonReport report) =>
@@ -44,12 +53,13 @@ final class DefaultJsonPublisher implements CustomLogPublisher<JsonReport> {
   }
 }
 
-final class EncodableClass {
+final class EncodableClass implements _HasToJson {
   final int id;
   final String data;
 
   const EncodableClass(this.id, this.data);
 
+  @override
   Map<String, Object?> toJson() => {'id': id, 'data': data};
 }
 

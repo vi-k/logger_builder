@@ -239,6 +239,20 @@ void main() {
       expect(inner.closeCount, 1);
     });
 
+    // Regression: L8 (project review 2026-08-17[1]) — every sibling
+    // short-circuits flush() after close(); TransformPublisher delegated
+    // unconditionally, so with an inner publisher that is Flushable but not
+    // Closable it kept poking a publisher it had already disowned.
+    test('flush after close does not touch the wrapped publisher', () async {
+      final inner = _LifecyclePublisher();
+      final publisher = TransformPublisher(inner, transformer: (log) => log);
+
+      await publisher.close();
+      await publisher.flush().timeout(const Duration(seconds: 1));
+
+      expect(inner.flushCount, 0);
+    });
+
     // Regression: C1 (project review 2026-08-17[1]) — a withParam adapter did
     // not implement Closable, so the switch on _inner fell through to a no-op
     // and the wrapped shared queue was never drained.

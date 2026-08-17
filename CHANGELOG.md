@@ -1,4 +1,4 @@
-## 0.6.0
+## 0.6.0 (unreleased)
 
 The 0.5.1 work below was never published; an independent review of the
 whole code base then found defects that need behaviour changes, so the
@@ -53,6 +53,35 @@ unreleased section became a minor bump instead.
 
 **Fixes**
 
+* `CustomLogger.isLoggable` no longer contradicts itself at the thresholds:
+  `isLoggable(Levels.off)` was `true` for a logger set to `Levels.off`.
+  `Levels.all` and `Levels.off` are thresholds, not levels, and no level
+  logger can be registered on either, so both now answer `false`.
+* `CustomLogger.levels` returns a snapshot instead of a live view of the map
+  keys, so registering a level while iterating it no longer throws
+  `ConcurrentModificationError`.
+* `TransformPublisher.flush()` after `close()` completes without touching the
+  wrapped publisher, like every sibling. With an inner publisher that is
+  `Flushable` but not `Closable` it kept flushing through one it had already
+  disowned.
+* Reading `isClosed` (or calling `flush`) on a buffered publisher no longer
+  creates its queue. Asking whether a publisher was closed used to
+  materialise a `StreamController` with a live subscription nobody would ever
+  close, and pinned the zone that receives handler errors to whoever asked
+  first.
+* `flush()` on the unbuffered publishers no longer moves error routing:
+  re-creating the internal listener happens in the zone the publisher was
+  constructed in, not the zone that flushed.
+* A throwing `Lazy` factory is memoized like `late final` — the error is
+  stored, the closure released, and later accesses rethrow it. It used to run
+  again on each access, so a factory with a side effect ran once per
+  publisher in a `MultiPublisher`, while the class promised the source had
+  been replaced by the result.
+* Toggling a level that is already in the requested state is a no-op.
+  `processLog` allocates a fresh closure in every documented pattern, so
+  re-toggling was pure waste (3M closures for 50 level assignments over 20k
+  linked subloggers) and it changed the identity of a function a caller may
+  have hoisted.
 * `close()` on a buffered publisher no longer sleeps through a pending
   `retryDelay`. The retry `Timer` was not kept anywhere, so shutdown latency
   scaled with `retryDelay` — and the entries it waited for were dropped
@@ -121,6 +150,35 @@ unreleased section became a minor bump instead.
 
 **Documentation**
 
+* `CustomLevelLogger.log` warns against hoisting it into a variable:
+  enabling and disabling a level swaps the field, so a stored function is a
+  snapshot that keeps publishing after `logger.level = Levels.off`.
+* `CustomLevelLogger.publisher` says that reading it and publishing yourself
+  bypasses `CustomLogger.transformer` — the transformer is a convenience on
+  the library's own path, not an enforced boundary.
+* The `Lazy` warning covers `async` functions, which the type test also calls:
+  `Instance of 'Future<...>'` gets logged and the future's error becomes an
+  unhandled zone error. One mistake, two failures.
+* `pruneSubloggers()` and the three `*Linked` getters are no longer marked
+  `@visibleForTesting`. The first is the library's own memory-management
+  primitive, called on every propagation; the others answer "is this
+  sublogger still following its parent?", which is a fair question in
+  production given `relink()` is public.
+* `analysis_options.yaml`: dropped two deprecated rules (one of which was
+  suppressed at every single trigger site), commented out three
+  Flutter-only rules and three non-existent excludes, moved eight rules
+  `lints/recommended` has since absorbed into the inherited block, marked the
+  rules that are still experimental, and enabled `unnecessary_ignore` so the
+  suppression list stays honest without a manual audit.
+* CI now validates the published archive, runs every example, and smoke-tests
+  the web and wasm targets pub.dev advertises. Dependabot watches the `pub`
+  dependencies as well as the actions, `actions/checkout` is SHA-pinned like
+  `setup-dart` already was, and a weekly scheduled run compensates for the
+  absence of a committed lockfile.
+* The example package declared `sdk: ^3.2.0`, mirroring the library, and
+  could not resolve there: `logging` needs ^3.4.0, `ansi_escape_codes` and
+  `lints` need ^3.6.0. It also declared a `test` dev dependency with no
+  `test/` directory.
 * New README sections: "Hierarchical Loggers" (including `CustomLogger.sub`,
   which was never documented) and "Transformers" (the 0.5.0 headline feature,
   previously mentioned only under "Common Mistakes").
@@ -188,9 +246,10 @@ unreleased section became a minor bump instead.
   transformer is already running is covered; logging into an unrelated
   logger is unaffected, and chained transform publishers do not trip the
   guard. There is no cost when `transformer` is `null` (the default).
-* New README sections: "Why not just `if (logging)`?", "Common Scenarios"
-  (stdout/stderr, files, timestamps, colour), "Common Mistakes" and
-  "Using logger_builder in your own package".
+(The README sections "Why not just `if (logging)`?", "Common Scenarios",
+"Common Mistakes" and "Using logger_builder in your own package" were
+originally listed here. They landed after the `Release 0.5.1` commit, so they
+belong to 0.6.0 and are credited there.)
 * The README and the bundled examples now publish via
   `CustomLevelLogger.publishLog` instead of `publisher.publish`. They had
   been left on the pre-0.5.0 form, so loggers copied from them ignored

@@ -23,10 +23,10 @@ import 'internal/buffered_pipeline.dart';
 /// > Entries already queued when [close] was called are drained (see
 /// > [close]).
 /// >
-/// > The queue is created lazily, on the first publish, [flush], [close] or
-/// > [isClosed], not in the constructor. Without an [onError] the zone that
-/// > receives handler errors is therefore the one that touched the publisher
-/// > first, not the one that built it.
+/// > The queue is created lazily, on the first publish or [close], not in
+/// > the constructor ([flush] and [isClosed] no longer create it). Without an
+/// > [onError] the zone that receives handler errors is therefore the one
+/// > that published first, not the one that built the publisher.
 ///
 /// Example usage:
 ///
@@ -91,14 +91,16 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// the current zone.
   final void Function(List<(Param, Log)> entries)? onDropped;
 
-  late final BufferedPipeline<(Param, Log)> _pipeline =
-      BufferedPipeline<(Param, Log)>(
-    handle: handle,
-    sync: sync,
-    onError: onError,
-    onDropped: onDropped,
-    retryDelay: retryDelay,
-  );
+  BufferedPipeline<(Param, Log)>? _pipelineOrNull;
+
+  BufferedPipeline<(Param, Log)> get _pipeline =>
+      _pipelineOrNull ??= BufferedPipeline<(Param, Log)>(
+        handle: handle,
+        sync: sync,
+        onError: onError,
+        onDropped: onDropped,
+        retryDelay: retryDelay,
+      );
 
   /// Creates the publisher and its buffered processing queue.
   AsyncPublisherWithBufferAndParamBase({
@@ -125,7 +127,12 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   );
 
   /// Whether [close] has been called.
-  bool get isClosed => _pipeline.isClosed;
+  ///
+  /// Reading this does not create the queue: asking whether a publisher is
+  /// closed used to materialise a `StreamController` with a live subscription
+  /// nobody would ever close, and pinned the zone that receives handler
+  /// errors to whoever asked first.
+  bool get isClosed => _pipelineOrNull?.isClosed ?? false;
 
   /// Returns a [CustomLogPublisher] that publishes into this shared buffer
   /// with the given [param] attached to every log event.
@@ -147,7 +154,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// already-completed one — reporting "the queue is empty" while logs are
   /// still in flight would be a false all-clear at exactly the wrong moment.
   @override
-  Future<void> flush() => _pipeline.flush();
+  Future<void> flush() => _pipelineOrNull?.flush() ?? Future<void>.value();
 
   /// Closes the publisher after draining the queue: every log accepted
   /// before closing is processed, including logs published while a batch

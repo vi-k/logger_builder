@@ -117,6 +117,39 @@ void main() {
       }
     });
 
+    // Regression: L2 (project review 2026-08-17[1]) — `_level <= level` made
+    // isLoggable(Levels.off) true for a logger set to Levels.off, a predicate
+    // contradicting "logging is completely disabled" for code guarding on it.
+    test('isLoggable rejects the thresholds themselves', () {
+      final off = VarLogger([Levels.info])..level = Levels.off;
+      final all = VarLogger([Levels.info])..level = Levels.all;
+
+      expect(off.isLoggable(Levels.off), isFalse);
+      expect(off.isLoggable(Levels.info), isFalse);
+      expect(all.isLoggable(Levels.off), isFalse);
+      expect(all.isLoggable(Levels.all), isFalse);
+      expect(all.isLoggable(Levels.info), isTrue);
+    });
+
+    // Regression: L7 (project review 2026-08-17[1]) — `levels` was a live view
+    // of the map keys, so registering a level while iterating it threw
+    // ConcurrentModificationError.
+    test('levels is a snapshot, safe to register while iterating', () {
+      final logger = VarLogger([Levels.info, Levels.error]);
+
+      expect(
+        () {
+          for (final _ in logger.levels) {
+            if (!logger.levels.contains(Levels.finest)) {
+              logger.addLevel(Levels.finest);
+            }
+          }
+        },
+        returnsNormally,
+      );
+      expect(logger.levels, hasLength(3));
+    });
+
     test('a freshly built logger publishes nothing', () {
       final published = <String?>[];
       final log = VarLogger([Levels.info])

@@ -52,6 +52,7 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   StreamSubscription<void>? _subscription;
   Future<void>? _flushFuture;
   Future<void>? _closeFuture;
+  final Zone _zone = Zone.current;
 
   /// Creates the publisher and starts its processing queue.
   AsyncPublisherWithParamBase({this.sync = false, this.onError})
@@ -82,9 +83,10 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// processed.
   ///
   /// Concurrent calls are serialized: a later flush first waits for the
-  /// earlier one and then drains the events queued in between. Note that
-  /// the internal queue listener is re-created in the zone of this call, so
-  /// subsequent zone-reported handler errors go to that zone.
+  /// earlier one and then drains the events queued in between. The internal
+  /// queue listener is re-created, but always in the zone this publisher was
+  /// constructed in, so flushing does not move where later zone-reported
+  /// handler errors land.
   @override
   Future<void> flush() {
     if (isClosed) {
@@ -131,9 +133,14 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   }
 
   void _listen() {
-    _subscription = _controller.stream
-        .asyncMap(_guardedHandle)
-        .listen((_) {}, onError: _lastResortError);
+    // Always the construction zone. `_listen` also runs from `flush`, and
+    // subscribing there would silently move every later zone-reported handler
+    // error to whoever happened to flush last.
+    _zone.run(() {
+      _subscription = _controller.stream
+          .asyncMap(_guardedHandle)
+          .listen((_) {}, onError: _lastResortError);
+    });
   }
 
   /// Last-resort guard for errors that escape [_guardedHandle]

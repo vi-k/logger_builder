@@ -103,4 +103,44 @@ void main() {
       expect(LazyStringOrNull(() => 42).value, '42');
     });
   });
+
+  group('failed resolution', () {
+    // Regression: L3 (project review 2026-08-17[1]) — a throwing factory was
+    // not memoized: _isResolved stayed false, so every later access ran the
+    // factory again. With a MultiPublisher of three formatters a
+    // side-effecting factory ran three times, while the class promised the
+    // source had been replaced by the result.
+    test('a throwing factory runs once and rethrows on every access', () {
+      var calls = 0;
+      final lazy = Lazy(() {
+        calls++;
+        throw StateError('boom');
+      });
+
+      expect(() => lazy.resolved, throwsStateError);
+      expect(() => lazy.resolved, throwsStateError);
+      expect(() => lazy.resolved, throwsStateError);
+      expect(calls, 1, reason: 'the factory must not run again');
+    });
+
+    test('the memoized error keeps its identity', () {
+      final error = StateError('boom');
+      final lazy = Lazy(() => throw error);
+
+      expect(() => lazy.resolved, throwsA(same(error)));
+      expect(() => lazy.resolved, throwsA(same(error)));
+    });
+
+    test('a throwing factory propagates through TypedLazy.value', () {
+      var calls = 0;
+      final lazy = LazyString(() {
+        calls++;
+        throw StateError('boom');
+      });
+
+      expect(() => lazy.value, throwsStateError);
+      expect(() => lazy.value, throwsStateError);
+      expect(calls, 1);
+    });
+  });
 }

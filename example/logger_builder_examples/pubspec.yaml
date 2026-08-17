@@ -3,8 +3,11 @@ description: Runnable examples for the logger_builder package.
 version: 1.0.0
 publish_to: none
 
+# Not ^3.2.0 like the library: `logging` needs ^3.4.0, `ansi_escape_codes`
+# and `lints` need ^3.6.0. Mirroring the library's floor claimed a guarantee
+# this package cannot honour — `dart pub get` fails outright on 3.2.0.
 environment:
-  sdk: ^3.2.0
+  sdk: ^3.6.0
 
 dependencies:
   ansi_escape_codes: ^3.0.2
@@ -15,4 +18,3 @@ dependencies:
 
 dev_dependencies:
   lints: ^5.0.0
-  test: ^1.24.0

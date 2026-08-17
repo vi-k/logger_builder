@@ -8,7 +8,6 @@ import '../custom_logger/custom_log_publisher.dart';
 /// Flushing returns a future that completes when every log event accepted so
 /// far (and, for buffered publishers, any events accepted while the flush is
 /// in progress) has been processed.
-// ignore: one_member_abstracts
 abstract interface class Flushable {
   /// Completes when the publisher's queue has been fully processed.
   Future<void> flush();
@@ -22,7 +21,6 @@ typedef HasFlush = Flushable;
 ///
 /// Closing is terminal: after the returned future completes, the handler no
 /// longer accepts log events.
-// ignore: one_member_abstracts
 abstract interface class Closable {
   /// Closes the handler after processing the already accepted log events.
   Future<void> close();
@@ -72,6 +70,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   StreamSubscription<void>? _subscription;
   Future<void>? _flushFuture;
   Future<void>? _closeFuture;
+  final Zone _zone = Zone.current;
 
   /// Creates the publisher and starts its processing queue.
   AsyncPublisherBase({this.sync = false, this.onError})
@@ -101,9 +100,10 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// processed.
   ///
   /// Concurrent calls are serialized: a later flush first waits for the
-  /// earlier one and then drains the events queued in between. Note that
-  /// the internal queue listener is re-created in the zone of this call, so
-  /// subsequent zone-reported handler errors go to that zone.
+  /// earlier one and then drains the events queued in between. The internal
+  /// queue listener is re-created, but always in the zone this publisher was
+  /// constructed in, so flushing does not move where later zone-reported
+  /// handler errors land.
   ///
   /// Each call replaces the internal [StreamController] and its
   /// subscription, so flushing after every single log is measurably more
@@ -154,9 +154,14 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   }
 
   void _listen() {
-    _subscription = _controller.stream
-        .asyncMap(_guardedHandle)
-        .listen((_) {}, onError: _lastResortError);
+    // Always the construction zone. `_listen` also runs from `flush`, and
+    // subscribing there would silently move every later zone-reported handler
+    // error to whoever happened to flush last.
+    _zone.run(() {
+      _subscription = _controller.stream
+          .asyncMap(_guardedHandle)
+          .listen((_) {}, onError: _lastResortError);
+    });
   }
 
   /// Last-resort guard for errors that escape [_guardedHandle]

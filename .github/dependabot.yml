@@ -7,3 +7,16 @@ updates:
     directory: /
     schedule:
       interval: monthly
+
+  # Without these, nothing watches the Dart dependencies at all: `dart pub
+  # get` already reports lints drifting a major version behind, and the lower
+  # bounds would rot unnoticed.
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: pub
+    directory: /example/logger_builder_examples
+    schedule:
+      interval: monthly

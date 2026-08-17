@@ -86,10 +86,11 @@ abstract base class CustomLogger<
   /// Removes references to subloggers that have already been garbage
   /// collected.
   ///
-  /// Called automatically before every traversal of the subloggers, so the
-  /// internal list does not grow unboundedly. Exposed for deterministic
-  /// tests.
-  @visibleForTesting
+  /// Called automatically before every traversal of the subloggers, and
+  /// amortized on registration, so the internal list does not grow
+  /// unboundedly on its own. Call it directly to compact immediately after
+  /// dropping a large subtree, or in a test that needs a deterministic
+  /// moment.
   void pruneSubloggers() {
     _subloggers.removeWhere((sublogger) => sublogger.target == null);
     _prunedAt = _subloggers.length;
@@ -109,22 +110,25 @@ abstract base class CustomLogger<
 
   /// Returns `true` if this logger's level is synchronized with its parent.
   ///
-  /// For tests only; not intended for production use.
-  @visibleForTesting
+  /// Supported API, not a test hook: with [relink] public, "is this sublogger
+  /// still following its parent?" is a question production code may need to
+  /// answer.
   bool get levelLinked => _levelLinked;
 
   /// Returns `true` if this logger's publisher is synchronized with its
   /// parent.
   ///
-  /// For tests only; not intended for production use.
-  @visibleForTesting
+  /// Supported API, not a test hook: with [relink] public, "is this sublogger
+  /// still following its parent?" is a question production code may need to
+  /// answer.
   bool get publisherLinked => _publisherLinked;
 
   /// Returns `true` if this logger's transformer is synchronized with its
   /// parent.
   ///
-  /// For tests only; not intended for production use.
-  @visibleForTesting
+  /// Supported API, not a test hook: with [relink] public, "is this sublogger
+  /// still following its parent?" is a question production code may need to
+  /// answer.
   bool get transformerLinked => _transformerLinked;
 
   /// Retrieves the [LevelLogger] associated with the given numerical [level].
@@ -134,10 +138,12 @@ abstract base class CustomLogger<
       _levelLoggers[level] ??
       (throw StateError('Level $level is not registered'));
 
-  /// The numeric values of the registered levels.
+  /// The numeric values of the registered levels, in registration order.
   ///
-  /// A live view in registration order, not a snapshot.
-  Iterable<int> get levels => _levelLoggers.keys;
+  /// A snapshot, not a live view: registering a level while iterating this
+  /// used to throw [ConcurrentModificationError]. The set is normally built
+  /// once, so the copy costs nothing worth keeping the hazard for.
+  List<int> get levels => List<int>.unmodifiable(_levelLoggers.keys);
 
   /// Re-attaches this sublogger to its parent: re-inherits the parent's
   /// current [level], per-level publishers and [transformer], and turns
@@ -293,7 +299,15 @@ abstract base class CustomLogger<
   }
 
   /// Returns `true` if the specified [level] meets the logging threshold.
-  bool isLoggable(int level) => _level <= level;
+  ///
+  /// [Levels.all] and [Levels.off] are thresholds, not levels, and no level
+  /// logger can be registered on either (the [CustomLevelLogger] constructor
+  /// rejects them), so both answer `false`. Without that guard
+  /// `isLoggable(Levels.off)` was `true` for a logger set to
+  /// `Levels.off` — a predicate contradicting "logging is completely
+  /// disabled" for any code that guards on it.
+  bool isLoggable(int level) =>
+      level > Levels.all && level < Levels.off && _level <= level;
 
   /// Assigns a common [CustomLogPublisher] to all registered log levels.
   ///

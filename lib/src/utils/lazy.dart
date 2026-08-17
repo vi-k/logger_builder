@@ -32,6 +32,11 @@
 /// > later in time and in a different zone than the logging call. Wrap such
 /// > a value (`log.i(() => controller.dispose)`) or log something else.
 /// >
+/// > An `async` function matches the test too, and that case is worse: it is
+/// > called, `Instance of 'Future<...>'` is what gets logged, and the
+/// > future's error becomes an unhandled zone error — which in a plain Dart
+/// > program terminates the isolate. One mistake, two failures.
+/// >
 /// > Until it is resolved, a `Lazy` also keeps its closure alive together
 /// > with everything the closure captured — for buffered publishers, until
 /// > the batch is processed.
@@ -58,10 +63,27 @@ base class Lazy {
   /// On first access, computes the value via [resolveToObject]; the source
   /// is replaced by the result, so a passed closure is released. Subsequent
   /// accesses return the memoized result.
+  ///
+  /// A throwing factory is memoized too, like `late final`: the error is
+  /// stored, the closure is released, and every later access rethrows the
+  /// same error with the original stack trace. Otherwise a factory with a
+  /// side effect ran again on each access — three times over a
+  /// `MultiPublisher` of three formatters — while the class promised the
+  /// source had been replaced by the result.
   Object? get resolved {
     if (!_isResolved) {
-      _slot = resolveToObject(_slot);
+      try {
+        _slot = resolveToObject(_slot);
+      } on Object catch (error, stackTrace) {
+        _slot = _FailedResolution(error, stackTrace);
+        _isResolved = true;
+        rethrow;
+      }
       _isResolved = true;
+    }
+
+    if (_slot case final _FailedResolution failure) {
+      Error.throwWithStackTrace(failure.error, failure.stackTrace);
     }
 
     return _slot;
@@ -70,6 +92,17 @@ base class Lazy {
   /// Calls [obj] if it is a function, otherwise returns it as is.
   static Object? resolveToObject(Object? obj) =>
       obj is Object? Function() ? obj() : obj;
+}
+
+/// The memoized failure of a [Lazy] factory.
+///
+/// Never leaves the object: [Lazy.resolved] rethrows it instead of returning
+/// it, so no sentinel is observable from outside.
+final class _FailedResolution {
+  final Object error;
+  final StackTrace stackTrace;
+
+  const _FailedResolution(this.error, this.stackTrace);
 }
 
 /// Base class for lazy evaluation of a typed value.

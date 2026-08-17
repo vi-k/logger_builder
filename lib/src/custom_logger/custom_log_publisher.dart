@@ -5,7 +5,6 @@ import 'custom_log.dart';
 /// Log publishers encapsulate the logic of what to do with a [Log] after
 /// it has been created and passed the level filtering. This can include
 /// printing to stdout, writing to a file, or sending it over a network.
-// ignore: one_member_abstracts
 abstract interface class CustomLogPublisher<Log extends CustomLog> {
   /// Creates a publisher from a simple function.
   const factory CustomLogPublisher(void Function(Log log) publish) =

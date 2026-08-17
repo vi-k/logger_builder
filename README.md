@@ -6,6 +6,10 @@
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.
 
+```sh
+dart pub add logger_builder
+```
+
 ## Features
 
 - **Custom Loggers**: Build your own logger classes extending `CustomLogger`
@@ -387,8 +391,9 @@ final class Log extends CustomLog {
     super.zone,
   }) : _lazyMessage = LazyString(message);
 
-  /// A copy is not a new log event: `CustomLog.copy` keeps the level, the
-  /// zone and any identity your subclass adds. Transformers need this.
+  /// A copy is not a new log event: `CustomLog.copy` keeps the level and the
+  /// zone, and your copy constructor carries over your own fields — as the
+  /// two lines below do. Transformers need this.
   Log.copy(Log original, {Object? message})
       : _lazyMessage =
             message != null ? LazyString(message) : original._lazyMessage,
@@ -726,6 +731,14 @@ final log = Logger()
     output: (str) => print(red(str)),
   );
 ```
+
+`CustomLogFormatter` above is the second, shorter route: it is a
+`CustomLogPublisher` that splits the job in two — `format` turns a `Log` into
+an `Out` object, `output` decides what to do with it. Writing a class like
+`DefaultLogPublisher` gives you a name and a place for state; reaching for
+`CustomLogFormatter` saves you the class when all you want is to reuse one
+`format` with a different `output`, which is exactly what the error level does
+here.
 
 
 ## Async Publishers

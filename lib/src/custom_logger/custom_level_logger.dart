@@ -136,6 +136,16 @@ abstract base class CustomLevelLogger<
   ///
   /// If [isEnabled] is `true`, it delegates to [processLog]. Otherwise, it
   /// returns a no-op function.
+  ///
+  /// > [!WARNING]
+  /// > Read it per call, never hoist it. Enabling and disabling a level
+  /// > *swaps this field*, so a function stored in a variable is a snapshot:
+  /// > captured while enabled it keeps publishing after
+  /// > `logger.level = Levels.off`, and captured while disabled it stays
+  /// > silent after the level is turned back on. Expose it through a getter
+  /// > (`LogFn get d => _d.log;`) so every call re-reads the current
+  /// > function. Note that the logger's [CustomLogger.transformer] still runs
+  /// > on the stale path — only the level gate is bypassed.
   LogFn get log => _log;
 
   /// Returns the actual parent [Logger] instance.
@@ -148,6 +158,14 @@ abstract base class CustomLevelLogger<
   bool get isEnabled => !identical(_log, _noLog);
 
   /// Returns the custom log publisher assigned to this particular level.
+  ///
+  /// Reading it and calling `publish` yourself bypasses
+  /// [CustomLogger.transformer]: masking, redaction and the drop-on-`null`
+  /// rule all live in [publishLog], not in the publisher. The transformer is
+  /// a convenience applied on the library's own path, not an enforced
+  /// boundary — if secrets must never reach a sink, put the masking in the
+  /// publisher (or wrap it in a `TransformPublisher`) rather than relying on
+  /// every caller going through the logger.
   CustomLogPublisher<Log> get publisher => _publisher;
 
   /// Whether this level has a publisher that actually goes somewhere.
@@ -309,6 +327,15 @@ abstract base class CustomLevelLogger<
   }
 
   void _toggle(bool enabled) {
+    // No-op when the state is unchanged. `processLog` allocates a fresh
+    // closure in every documented pattern, so re-toggling an already-enabled
+    // level was pure waste (measured: 3M closures for 50 level assignments
+    // over 20k linked subloggers) and it changed the identity of a function
+    // a caller may have hoisted.
+    if (enabled == isEnabled) {
+      return;
+    }
+
     _log = enabled ? processLog : _noLog;
   }
 }
