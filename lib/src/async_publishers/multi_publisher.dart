@@ -58,8 +58,7 @@ base class MultiPublisher<Log extends CustomLog>
     CustomLogPublisher<Log> publisher,
     Object error,
     StackTrace stackTrace,
-  )?
-  onError;
+  )? onError;
 
   Future<void>? _closeFuture;
 
@@ -68,7 +67,7 @@ base class MultiPublisher<Log extends CustomLog>
   /// The list is copied: later changes to the original list do not affect
   /// this publisher.
   MultiPublisher(List<CustomLogPublisher<Log>> publishers, {this.onError})
-    : _publishers = List.of(publishers);
+      : _publishers = List.of(publishers);
 
   /// Whether [close] has been called.
   bool get isClosed => _closeFuture != null;
@@ -114,10 +113,9 @@ base class MultiPublisher<Log extends CustomLog>
   /// After [close] this completes immediately without touching the wrapped
   /// publishers, matching the asynchronous publishers.
   @override
-  Future<void> flush() =>
-      isClosed
-          ? Future<void>.value()
-          : _waitAll<Flushable>((flushable) => flushable.flush());
+  Future<void> flush() => isClosed
+      ? Future<void>.value()
+      : _waitAll<Flushable>((flushable) => flushable.flush());
 
   /// Closes every [Closable] publisher in the list and this publisher
   /// itself: afterwards [publish] throws a [StateError] and repeated calls

@@ -38,10 +38,8 @@ Future<void> main() async {
 
   title('AsyncPublisherWithParam');
 
-  final asyncPublisher = AsyncPublisherWithParam<bool, Log>((
-    isError,
-    log,
-  ) async {
+  final asyncPublisher =
+      AsyncPublisherWithParam<bool, Log>((isError, log) async {
     final str = await defaultAsyncFormat(isError, log);
     await defaultAsyncOutput(isError, str);
   });

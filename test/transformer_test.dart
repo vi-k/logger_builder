@@ -12,10 +12,9 @@ void main() {
 
     setUp(() {
       published = <Log>[];
-      logger =
-          Logger('app')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(published.add);
+      logger = Logger('app')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(published.add);
     });
 
     test('is applied before the publisher', () {
@@ -42,11 +41,14 @@ void main() {
 
     test('throwing transformer drops the log and reports to the zone', () {
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) => throw StateError('bad transformer'))
-          ..i('secret');
-      }, (error, stackTrace) => errors.add(error));
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) => throw StateError('bad transformer'))
+            ..i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published, isEmpty);
       expect(errors.single, isA<StateError>());
@@ -98,11 +100,10 @@ void main() {
 
     test('relink() re-inherits the parent transformer', () {
       logger.transformer = (log) => Log.copy(log, message: 'parent');
-      final child =
-          logger.withAddedName('child')
-            ..transformer = ((log) => Log.copy(log, message: 'child'))
-            ..relink()
-            ..i('secret');
+      final child = logger.withAddedName('child')
+        ..transformer = ((log) => Log.copy(log, message: 'child'))
+        ..relink()
+        ..i('secret');
 
       expect(published.single.message, 'parent');
       expect(child.transformerLinked, isTrue);
@@ -127,23 +128,25 @@ void main() {
 
     setUp(() {
       published = <Log>[];
-      logger =
-          Logger('app')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(published.add);
+      logger = Logger('app')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(published.add);
     });
 
     test('logging through the same logger drops the nested log', () {
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            logger.i('from inside the transformer');
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              logger.i('from inside the transformer');
 
-            return Log.copy(log, message: '***');
-          })
-          ..i('secret');
-      }, (error, stackTrace) => errors.add(error));
+              return Log.copy(log, message: '***');
+            })
+            ..i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.single.message, '***');
       expect(errors.single, isA<StateError>());
@@ -151,15 +154,18 @@ void main() {
 
     test('a nested call on another level of the same logger is caught', () {
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            logger.d('from inside the transformer');
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              logger.d('from inside the transformer');
 
-            return log;
-          })
-          ..i('secret');
-      }, (error, stackTrace) => errors.add(error));
+              return log;
+            })
+            ..i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       // The outer log is the one that must survive: a guard firing inside
       // out — dropping the outer log and publishing the nested one — would
@@ -171,18 +177,21 @@ void main() {
 
     test('the logger keeps working after a reentrant call', () {
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            if (log.message == 'first') {
-              logger.i('from inside the transformer');
-            }
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              if (log.message == 'first') {
+                logger.i('from inside the transformer');
+              }
 
-            return Log.copy(log, message: '${log.message}!');
-          })
-          ..i('first')
-          ..i('second');
-      }, (error, stackTrace) => errors.add(error));
+              return Log.copy(log, message: '${log.message}!');
+            })
+            ..i('first')
+            ..i('second');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.map((log) => log.message), ['first!', 'second!']);
       expect(errors.single, isA<StateError>());
@@ -190,23 +199,25 @@ void main() {
 
     test('logging into an unrelated logger is allowed', () {
       final audited = <Log>[];
-      final auditLogger =
-          Logger('audit')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(audited.add)
-            ..transformer =
-                ((log) => Log.copy(log, message: 'audit/${log.message}'));
+      final auditLogger = Logger('audit')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(audited.add)
+        ..transformer =
+            ((log) => Log.copy(log, message: 'audit/${log.message}'));
 
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            auditLogger.i('masked');
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              auditLogger.i('masked');
 
-            return Log.copy(log, message: '***');
-          })
-          ..i('secret');
-      }, (error, stackTrace) => errors.add(error));
+              return Log.copy(log, message: '***');
+            })
+            ..i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.single.message, '***');
       expect(audited.single.message, 'audit/masked');
@@ -215,25 +226,27 @@ void main() {
 
     test('a cycle between two loggers is caught on the way back', () {
       final other = <Log>[];
-      final otherLogger =
-          Logger('other')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(other.add);
+      final otherLogger = Logger('other')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(other.add);
 
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger.transformer = (log) {
-          otherLogger.i('to the other logger');
+      runZonedGuarded(
+        () {
+          logger.transformer = (log) {
+            otherLogger.i('to the other logger');
 
-          return Log.copy(log, message: '***');
-        };
-        otherLogger.transformer = (log) {
-          logger.i('back to the first logger');
+            return Log.copy(log, message: '***');
+          };
+          otherLogger.transformer = (log) {
+            logger.i('back to the first logger');
 
-          return Log.copy(log, message: 'other');
-        };
-        logger.i('secret');
-      }, (error, stackTrace) => errors.add(error));
+            return Log.copy(log, message: 'other');
+          };
+          logger.i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.single.message, '***');
       expect(other.single.message, 'other');
@@ -243,18 +256,21 @@ void main() {
     test('a throwing transformer still releases the guard', () {
       final errors = <Object>[];
       var fail = true;
-      runZonedGuarded(() {
-        logger.transformer = (log) {
-          if (fail) {
-            throw StateError('bad transformer');
-          }
+      runZonedGuarded(
+        () {
+          logger.transformer = (log) {
+            if (fail) {
+              throw StateError('bad transformer');
+            }
 
-          return Log.copy(log, message: '***');
-        };
-        logger.i('dropped');
-        fail = false;
-        logger.i('secret');
-      }, (error, stackTrace) => errors.add(error));
+            return Log.copy(log, message: '***');
+          };
+          logger.i('dropped');
+          fail = false;
+          logger.i('secret');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.single.message, '***');
       expect(errors.single, isA<StateError>());
@@ -262,16 +278,20 @@ void main() {
 
     test('composes with a TransformPublisher without tripping the guard', () {
       final errors = <Object>[];
-      runZonedGuarded(() {
-        logger
-          ..publisher = TransformPublisher<Log>(
-            CustomLogPublisher(published.add),
-            transformer: (log) => Log.copy(log, message: '${log.message}/pub'),
-          )
-          ..transformer =
-              ((log) => Log.copy(log, message: '${log.message}/log'))
-          ..i('m');
-      }, (error, stackTrace) => errors.add(error));
+      runZonedGuarded(
+        () {
+          logger
+            ..publisher = TransformPublisher<Log>(
+              CustomLogPublisher(published.add),
+              transformer: (log) =>
+                  Log.copy(log, message: '${log.message}/pub'),
+            )
+            ..transformer =
+                ((log) => Log.copy(log, message: '${log.message}/log'))
+            ..i('m');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(published.single.message, 'm/log/pub');
       expect(errors, isEmpty);
@@ -283,15 +303,18 @@ void main() {
     test('a publisher logging into its own logger drops the nested log', () {
       final errors = <Object>[];
       var publishes = 0;
-      runZonedGuarded(() {
-        logger
-          ..publisher = CustomLogPublisher<Log>((log) {
-            publishes++;
-            published.add(log);
-            logger.i('from inside the publisher');
-          })
-          ..i('outer');
-      }, (error, stackTrace) => errors.add(error));
+      runZonedGuarded(
+        () {
+          logger
+            ..publisher = CustomLogPublisher<Log>((log) {
+              publishes++;
+              published.add(log);
+              logger.i('from inside the publisher');
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(publishes, 1);
       expect(published.single.message, 'outer');
@@ -303,19 +326,22 @@ void main() {
     test('the publisher guard also holds with a transformer installed', () {
       final errors = <Object>[];
       var transformerRuns = 0;
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            transformerRuns++;
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              transformerRuns++;
 
-            return log;
-          })
-          ..publisher = CustomLogPublisher<Log>((log) {
-            published.add(log);
-            logger.i('from inside the publisher');
-          })
-          ..i('outer');
-      }, (error, stackTrace) => errors.add(error));
+              return log;
+            })
+            ..publisher = CustomLogPublisher<Log>((log) {
+              published.add(log);
+              logger.i('from inside the publisher');
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(transformerRuns, 2, reason: 'outer log plus the nested attempt');
       expect(published.single.message, 'outer');
@@ -330,23 +356,27 @@ void main() {
       final errors = <Object>[];
       final child = logger.withAddedName('child');
       var transformerRuns = 0;
-      runZonedGuarded(() {
-        logger
-          ..transformer = ((log) {
-            transformerRuns++;
-            if (transformerRuns == 1) {
-              child.i('via child');
-            }
+      runZonedGuarded(
+        () {
+          logger
+            ..transformer = ((log) {
+              transformerRuns++;
+              if (transformerRuns == 1) {
+                child.i('via child');
+              }
 
-            return log;
-          })
-          ..i('outer');
-      }, (error, stackTrace) => errors.add(error));
+              return log;
+            })
+            ..i('outer');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
-      expect(published.map((log) => log.message), [
-        'via child',
-        'outer',
-      ], reason: 'the nested log goes through and is published first');
+      expect(
+        published.map((log) => log.message),
+        ['via child', 'outer'],
+        reason: 'the nested log goes through and is published first',
+      );
       expect(errors, isEmpty);
     });
 
@@ -355,41 +385,43 @@ void main() {
     // terminating pattern: an error publisher noting what it did at info
     // level, through a publisher that logs nothing. The nested log was
     // dropped and a StateError reported.
-    test(
-      'a publisher logging at another level of the same logger is allowed',
-      () {
-        final errors = <Object>[];
-        final notes = <String?>[];
-        runZonedGuarded(() {
-          logger[Levels.info].publisher = CustomLogPublisher<Log>(
-            (log) => notes.add(log.message),
-          );
+    test('a publisher logging at another level of the same logger is allowed',
+        () {
+      final errors = <Object>[];
+      final notes = <String?>[];
+      runZonedGuarded(
+        () {
+          logger[Levels.info].publisher =
+              CustomLogPublisher<Log>((log) => notes.add(log.message));
           logger[Levels.severe].publisher = CustomLogPublisher<Log>((log) {
             published.add(log);
             logger.i('rotated');
           });
           logger.e('disk full');
-        }, (error, stackTrace) => errors.add(error));
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
-        expect(published.single.message, 'disk full');
-        expect(notes, ['rotated'], reason: 'the nested log must go through');
-        expect(errors, isEmpty);
-      },
-    );
+      expect(published.single.message, 'disk full');
+      expect(notes, ['rotated'], reason: 'the nested log must go through');
+      expect(errors, isEmpty);
+    });
 
     test('a cycle across two levels of one logger is still caught', () {
       final errors = <Object>[];
       var severePublishes = 0;
-      runZonedGuarded(() {
-        logger[Levels.info].publisher = CustomLogPublisher<Log>(
-          (log) => logger.e('back to severe'),
-        );
-        logger[Levels.severe].publisher = CustomLogPublisher<Log>((log) {
-          severePublishes++;
-          logger.i('to info');
-        });
-        logger.e('start');
-      }, (error, stackTrace) => errors.add(error));
+      runZonedGuarded(
+        () {
+          logger[Levels.info].publisher =
+              CustomLogPublisher<Log>((log) => logger.e('back to severe'));
+          logger[Levels.severe].publisher = CustomLogPublisher<Log>((log) {
+            severePublishes++;
+            logger.i('to info');
+          });
+          logger.e('start');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
 
       expect(severePublishes, 1, reason: 'the cycle must not run twice');
       expect(errors.single, isA<StateError>());
@@ -402,10 +434,9 @@ void main() {
 
     setUp(() {
       published = <Log>[];
-      logger =
-          Logger('app')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(published.add);
+      logger = Logger('app')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(published.add);
     });
 
     // Regression: H2 (project review 2026-08-17[1]) — a throwing transformer
@@ -417,12 +448,15 @@ void main() {
       final zoneErrors = <Object>[];
       void collect(Object error, StackTrace stackTrace) => handled.add(error);
 
-      runZonedGuarded(() {
-        logger
-          ..onError = collect
-          ..transformer = ((log) => throw StateError('masking bug'))
-          ..i('secret');
-      }, (error, stackTrace) => zoneErrors.add(error));
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = collect
+            ..transformer = ((log) => throw StateError('masking bug'))
+            ..i('secret');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
 
       expect(handled.single, isA<StateError>());
       expect(zoneErrors, isEmpty, reason: 'the zone must not see it');
@@ -434,16 +468,19 @@ void main() {
       final zoneErrors = <Object>[];
       void collect(Object error, StackTrace stackTrace) => handled.add(error);
 
-      runZonedGuarded(() {
-        logger
-          ..onError = collect
-          ..transformer = ((log) {
-            logger.i('from inside the transformer');
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = collect
+            ..transformer = ((log) {
+              logger.i('from inside the transformer');
 
-            return log;
-          })
-          ..i('secret');
-      }, (error, stackTrace) => zoneErrors.add(error));
+              return log;
+            })
+            ..i('secret');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
 
       expect(handled.single, isA<StateError>());
       expect(zoneErrors, isEmpty);
@@ -466,16 +503,14 @@ void main() {
       expect(handled.single, isA<StateError>());
     });
 
-    test(
-      'without a handler a throwing publisher still reaches the call site',
-      () {
-        logger.publisher = CustomLogPublisher<Log>((log) {
-          throw StateError('sink down');
-        });
+    test('without a handler a throwing publisher still reaches the call site',
+        () {
+      logger.publisher = CustomLogPublisher<Log>((log) {
+        throw StateError('sink down');
+      });
 
-        expect(() => logger.i('hello'), throwsStateError);
-      },
-    );
+      expect(() => logger.i('hello'), throwsStateError);
+    });
 
     test('the logger keeps working after a handled publisher failure', () {
       final handled = <Object>[];
@@ -504,14 +539,17 @@ void main() {
       void boom(Object error, StackTrace stackTrace) =>
           throw StateError('handler boom');
 
-      runZonedGuarded(() {
-        logger
-          ..onError = boom
-          ..transformer = ((log) => throw StateError('masking bug'))
-          ..i('secret')
-          ..transformer = null
-          ..i('after');
-      }, (error, stackTrace) => zoneErrors.add(error));
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = boom
+            ..transformer = ((log) => throw StateError('masking bug'))
+            ..i('secret')
+            ..transformer = null
+            ..i('after');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
 
       expect(zoneErrors.single, isA<StateError>());
       expect(published.single.message, 'after');
@@ -544,10 +582,9 @@ void main() {
           childHandled.add(error);
 
       logger.onError = collectParent;
-      final child =
-          logger.withAddedName('child')
-            ..onError = collectChild
-            ..transformer = ((log) => throw StateError('masking bug'));
+      final child = logger.withAddedName('child')
+        ..onError = collectChild
+        ..transformer = ((log) => throw StateError('masking bug'));
 
       child.i('secret');
 
@@ -561,10 +598,9 @@ void main() {
       void other(Object error, StackTrace stackTrace) {}
 
       logger.onError = collect;
-      final child =
-          logger.withAddedName('child')
-            ..onError = other
-            ..onError = null;
+      final child = logger.withAddedName('child')
+        ..onError = other
+        ..onError = null;
 
       expect(child.onError, isNotNull, reason: 'the parent handler is back');
     });

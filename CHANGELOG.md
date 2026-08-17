@@ -6,15 +6,17 @@ unreleased section became a minor bump instead.
 
 **[breaking changes]**
 
-* `environment.sdk` is now `^3.7.0`, up from `^3.2.0`. The old floor was true
-  for pure Dart — verified by running the package on a real 3.2.0 SDK — and
-  unreachable from Flutter: releases 3.16 through 3.27 pin `meta` to 1.10.0
-  through 1.15.0 *exactly*, so `meta: ^1.16.0` could not resolve there and
-  pub failed with a version-solving error naming meta. The first Flutter that
-  resolves is 3.29, whose Dart is 3.7, so the declared floor now says what a
-  Flutter consumer actually needs. Pure Dart consumers on 3.2–3.6 lose access
-  even though the code works there; lowering `meta` to `^1.10.0` was the
-  alternative and would have widened the Flutter reach to 3.16 instead.
+* `environment.sdk` is now `^3.6.0`, up from `^3.2.0`, matching the
+  `oldest-supported` CI job and the example package — the declared floor is
+  the one actually exercised. `^3.2.0` was true for pure Dart, verified by
+  running the package on a real 3.2.0 SDK, but nothing in CI proved it.
+* `meta` is now `^1.15.0`, down from `^1.16.0`. This is what made the package
+  usable from Flutter at all: Flutter pins `meta` from its own SDK, with an
+  *exact* version in older releases (3.24 and 3.27 both pin 1.15.0), so
+  `^1.16.0` failed version solving there — on a Flutter whose Dart satisfied
+  the declared floor. Nothing in the package needs a newer meta: only
+  `@protected`, `@visibleForTesting` and `@immutable` are used. With both
+  changes the first usable Flutter is 3.27 instead of 3.29.
 * `CustomLevelLogger` now rejects a `level` outside `(Levels.all,
   Levels.off)` with an `ArgumentError`, in every build mode. Those two are
   thresholds, not levels: a level logger registered at `Levels.off` stayed
@@ -173,10 +175,10 @@ unreleased section became a minor bump instead.
   primitive, called on every propagation; the others answer "is this
   sublogger still following its parent?", which is a fair question in
   production given `relink()` is public.
-* `analysis_options.yaml`: `require_trailing_commas` is off. The 3.7 tall
-  style removes the commas it demands, so the format gate on latest stable
-  and the analyzer on the ^3.7.0 floor contradicted each other — 43 issues on
-  a tree `dart format` had just produced. Also dropped two deprecated rules (one of which was
+* `analysis_options.yaml`: `require_trailing_commas` carries a note that it
+  only works while the language version stays below 3.7 — the 3.7 formatter's
+  tall style removes the very commas it demands, measured at 43 issues
+  against a freshly formatted tree. Also dropped two deprecated rules (one of which was
   suppressed at every single trigger site), commented out three
   Flutter-only rules and three non-existent excludes, moved eight rules
   `lints/recommended` has since absorbed into the inherited block, marked the

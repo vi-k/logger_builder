@@ -49,11 +49,11 @@ abstract base class CustomLog {
     this.error,
     StackTrace? stackTrace,
     Zone? zone,
-  }) : level = levelLogger.level,
-       levelName = levelLogger.name,
-       shortLevelName = levelLogger.shortName,
-       stackTrace = stackTrace ?? stackTraceFromError(error),
-       zone = zone ?? Zone.current;
+  })  : level = levelLogger.level,
+        levelName = levelLogger.name,
+        shortLevelName = levelLogger.shortName,
+        stackTrace = stackTrace ?? stackTraceFromError(error),
+        zone = zone ?? Zone.current;
 
   /// Creates a copy of [original] with the given [error] and [stackTrace].
   ///
@@ -67,10 +67,10 @@ abstract base class CustomLog {
     CustomLog original, {
     required this.error,
     required this.stackTrace,
-  }) : level = original.level,
-       levelName = original.levelName,
-       shortLevelName = original.shortLevelName,
-       zone = original.zone;
+  })  : level = original.level,
+        levelName = original.levelName,
+        shortLevelName = original.shortLevelName,
+        zone = original.zone;
 
   /// Attempts to extract a [StackTrace] securely from an [error] object
   /// if it is of type [Error].

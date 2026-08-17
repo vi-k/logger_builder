@@ -26,26 +26,21 @@ void main() {
     });
 
     test('an explicit shortName is respected', () {
-      final levelLogger = LevelLogger(
-        level: Levels.info,
-        name: 'info',
-        shortName: 'INF',
-      );
+      final levelLogger =
+          LevelLogger(level: Levels.info, name: 'info', shortName: 'INF');
 
       expect(levelLogger.shortName, 'INF');
     });
 
-    test(
-      'setting a publisher on an unattached level logger throws StateError',
-      () {
-        final levelLogger = LevelLogger(level: Levels.info, name: 'info');
+    test('setting a publisher on an unattached level logger throws StateError',
+        () {
+      final levelLogger = LevelLogger(level: Levels.info, name: 'info');
 
-        expect(
-          () => levelLogger.publisher = const CustomLogPublisher.noOp(),
-          throwsStateError,
-        );
-      },
-    );
+      expect(
+        () => levelLogger.publisher = const CustomLogPublisher.noOp(),
+        throwsStateError,
+      );
+    });
 
     // Regression: M1 (project review 2026-08-16[4]) — Levels.all and
     // Levels.off are thresholds, not levels: a level logger registered at
@@ -60,8 +55,14 @@ void main() {
         () => LevelLogger(level: Levels.all, name: 'nope'),
         throwsArgumentError,
       );
-      expect(() => LevelLogger(level: -1, name: 'nope'), throwsArgumentError);
-      expect(() => LevelLogger(level: 5000, name: 'nope'), throwsArgumentError);
+      expect(
+        () => LevelLogger(level: -1, name: 'nope'),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelLogger(level: 5000, name: 'nope'),
+        throwsArgumentError,
+      );
     });
 
     // Regression: M2 (project review 2026-08-16[4]) — one level logger
@@ -91,7 +92,10 @@ void main() {
     });
 
     test('registering a duplicate level throws StateError', () {
-      expect(() => VarLogger([Levels.info, Levels.info]), throwsStateError);
+      expect(
+        () => VarLogger([Levels.info, Levels.info]),
+        throwsStateError,
+      );
     });
 
     // Regression: M20 (project review 2026-08-17[1]) — nothing pinned the
@@ -133,13 +137,16 @@ void main() {
     test('levels is a snapshot, safe to register while iterating', () {
       final logger = VarLogger([Levels.info, Levels.error]);
 
-      expect(() {
-        for (final _ in logger.levels) {
-          if (!logger.levels.contains(Levels.finest)) {
-            logger.addLevel(Levels.finest);
+      expect(
+        () {
+          for (final _ in logger.levels) {
+            if (!logger.levels.contains(Levels.finest)) {
+              logger.addLevel(Levels.finest);
+            }
           }
-        }
-      }, returnsNormally);
+        },
+        returnsNormally,
+      );
       expect(logger.levels, hasLength(3));
     });
 

@@ -9,13 +9,12 @@ final class JsonReportNoData {
 
 const _noData = JsonReportNoData._();
 
-typedef JsonReporterFn =
-    bool Function(
-      String event, {
-      Object? data,
-      Object? error,
-      StackTrace? stackTrace,
-    });
+typedef JsonReporterFn = bool Function(
+  String event, {
+  Object? data,
+  Object? error,
+  StackTrace? stackTrace,
+});
 
 final class JsonReport extends CustomLog {
   final DateTime timestamp;
@@ -28,55 +27,41 @@ final class JsonReport extends CustomLog {
     super.stackTrace,
     required this.event,
     required Object? data,
-  }) : timestamp = DateTime.now(),
-       _lazyData = Lazy(data);
+  })  : timestamp = DateTime.now(),
+        _lazyData = Lazy(data);
 
   Object? get data => _lazyData.resolved;
 }
 
-final class JsonLevelReporter
-    extends
-        CustomLevelLogger<
-          JsonReporter,
-          JsonLevelReporter,
-          JsonReporterFn,
-          JsonReport
-        > {
+final class JsonLevelReporter extends CustomLevelLogger<JsonReporter,
+    JsonLevelReporter, JsonReporterFn, JsonReport> {
   JsonLevelReporter({
     required super.level,
     required super.name,
     super.shortName,
-  }) : super(noLog: (_, {data, error, stackTrace}) => true);
+  }) : super(
+          noLog: (_, {data, error, stackTrace}) => true,
+        );
 
   @override
-  JsonReporterFn get processLog => (
-    event, {
-    data = _noData,
-    error,
-    stackTrace,
-  }) {
-    publishLog(
-      JsonReport(
-        this,
-        error: error,
-        stackTrace: stackTrace,
-        event: event,
-        data: data,
-      ),
-    );
+  JsonReporterFn get processLog =>
+      (event, {data = _noData, error, stackTrace}) {
+        publishLog(
+          JsonReport(
+            this,
+            error: error,
+            stackTrace: stackTrace,
+            event: event,
+            data: data,
+          ),
+        );
 
-    return true;
-  };
+        return true;
+      };
 }
 
-final class JsonReporter
-    extends
-        CustomLogger<
-          JsonReporter,
-          JsonLevelReporter,
-          JsonReporterFn,
-          JsonReport
-        > {
+final class JsonReporter extends CustomLogger<JsonReporter, JsonLevelReporter,
+    JsonReporterFn, JsonReport> {
   JsonReporter();
 
   final JsonLevelReporter _d = JsonLevelReporter(

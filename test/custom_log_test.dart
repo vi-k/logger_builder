@@ -7,10 +7,9 @@ void main() {
   group('CustomLog.copy', () {
     Log capture(void Function(Logger logger) emit) {
       final logs = <Log>[];
-      final logger =
-          Logger('test')
-            ..level = Levels.all
-            ..publisher = CustomLogPublisher(logs.add);
+      final logger = Logger('test')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(logs.add);
       emit(logger);
 
       return logs.single;
@@ -47,8 +46,11 @@ void main() {
       expect(error.stackTrace, isNotNull);
 
       final original = capture(
-        (logger) =>
-            logger.e('fail', error: error, stackTrace: StackTrace.current),
+        (logger) => logger.e(
+          'fail',
+          error: error,
+          stackTrace: StackTrace.current,
+        ),
       );
       expect(original.stackTrace, isNotNull);
 
@@ -63,9 +65,8 @@ void main() {
     });
 
     test('drops error when copied without one', () {
-      final original = capture(
-        (logger) => logger.e('fail', error: StateError('boom')),
-      );
+      final original =
+          capture((logger) => logger.e('fail', error: StateError('boom')));
       final copy = Log.copy(original);
 
       expect(copy.error, isNull);

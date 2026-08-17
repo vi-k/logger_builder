@@ -6,22 +6,30 @@ import 'package:ansi_escape_codes/extensions.dart';
 
 final _titlePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultStyle: const ansi.Style(foreground: ansi.Color256.rgb530),
+  defaultStyle: const ansi.Style(
+    foreground: ansi.Color256.rgb530,
+  ),
 );
 
 final _subtitlePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultStyle: const ansi.Style(foreground: ansi.Color256.rgb432),
+  defaultStyle: const ansi.Style(
+    foreground: ansi.Color256.rgb432,
+  ),
 );
 
 final _linePrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultStyle: const ansi.Style(foreground: ansi.Color256.gray16),
+  defaultStyle: const ansi.Style(
+    foreground: ansi.Color256.gray16,
+  ),
 );
 
 final _descriptionPrinter = ansi.Printer(
   ansiCodesEnabled: !Platform.isIOS,
-  defaultStyle: const ansi.Style(foreground: ansi.Color256.gray10),
+  defaultStyle: const ansi.Style(
+    foreground: ansi.Color256.gray10,
+  ),
 );
 
 void title(String text) {

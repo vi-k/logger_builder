@@ -8,16 +8,21 @@ topics:
   - debugging
   - logging
 
-# Raised from ^3.2.0 to match reality for a Flutter consumer. `^3.2.0` was
-# true for pure Dart — verified by running on a real 3.2.0 SDK — but
-# unreachable from Flutter: releases 3.16 through 3.27 pin `meta` to 1.10.0
-# through 1.15.0 *exactly*, so `meta: ^1.16.0` could not resolve there. The
-# first Flutter that works is 3.29, which is Dart 3.7.
+# Matches the `oldest-supported` CI job and the example package, so the
+# declared floor is the one actually exercised. Lower would still work for
+# pure Dart — the previous review ran the package on a real 3.2.0 SDK — but
+# the floor is deliberately pinned to what CI proves.
 environment:
-  sdk: ^3.7.0
+  sdk: ^3.6.0
 
 dependencies:
-  meta: ^1.16.0
+  # Not ^1.16.0: Flutter pins `meta` from its own SDK, with an *exact*
+  # version in older releases (3.24 and 3.27 pin 1.15.0), so `^1.16.0` made
+  # the package unresolvable there — pub failed with a version-solving error
+  # naming meta, on a Flutter whose Dart satisfied our floor. ^1.15.0 is the
+  # lowest pin any Flutter within `sdk: ^3.6.0` carries. Nothing here needs a
+  # newer meta: only @protected, @visibleForTesting and @immutable are used.
+  meta: ^1.15.0
 
 dev_dependencies:
   lints: ^5.0.0

@@ -18,10 +18,9 @@ final class DefaultLogPublisher implements CustomLogPublisher<Log> {
 }
 
 Future<void> main() async {
-  final log1 =
-      Logger('unit')
-        ..level = Levels.all
-        ..publisher = const DefaultLogPublisher();
+  final log1 = Logger('unit')
+    ..level = Levels.all
+    ..publisher = const DefaultLogPublisher();
   final log2 = log1.withAddedName('feature');
   final log3 = log2.withAddedName('class');
 

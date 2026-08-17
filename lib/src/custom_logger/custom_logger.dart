@@ -28,11 +28,10 @@ part 'custom_level_logger.dart';
 /// Subclasses must implement the [registerLevels] method to configure their
 /// associated [CustomLevelLogger]s.
 abstract base class CustomLogger<
-  Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log>,
-  LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
-  LogFn extends Function,
-  Log extends CustomLog
-> {
+    Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log>,
+    LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
+    LogFn extends Function,
+    Log extends CustomLog> {
   int _level = Levels.off;
   final Map<int, LevelLogger> _levelLoggers = {};
   final List<WeakReference<Logger>> _subloggers = [];

@@ -8,14 +8,13 @@ import 'package:logger_builder_examples/console.dart';
 final class DefaultLogPublisher implements CustomLogPublisher<Log> {
   const DefaultLogPublisher();
 
-  static String format(Log log) =>
-      '(${log.sequenceNumber})'
+  static String format(Log log) => '(${log.sequenceNumber})'
       ' ${log.time.toIso8601String()} [${log.name}] '
       '${log.source == null ? '' : '${log.source} | '}'
       '${log.message}'
       '${log.error == null ? '' : ': ${log.error}'}'
       '${log.stackTrace == null || log.stackTrace == StackTrace.empty //
-                  ? '' : '\n${log.stackTrace}'}';
+          ? '' : '\n${log.stackTrace}'}';
 
   static void output(String out) => print(out);
 
@@ -26,10 +25,9 @@ final class DefaultLogPublisher implements CustomLogPublisher<Log> {
 final class MyClass {}
 
 Future<void> main() async {
-  final log =
-      Logger('logger_name')
-        ..level = Levels.all
-        ..publisher = const DefaultLogPublisher();
+  final log = Logger('logger_name')
+    ..level = Levels.all
+    ..publisher = const DefaultLogPublisher();
 
   title('Default usage:');
   log.finest(MyClass, 'Finest message');
@@ -92,9 +90,9 @@ Future<void> main() async {
   title('Custom level printer:');
   log[Levels.severe].publisher =
       log[Levels.shout].publisher = CustomLogFormatter(
-        format: DefaultLogPublisher.format,
-        output: (str) => DefaultLogPublisher.output('$fgRed$str$reset'),
-      );
+    format: DefaultLogPublisher.format,
+    output: (str) => DefaultLogPublisher.output('$fgRed$str$reset'),
+  );
   log[Levels.finest].log(MyClass, 'Finest message');
   log[Levels.finer].log(MyClass, 'Finer message');
   log[Levels.fine].log(MyClass, 'Fine message');
@@ -106,19 +104,21 @@ Future<void> main() async {
   log.publisher = const DefaultLogPublisher();
 
   title('Using development.log:');
-  log.publisher = CustomLogPublisher((log) {
-    development.log(
-      '${log.source == null ? '' : '${log.source} | '}'
-      '${log.message}',
-      time: log.time,
-      sequenceNumber: log.sequenceNumber,
-      level: log.level,
-      name: log.name,
-      error: log.error,
-      stackTrace: log.stackTrace,
-      zone: log.zone,
-    );
-  });
+  log.publisher = CustomLogPublisher(
+    (log) {
+      development.log(
+        '${log.source == null ? '' : '${log.source} | '}'
+        '${log.message}',
+        time: log.time,
+        sequenceNumber: log.sequenceNumber,
+        level: log.level,
+        name: log.name,
+        error: log.error,
+        stackTrace: log.stackTrace,
+        zone: log.zone,
+      );
+    },
+  );
   log[Levels.finest].log(MyClass, 'Finest message');
   log[Levels.finer].log(MyClass, 'Finer message');
   log[Levels.fine].log(MyClass, 'Fine message');

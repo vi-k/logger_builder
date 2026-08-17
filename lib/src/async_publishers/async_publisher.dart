@@ -74,7 +74,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
 
   /// Creates the publisher and starts its processing queue.
   AsyncPublisherBase({this.sync = false, this.onError})
-    : _controller = StreamController<Log>(sync: sync) {
+      : _controller = StreamController<Log>(sync: sync) {
     _listen();
   }
 
@@ -263,7 +263,7 @@ final class AsyncFormatter<Log extends CustomLog, Out extends Object?>
 
   @override
   FutureOr<void> handle(Log log) => switch (format(log)) {
-    final Future<Out> future => future.then(output),
-    final Out out => output(out),
-  };
+        final Future<Out> future => future.then(output),
+        final Out out => output(out),
+      };
 }

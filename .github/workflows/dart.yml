@@ -85,12 +85,11 @@ jobs:
           dart compile js bin/simple_logger.dart -o /tmp/out.js
           dart compile wasm bin/simple_logger.dart -o /tmp/out.wasm
 
-  # The floor, and now literally it: `environment.sdk` is ^3.7.0, so this job
-  # runs the oldest SDK the package claims to support. The claim is pinned to
-  # Flutter rather than to the language: 3.7 is the Dart in Flutter 3.29, the
-  # first release whose `meta` pin (1.16.0) can satisfy this package. Without
-  # this job nothing ever exercises an SDK other than whatever `stable`
-  # happens to be on the day.
+  # The floor, and literally it: `environment.sdk` is ^3.6.0, so this job runs
+  # the oldest SDK the package claims to support. 3.6.0 is also the oldest the
+  # dev toolchain can manage — lints 5.x needs ^3.6.0. Without this job
+  # nothing ever exercises an SDK other than whatever `stable` happens to be
+  # on the day.
   #
   # No `dart pub downgrade` here: it resolves every transitive dependency to
   # its minimum, which drags in file 6.0.0 — a dependency of the test runner
@@ -105,7 +104,7 @@ jobs:
 
       - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:
-          sdk: "3.7.0"
+          sdk: "3.6.0"
 
       - name: Install dependencies
         run: dart pub get
@@ -117,7 +116,7 @@ jobs:
         run: dart pub get --directory=example/logger_builder_examples
 
       - name: Analyze project source
-        # --fatal-infos here too: the floor analyzer was measured against this
+        # --fatal-infos here too: the 3.6.0 analyzer was measured against this
         # tree and reports nothing extra, so the weaker check bought nothing.
         run: dart analyze --fatal-infos
 
