@@ -9,6 +9,11 @@ AGENTS.md
 CLAUDE.md
 docs/
 
+# The Russian translation of the README lives in the repository only: pub.dev
+# renders a single README, and shipping a second one would only bloat the
+# archive. README.md links to it by absolute URL, which works from pub.dev too.
+README.ru.md
+
 # The test suite is of no use to a consumer and is half the uncompressed
 # archive.
 test/
