@@ -8,8 +8,13 @@ topics:
   - debugging
   - logging
 
+# Raised from ^3.2.0 to match reality for a Flutter consumer. `^3.2.0` was
+# true for pure Dart — verified by running on a real 3.2.0 SDK — but
+# unreachable from Flutter: releases 3.16 through 3.27 pin `meta` to 1.10.0
+# through 1.15.0 *exactly*, so `meta: ^1.16.0` could not resolve there. The
+# first Flutter that works is 3.29, which is Dart 3.7.
 environment:
-  sdk: ^3.2.0
+  sdk: ^3.7.0
 
 dependencies:
   meta: ^1.16.0

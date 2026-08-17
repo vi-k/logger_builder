@@ -436,6 +436,18 @@ abstract base class CustomLogger<
   ///
   /// A throwing handler cannot wedge logging: its own error goes to the
   /// current zone.
+  ///
+  /// Wrap an arrow function in parentheses when assigning it inside
+  /// a cascade, as with [transformer] — without them the `..` of the next
+  /// section is parsed as part of the arrow's body, and the error points at
+  /// the following line rather than at this one:
+  ///
+  /// ```dart
+  /// final log = Logger()
+  ///   ..level = Levels.all
+  ///   ..onError = ((error, stackTrace) => report(error, stackTrace))
+  ///   ..publisher = const DefaultLogPublisher();
+  /// ```
   void Function(Object error, StackTrace stackTrace)? get onError =>
       _onError ?? _parent?.onError;
 
