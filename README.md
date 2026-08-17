@@ -3,8 +3,6 @@
 ![Pub Version](https://img.shields.io/pub/v/logger_builder)
 ![GitHub License](https://img.shields.io/github/license/vi-k/logger_builder)
 
-*This README is also available in [Russian / Русский](https://github.com/vi-k/logger_builder/blob/main/README.ru.md).*
-
 A toolkit for creating your own customizable and hierarchical loggers in Dart
 with good performance when disabled.
 
