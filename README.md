@@ -205,7 +205,7 @@ final log = Logger()
     output: print,
   )
   ..[Levels.error].publisher = CustomLogFormatter(
-    format: (log) => red(format(log)),
+    format: (log) => Styles.red(format(log)),
     output: print,
   );
 ```
@@ -225,7 +225,7 @@ final log = Logger()
   )
   ..[Levels.error].publisher = CustomLogFormatter(
     format: format,
-    output: (str) => print(red(str)),
+    output: (str) => print(Styles.red(str)),
   );
 ```
 
@@ -745,7 +745,7 @@ final log = Logger()
   // Change the publisher for errors only (e.g. print in red using ansi codes)
   ..[Levels.error].publisher = CustomLogFormatter(
     format: DefaultLogPublisher.format,
-    output: (str) => print(red(str)),
+    output: (str) => print(Styles.red(str)),
   );
 ```
 
@@ -1274,8 +1274,10 @@ String format(Log log) => '[${log.shortLevelName}] ${log.message}';
 final log = Logger()
   ..level = Levels.all
   ..publisher = CustomLogFormatter(format: format, output: print)
-  ..[Levels.error].publisher =
-      CustomLogFormatter(format: format, output: (str) => print(red(str)));
+  ..[Levels.error].publisher = CustomLogFormatter(
+    format: format,
+    output: (str) => print(Styles.red(str)),
+  );
 ```
 
 Escape codes are for terminals, not for files: colouring the shared
@@ -1287,7 +1289,7 @@ final log = Logger()
   ..level = Levels.all
   ..publisher = MultiPublisher<Log>([
     // Terminal: coloured.
-    CustomLogFormatter(format: format, output: (str) => print(red(str))),
+    CustomLogFormatter(format: format, output: (str) => print(Styles.red(str))),
     // File: plain text.
     filePublisher,
   ]);

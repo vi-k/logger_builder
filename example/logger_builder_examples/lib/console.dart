@@ -54,8 +54,7 @@ void description(String text) {
 
 void box(String text) {
   final lines = text.split('\n');
-  final widths =
-      lines.map((line) => line.ansiRemoveEscapeCodes().length).toList();
+  final widths = lines.map((line) => line.lengthWithoutEscapeCodes).toList();
   final maxWidth = widths.reduce(math.max);
   _descriptionPrinter.print('┌─${'─' * maxWidth}─┐');
   for (final (index, line) in lines.indexed) {

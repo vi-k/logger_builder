@@ -1,3 +1,28 @@
+## 0.6.2 (unreleased)
+
+Documentation and the example only: `lib/` is untouched, so there is nothing
+to migrate. The example moves to `ansi_escape_codes` 4.x, and the README
+snippets that colour a log follow it there.
+
+**Documentation**
+
+* The example depends on `ansi_escape_codes: ^4.0.1`, up from `^3.0.2`. The
+  major release renamed and removed a good deal — `Match` to `Piece`, `Link`
+  to `OscLink`, `rgb` and `gray` to `rgb256` and `gray256`, every name
+  deprecated earlier — but nothing the example used: it analysed clean before
+  a line of it was touched. The SDK floor of 4.0.1 is `^3.6.0`, the same as
+  this package's, so the floor of the example is where it was.
+* The five README snippets that print errors in red call `Styles.red(...)`
+  where they called `red(...)`. `ansi_escape_codes` 4.0.0 moved its 530
+  top-level style names into constants of a single class, `Styles`, so the
+  old form no longer compiles against the version the example now uses. The
+  import is unchanged: `Styles` comes from
+  `package:ansi_escape_codes/style.dart` like the names it replaces.
+* `console.dart` in the example measures the width of a line with
+  `lengthWithoutEscapeCodes`, which 4.x has and 3.0.2 did not, instead of
+  building a cleaned copy of the string and asking for its length. Same
+  answer, one copy of the string fewer.
+
 ## 0.6.1
 
 Documentation only: `lib/` is untouched, so there is nothing to migrate.

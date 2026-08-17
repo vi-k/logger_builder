@@ -211,7 +211,7 @@ final log = Logger()
     output: print,
   )
   ..[Levels.error].publisher = CustomLogFormatter(
-    format: (log) => red(format(log)),
+    format: (log) => Styles.red(format(log)),
     output: print,
   );
 ```
@@ -230,7 +230,7 @@ final log = Logger()
   )
   ..[Levels.error].publisher = CustomLogFormatter(
     format: format,
-    output: (str) => print(red(str)),
+    output: (str) => print(Styles.red(str)),
   );
 ```
 
@@ -758,7 +758,7 @@ final log = Logger()
   // Меняем паблишер только для ошибок (например, печать красным через ansi)
   ..[Levels.error].publisher = CustomLogFormatter(
     format: DefaultLogPublisher.format,
-    output: (str) => print(red(str)),
+    output: (str) => print(Styles.red(str)),
   );
 ```
 
@@ -1305,8 +1305,10 @@ String format(Log log) => '[${log.shortLevelName}] ${log.message}';
 final log = Logger()
   ..level = Levels.all
   ..publisher = CustomLogFormatter(format: format, output: print)
-  ..[Levels.error].publisher =
-      CustomLogFormatter(format: format, output: (str) => print(red(str)));
+  ..[Levels.error].publisher = CustomLogFormatter(
+    format: format,
+    output: (str) => print(Styles.red(str)),
+  );
 ```
 
 Escape-последовательности нужны терминалу, а не файлу: раскрасив общий
@@ -1318,7 +1320,7 @@ final log = Logger()
   ..level = Levels.all
   ..publisher = MultiPublisher<Log>([
     // Терминал: с цветом.
-    CustomLogFormatter(format: format, output: (str) => print(red(str))),
+    CustomLogFormatter(format: format, output: (str) => print(Styles.red(str))),
     // Файл: обычный текст.
     filePublisher,
   ]);
