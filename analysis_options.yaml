@@ -219,7 +219,11 @@ linter:
     # unnecessary_constructor_name: true # [recommended]
     # unnecessary_final: true # Use var, not final, when declaring local variables.
     # unnecessary_getters_setters: true # [recommended]
-    unnecessary_ignore: true # DON'T leave an ignore comment that suppresses nothing.
+    # unnecessary_ignore: true # Needs a newer analyzer than the 3.6.0 the
+    # `oldest-supported` CI job pins: there the name is not recognized, which
+    # is an `undefined_lint` warning and fails the job. Demoting
+    # `undefined_lint` would be the wrong trade — it is what catches a
+    # misspelled rule anywhere in this file. Enable it when the floor moves.
     unnecessary_lambdas: true
     # unnecessary_late: true # [recommended]
     unnecessary_library_directive: true

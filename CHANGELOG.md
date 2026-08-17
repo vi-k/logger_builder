@@ -168,8 +168,10 @@ unreleased section became a minor bump instead.
   suppressed at every single trigger site), commented out three
   Flutter-only rules and three non-existent excludes, moved eight rules
   `lints/recommended` has since absorbed into the inherited block, marked the
-  rules that are still experimental, and enabled `unnecessary_ignore` so the
-  suppression list stays honest without a manual audit.
+  rules that are still experimental,. `unnecessary_ignore` is left off on
+  purpose: it does not exist in the 3.6.0 analyzer the `oldest-supported` job
+  pins, and suppressing the `undefined_lint` warning that would cause costs
+  more than the rule is worth.
 * The `*Linked` flags double as in-progress markers — they are cleared before
   propagation recurses and restored after — and that is the only thing
   stopping a cycle in the sublogger graph from recursing until the stack is
