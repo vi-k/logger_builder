@@ -21,8 +21,8 @@ Future<void> main() async {
   final log1 = Logger('unit')
     ..level = Levels.all
     ..publisher = const DefaultLogPublisher();
-  final log2 = log1.withAddedName('feature');
-  final log3 = log2.withAddedName('class');
+  final log2 = log1.child('feature');
+  final log3 = log2.child('class');
 
   //
   title('Initial state:');

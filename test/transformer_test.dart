@@ -56,7 +56,7 @@ void main() {
 
     test('a sublogger created after the assignment inherits it', () {
       logger.transformer = (log) => Log.copy(log, message: '***');
-      final child = logger.withAddedName('child');
+      final child = logger.child('child');
 
       child.i('secret');
 
@@ -65,7 +65,7 @@ void main() {
     });
 
     test('an assignment on the parent propagates to linked subloggers', () {
-      final child = logger.withAddedName('child');
+      final child = logger.child('child');
       logger.transformer = (log) => Log.copy(log, message: '***');
 
       child.i('secret');
@@ -74,7 +74,7 @@ void main() {
     });
 
     test('an assignment on the child detaches it from the parent', () {
-      final child = logger.withAddedName('child')
+      final child = logger.child('child')
         ..transformer = ((log) => Log.copy(log, message: 'child'));
       logger.transformer = (log) => Log.copy(log, message: 'parent');
 
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('self-assignment unlinks without changing the value', () {
-      final child = logger.withAddedName('child');
+      final child = logger.child('child');
       child.transformer = child.transformer;
       logger.transformer = (log) => Log.copy(log, message: 'parent');
 
@@ -100,7 +100,7 @@ void main() {
 
     test('relink() re-inherits the parent transformer', () {
       logger.transformer = (log) => Log.copy(log, message: 'parent');
-      final child = logger.withAddedName('child')
+      final child = logger.child('child')
         ..transformer = ((log) => Log.copy(log, message: 'child'))
         ..relink()
         ..i('secret');
@@ -354,7 +354,7 @@ void main() {
     // not reentrancy and the nested log IS published.
     test('logging through a linked sublogger is not treated as reentrant', () {
       final errors = <Object>[];
-      final child = logger.withAddedName('child');
+      final child = logger.child('child');
       var transformerRuns = 0;
       runZonedGuarded(
         () {
@@ -560,8 +560,8 @@ void main() {
       void collect(Object error, StackTrace stackTrace) => handled.add(error);
 
       logger.onError = collect;
-      final child = logger.withAddedName('child');
-      final grandchild = child.withAddedName('grandchild');
+      final child = logger.child('child');
+      final grandchild = child.child('grandchild');
 
       expect(child.onError, isNotNull);
       expect(grandchild.onError, isNotNull);
@@ -582,7 +582,7 @@ void main() {
           childHandled.add(error);
 
       logger.onError = collectParent;
-      final child = logger.withAddedName('child')
+      final child = logger.child('child')
         ..onError = collectChild
         ..transformer = ((log) => throw StateError('masking bug'));
 
@@ -598,7 +598,7 @@ void main() {
       void other(Object error, StackTrace stackTrace) {}
 
       logger.onError = collect;
-      final child = logger.withAddedName('child')
+      final child = logger.child('child')
         ..onError = other
         ..onError = null;
 

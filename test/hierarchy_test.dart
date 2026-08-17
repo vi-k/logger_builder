@@ -17,8 +17,8 @@ void main() {
           format: Logger.defaultFormat,
           output: buf.add,
         );
-      log2 = log.withAddedName('first');
-      log3 = log2.withAddedName('second');
+      log2 = log.child('first');
+      log3 = log2.child('second');
     });
 
     tearDown(buf.clear);

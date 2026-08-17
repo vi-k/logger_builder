@@ -66,7 +66,7 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
 
   String get path => _lazyPath.value;
 
-  Logger withAddedName(String name) => Logger._(this, name);
+  Logger child(String name) => Logger._(this, name);
 
   final LevelLogger _d = LevelLogger(level: Levels.debug, name: 'debug');
   final LevelLogger _i = LevelLogger(level: Levels.info, name: 'info');
