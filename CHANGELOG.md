@@ -1,4 +1,4 @@
-## 0.6.0 (unreleased)
+## 0.6.0
 
 The 0.5.1 work below was never published; an independent review of the
 whole code base then found defects that need behaviour changes, so the
