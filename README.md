@@ -867,10 +867,13 @@ The `MultiPublisher` helper class allows you to send a log to multiple
 publishers.
 
 ```dart
-final consolePrinter = CustomLogPublisher((log) => print('Console: $log'));
-final filePrinter = AsyncPublisher((log) async {/* write to file */});
+// The `<Log>` is required on all three. A publisher stored in a local
+// variable has no context type to infer from, so `Log` would become
+// `CustomLog` and the assignment to `log.publisher` would not compile.
+final consolePrinter = CustomLogPublisher<Log>((log) => print('Console: $log'));
+final filePrinter = AsyncPublisher<Log>((log) async {/* write to file */});
 
-final multiPublisher = MultiPublisher([
+final multiPublisher = MultiPublisher<Log>([
   consolePrinter,
   filePrinter,
 ]);
@@ -887,7 +890,7 @@ remaining publishers still receive the log. Pass `onError` to handle such
 errors yourself — it receives the failing publisher along with the error:
 
 ```dart
-final multiPublisher = MultiPublisher(
+final multiPublisher = MultiPublisher<Log>(
   [consolePrinter, filePrinter],
   onError: (publisher, error, stackTrace) =>
       print('$publisher failed: $error'),

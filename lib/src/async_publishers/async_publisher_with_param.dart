@@ -64,8 +64,13 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
 
   /// Returns a [CustomLogPublisher] that publishes into this shared queue
   /// with the given [param] attached to every log event.
+  ///
+  /// The returned publisher also implements [Flushable] and [Closable],
+  /// delegating both to this publisher, so it behaves correctly inside
+  /// a `MultiPublisher` or a `TransformPublisher`. Because the queue is
+  /// shared, closing any adapter closes it for every other adapter too.
   CustomLogPublisher<Log> withParam(Param param) =>
-      AsyncParamPublisher(_publish, param);
+      AsyncParamPublisher(_publish, param, flush, close);
 
   /// Completes when every log event queued before this call has been
   /// processed.

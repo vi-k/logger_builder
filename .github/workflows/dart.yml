@@ -69,10 +69,16 @@ jobs:
       - name: Install dependencies
         run: dart pub get
 
+      # Required, not optional: `dart analyze` from the root descends into
+      # example/, whose .dart_tool is git-ignored. Without this step a clean
+      # checkout fails with 353 unresolved-import errors and exit 3.
+      - name: Install example dependencies
+        run: dart pub get --directory=example/logger_builder_examples
+
       - name: Analyze project source
-        # Not --fatal-infos here: an older analyzer ships a different lint
-        # set, and the strict gate above is what enforces the rules.
-        run: dart analyze
+        # --fatal-infos here too: the 3.6.0 analyzer was measured against this
+        # tree and reports nothing extra, so the weaker check bought nothing.
+        run: dart analyze --fatal-infos
 
       - name: Run tests
         run: dart test

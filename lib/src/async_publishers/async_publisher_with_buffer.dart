@@ -17,8 +17,9 @@ import 'internal/buffered_pipeline.dart';
 /// > handing batches back through the retry buffer while the sink is down —
 /// > the queue grows until the process runs out of memory. There is no
 /// > overflow policy and no dropped-log counter; bound the input yourself if
-/// > the sink can stall for long. Logs still in the retry buffer when
-/// > [close] is called are dropped silently.
+/// > the sink can stall for long. Logs handed back to the retry buffer
+/// > *after* [close] was called are dropped silently — logs already queued
+/// > when it was called are drained (see [close]).
 /// >
 /// > The queue is created lazily, on the first [publish], [flush], [close]
 /// > or [isClosed], not in the constructor. Without an `onError` the zone
@@ -49,8 +50,10 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// Called when [handle] throws.
   ///
   /// When `null`, the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. In either case the retry buffer contents
-  /// are returned to the queue and processing continues.
+  /// [Zone.handleUncaughtError]. In either case whatever [handle] placed in
+  /// the retry buffer is returned to the queue and processing continues —
+  /// but only that. Logs the throwing [handle] did not hand back are gone;
+  /// reporting the error does not preserve them.
   ///
   /// Note: in a plain Dart program without an error zone, an uncaught
   /// asynchronous error terminates the isolate by default — and then nothing
@@ -88,6 +91,13 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   ///
   /// Logs added to [retryBuffer] are placed back at the front of the queue
   /// and retried with the next batch.
+  ///
+  /// > [!IMPORTANT]
+  /// > [retryBuffer] is the only way to keep a log. A throwing [handle] —
+  /// > synchronously or through its future — does not retry the batch: the
+  /// > error is routed to [onError] or the current zone, and every log not
+  /// > already handed back is dropped. Wrap the failing work in a
+  /// > `try`/`catch` and `retryBuffer.addAll(logs)` there.
   FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer);
 
   /// Whether [close] has been called.
@@ -197,6 +207,13 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
   final FutureOr<Out> Function(List<Log> logs, List<Log> retryBuffer) format;
 
   /// Receives the formatted [Out] object along with the logs it covers.
+  ///
+  /// Unlike [format], a throwing [output] does **not** put the batch back:
+  /// by the time it runs the sink may already have taken part of the batch,
+  /// so retrying wholesale would duplicate deliveries. Only what [output]
+  /// itself added to the retry buffer survives; the rest is dropped and the
+  /// error goes to `onError` or the current zone. Catch inside [output] and
+  /// `retryBuffer.addAll(logs)` when the destination should be retried.
   final FutureOr<void> Function(Out out, List<Log> logs, List<Log> retryBuffer)
       output;
 

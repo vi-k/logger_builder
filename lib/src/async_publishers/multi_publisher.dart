@@ -13,10 +13,13 @@ import 'async_publisher.dart';
 /// Example usage:
 ///
 /// ```dart
-/// final consolePrinter = CustomLogPublisher((log) => print('Console: $log'));
-/// final filePrinter = AsyncPublisher((log) async {/* write to file */});
+/// // The type argument is required on all three: a publisher stored in
+/// // a local variable has no context type, so `Log` would be inferred as
+/// // `CustomLog` and the assignment below would not compile.
+/// final consolePrinter = CustomLogPublisher<Log>((log) => print('Console: $log'));
+/// final filePrinter = AsyncPublisher<Log>((log) async {/* write to file */});
 ///
-/// final multiPublisher = MultiPublisher([
+/// final multiPublisher = MultiPublisher<Log>([
 ///   consolePrinter,
 ///   filePrinter,
 /// ]);

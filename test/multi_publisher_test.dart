@@ -278,5 +278,73 @@ void main() {
       expect(multi, isA<Flushable>());
       expect(multi, isA<Closable>());
     });
+
+    // Regression: C1 (project review 2026-08-17[1]) — a withParam adapter
+    // implemented neither interface, so _waitAll's type test skipped it:
+    // flush and close reported success while the whole shared queue was lost.
+    group('withParam adapters inside a MultiPublisher', () {
+      test('flush drains the shared queue', () async {
+        final handled = <String?>[];
+        final inner = AsyncPublisherWithParam<String, Log>((param, log) async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          handled.add(log.message);
+        });
+        final multi = MultiPublisher<Log>([inner.withParam('p')]);
+        final log = loggerWith(multi);
+
+        log.i('hello');
+        await multi.flush().timeout(const Duration(seconds: 2));
+
+        expect(handled, ['hello']);
+        await inner.close();
+      });
+
+      test('close drains the shared queue and closes it', () async {
+        final handled = <String?>[];
+        final inner = AsyncPublisherWithParam<String, Log>((param, log) async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          handled.add(log.message);
+        });
+        final multi = MultiPublisher<Log>([inner.withParam('p')]);
+        final log = loggerWith(multi);
+
+        log.i('hello');
+        await multi.close().timeout(const Duration(seconds: 2));
+
+        expect(handled, ['hello']);
+        expect(inner.isClosed, isTrue);
+      });
+
+      test('the buffered variant is drained too', () async {
+        final handled = <String?>[];
+        final inner = AsyncPublisherWithBufferAndParam<String, Log>(
+          (entries, retry) async {
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            handled.addAll(entries.map((entry) => entry.$2.message));
+          },
+        );
+        final multi = MultiPublisher<Log>([inner.withParam('p')]);
+        final log = loggerWith(multi);
+
+        log.i('hello');
+        await multi.close().timeout(const Duration(seconds: 2));
+
+        expect(handled, ['hello']);
+        expect(inner.isClosed, isTrue);
+      });
+
+      test('several adapters over one queue close it once', () async {
+        final inner =
+            AsyncPublisherWithParam<String, Log>((param, log) async {});
+        final multi = MultiPublisher<Log>([
+          inner.withParam('a'),
+          inner.withParam('b'),
+        ]);
+
+        await multi.close().timeout(const Duration(seconds: 2));
+
+        expect(inner.isClosed, isTrue);
+      });
+    });
   });
 }

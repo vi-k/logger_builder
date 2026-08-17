@@ -30,7 +30,8 @@ import 'internal/buffered_pipeline.dart';
 ///   }
 /// }
 ///
-/// log.publisher = asyncPublisher.withParam(source);
+/// final publisher = MetricsPublisher();
+/// log.publisher = publisher.withParam(source);
 /// ```
 abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
     Log extends CustomLog> implements Flushable, Closable {
@@ -40,8 +41,10 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// Called when [handle] throws.
   ///
   /// When `null`, the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. In either case the retry buffer contents
-  /// are returned to the queue and processing continues.
+  /// [Zone.handleUncaughtError]. In either case whatever [handle] placed in
+  /// the retry buffer is returned to the queue and processing continues —
+  /// but only that. Entries the throwing [handle] did not hand back are gone;
+  /// reporting the error does not preserve them.
   ///
   /// Note: in a plain Dart program without an error zone, an uncaught
   /// asynchronous error terminates the isolate by default — and then nothing
@@ -80,6 +83,13 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   ///
   /// Entries added to [retryBuffer] are placed back at the front of the
   /// queue and retried with the next batch.
+  ///
+  /// > [!IMPORTANT]
+  /// > [retryBuffer] is the only way to keep an entry. A throwing [handle] —
+  /// > synchronously or through its future — does not retry the batch: the
+  /// > error is routed to [onError] or the current zone, and every entry not
+  /// > already handed back is dropped. Wrap the failing work in a
+  /// > `try`/`catch` and `retryBuffer.addAll(entries)` there.
   FutureOr<void> handle(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
@@ -90,8 +100,13 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
 
   /// Returns a [CustomLogPublisher] that publishes into this shared buffer
   /// with the given [param] attached to every log event.
+  ///
+  /// The returned publisher also implements [Flushable] and [Closable],
+  /// delegating both to this publisher, so it behaves correctly inside
+  /// a `MultiPublisher` or a `TransformPublisher`. Because the buffer is
+  /// shared, closing any adapter closes it for every other adapter too.
   CustomLogPublisher<Log> withParam(Param param) =>
-      AsyncParamPublisher(_publish, param);
+      AsyncParamPublisher(_publish, param, flush, close);
 
   /// Completes when the queue has been fully drained.
   ///
@@ -204,6 +219,13 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
   ) format;
 
   /// Receives the formatted [Out] object along with the entries it covers.
+  ///
+  /// Unlike [format], a throwing [output] does **not** put the batch back:
+  /// by the time it runs the sink may already have taken part of the batch,
+  /// so retrying wholesale would duplicate deliveries. Only what [output]
+  /// itself added to the retry buffer survives; the rest is dropped and the
+  /// error goes to `onError` or the current zone. Catch inside [output] and
+  /// `retryBuffer.addAll(entries)` when the destination should be retried.
   final FutureOr<void> Function(
     Out out,
     List<(Param, Log)> entries,
@@ -275,11 +297,16 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
       return entries;
     }
 
-    // Records are compared structurally: `param ==` and `log ==` (identity
-    // unless the user's Log overrides `==`). Counted, not a set: a batch may
-    // hold equal entries twice, and handing one back must not withdraw the
-    // other from [output].
-    final retried = HashMap<(Param, Log), int>();
+    // The log half is matched by identity, like the buffer-only formatter
+    // does: a plain record map compares logs with `==`, so a user's Log with
+    // value equality made two distinct logs interchangeable — the retried one
+    // was passed to [output] *and* re-queued while the other vanished.
+    // Counted, not a set: a batch may hold the same entry twice, and handing
+    // one copy back must not withdraw the other from [output].
+    final retried = HashMap<(Param, Log), int>(
+      equals: (a, b) => a.$1 == b.$1 && identical(a.$2, b.$2),
+      hashCode: (entry) => Object.hash(entry.$1, identityHashCode(entry.$2)),
+    );
     for (final entry in retryBuffer) {
       retried[entry] = (retried[entry] ?? 0) + 1;
     }

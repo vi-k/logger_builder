@@ -1,12 +1,28 @@
 import 'dart:async';
 
 import 'package:logger_builder/logger_builder.dart';
+import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 
 List<(String, String?)> entriesOf(List<(String, Log)> entries) =>
     entries.map((entry) => (entry.$1, entry.$2.message)).toList();
+
+/// A log with value equality — legal for a user subclass of [CustomLog], and
+/// the case in which a structurally keyed map conflates two distinct logs.
+@immutable
+final class EqLog extends CustomLog {
+  final String message;
+
+  EqLog(super.levelLogger, this.message);
+
+  @override
+  bool operator ==(Object other) => other is EqLog && other.message == message;
+
+  @override
+  int get hashCode => message.hashCode;
+}
 
 void main() {
   group('AsyncPublisherWithBufferAndParam', () {
@@ -183,6 +199,43 @@ void main() {
 
       expect(errors.single, isStateError);
       expect(outputs, ['a']);
+    });
+
+    // Regression: H1 (project review 2026-08-17[1]) — the counted map compared
+    // records structurally, so a Log with value equality made two distinct
+    // logs interchangeable: the entry handed back to the retry buffer went to
+    // output *and* back into the queue, while the other one silently vanished.
+    test('retrying one of two equal but distinct logs keeps both', () async {
+      final levelLogger = Logger('test')[Levels.info];
+      final a = EqLog(levelLogger, 'dup');
+      final b = EqLog(levelLogger, 'dup');
+      expect(a == b, isTrue, reason: 'the fixture must have value equality');
+      expect(identical(a, b), isFalse);
+
+      final delivered = <EqLog>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBufferAndParam<String, EqLog, String>(
+        format: (entries, retry) {
+          if (first) {
+            first = false;
+            retry.add(entries[1]);
+          }
+
+          return 'batch';
+        },
+        output: (out, entries, retry) =>
+            delivered.addAll(entries.map((entry) => entry.$2)),
+      );
+      publisher.withParam('p')
+        ..publish(a)
+        ..publish(b);
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(
+        delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(),
+        ['a', 'b'],
+        reason: 'each distinct log must reach output exactly once',
+      );
     });
   });
 }

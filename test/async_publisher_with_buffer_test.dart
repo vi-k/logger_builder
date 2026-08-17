@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:logger_builder/logger_builder.dart';
+import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
@@ -8,6 +9,21 @@ import 'utils/hierarchical_logger.dart';
 Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..level = Levels.all
   ..publisher = publisher;
+
+/// A log with value equality — legal for a user subclass of [CustomLog], and
+/// the case that tells an identity-keyed map from a structurally keyed one.
+@immutable
+final class EqLog extends CustomLog {
+  final String message;
+
+  EqLog(super.levelLogger, this.message);
+
+  @override
+  bool operator ==(Object other) => other is EqLog && other.message == message;
+
+  @override
+  int get hashCode => message.hashCode;
+}
 
 List<String?> messagesOf(List<Log> logs) =>
     logs.map((log) => log.message).toList();
@@ -485,6 +501,76 @@ void main() {
         ['dup'],
         ['dup'],
       ]);
+    });
+
+    // Regression: H5 (project review 2026-08-17[1]) — pins the documented
+    // asymmetry with `format`: `output` runs after the sink may already have
+    // taken part of the batch, so a throw does not retry wholesale. Only what
+    // `output` handed back survives. This is a contract, not an accident: if it
+    // ever changes, this test must change with it.
+    test('a throwing output keeps only what it handed back', () async {
+      final delivered = <String?>[];
+      final errors = <Object>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) => 'batch',
+        output: (out, logs, retry) {
+          if (first) {
+            first = false;
+            retry.add(logs.first);
+            throw StateError('output boom');
+          }
+
+          delivered.addAll(messagesOf(logs));
+        },
+        onError: (error, stackTrace) => errors.add(error),
+        retryDelay: const Duration(milliseconds: 5),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('kept');
+      log.i('dropped');
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(errors.single, isStateError);
+      expect(delivered, ['kept']);
+    });
+
+    // Regression: M19 (project review 2026-08-17[1]) — the test above publishes
+    // one object twice, so identity and value equality behave alike in it and
+    // it cannot fail if the identity map is replaced by a plain one. This case
+    // uses two distinct logs that compare equal, which only identity separates.
+    test('retrying one of two equal but distinct logs keeps both', () async {
+      final levelLogger = Logger('test')[Levels.info];
+      final a = EqLog(levelLogger, 'dup');
+      final b = EqLog(levelLogger, 'dup');
+      expect(a == b, isTrue, reason: 'the fixture must have value equality');
+      expect(identical(a, b), isFalse);
+
+      final delivered = <EqLog>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<EqLog, String>(
+        format: (logs, retry) {
+          if (first) {
+            first = false;
+            retry.add(logs[1]);
+          }
+
+          return 'batch';
+        },
+        output: (out, remaining, retry) => delivered.addAll(remaining),
+      )
+        ..publish(a)
+        ..publish(b);
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(
+        delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(),
+        ['a', 'b'],
+        reason: 'each distinct log must reach output exactly once',
+      );
     });
   });
 }

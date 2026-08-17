@@ -56,6 +56,21 @@ unreleased section became a minor bump instead.
   to 6ms.
 * `MultiPublisher.flush()` after `close()` completes immediately instead of
   cascading into the wrapped publishers.
+* The publisher returned by `withParam()` now implements `Flushable` and
+  `Closable`, delegating both to the publisher that owns the shared queue.
+  It implemented neither, and `MultiPublisher` and `TransformPublisher`
+  select members with a type test — so the adapter was skipped: `flush()`
+  and `close()` completed successfully, `isClosed` on the real publisher
+  stayed `false`, and every queued log was lost at shutdown with no error,
+  no callback and no diagnostic. Because the queue is shared, closing any
+  adapter closes it for all of them.
+* `AsyncFormatterWithBufferAndParam` matches the log half of an entry by
+  identity when computing what is left for `output`, like
+  `AsyncFormatterWithBuffer` already did. It used a structurally keyed map,
+  so a `CustomLog` subclass with value equality made two distinct logs
+  interchangeable: the entry handed back to the retry buffer was passed to
+  `output` *and* re-queued, while the other one was silently withdrawn and
+  never published.
 
 **Documentation**
 
@@ -72,6 +87,18 @@ unreleased section became a minor bump instead.
 * The unbounded queues, the dropped retry buffer on `close`, the lazily
   created buffered queue and its zone, and `Lazy` calling any zero-argument
   value are all documented now.
+* The "Several Publishers" example did not compile, in the README and in the
+  `MultiPublisher` dartdoc alike: with the publishers bound to locals first
+  there is no context type, so `Log` was inferred as `CustomLog` and the
+  assignment to `logger.publisher` was rejected. All three constructors now
+  carry the type argument, with a note on why it is needed.
+* A throwing `handle`/`output` in the buffered publishers is documented at
+  its real reach: only what it placed in the retry buffer survives, the rest
+  is dropped, and reporting the error does not preserve it. `format` is the
+  one exception (it retries the whole batch) because `output` never ran.
+* `AsyncPublisherWithBufferBase` no longer contradicts its own `close()`:
+  the class note said logs in the retry buffer *when* `close` is called are
+  dropped; only logs handed back *after* it are.
 
 ## 0.5.1 (unreleased, folded into 0.6.0)
 

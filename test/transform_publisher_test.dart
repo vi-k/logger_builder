@@ -238,5 +238,27 @@ void main() {
 
       expect(inner.closeCount, 1);
     });
+
+    // Regression: C1 (project review 2026-08-17[1]) — a withParam adapter did
+    // not implement Closable, so the switch on _inner fell through to a no-op
+    // and the wrapped shared queue was never drained.
+    test('close drains a wrapped withParam adapter', () async {
+      final handled = <String?>[];
+      final inner = AsyncPublisherWithParam<String, Log>((param, log) async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        handled.add(log.message);
+      });
+      final publisher = TransformPublisher<Log>(
+        inner.withParam('p'),
+        transformer: (log) => log,
+      );
+      setUpLogger(publisher);
+
+      logger.i('hello');
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(handled, ['hello']);
+      expect(inner.isClosed, isTrue);
+    });
   });
 }
