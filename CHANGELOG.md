@@ -1,3 +1,41 @@
+## 0.6.1
+
+Documentation only: `lib/` is untouched, so there is nothing to migrate.
+Three README claims that had never been measured now are, and the benchmark
+sections behind them ship with the example.
+
+**Documentation**
+
+* The paragraph on `processLog` as a closure versus as a method no longer
+  says the method avoids "creating a closure on each call" — nothing does.
+  `processLog` is read once per level toggle, so the closure is allocated
+  when a level is switched on, not when a log is written. Measured over 1M
+  calls per form, the two land within 2 ns of each other, and which one is
+  ahead depends on the compiler: AOT gave 10.4 ns for the closure against
+  11.9 ns for the method, the JIT gave 11.9 against 11.7.
+* "Use closures in all cases" now carries the asymmetry that justifies it:
+  with the level enabled a closure adds about 3 ns to a call that costs
+  ~135 ns anyway, and with the level disabled it turns 41 ns into 4 ns. The
+  two lazy forms are also told apart — a tear-off of an existing function
+  allocates nothing per call and comes to 1.9 ns on a disabled level, while
+  a closure literal allocates one every call, on or off.
+* "`print` always writes to stdout" is scoped to native targets. On the web
+  `print` goes to `dartPrint` if the embedder defines one and to
+  `console.log` otherwise — the same code in `dart compile js` and in
+  `dart compile wasm` — and `dart:io` there compiles only to throw
+  `UnsupportedError` at runtime, so the stdout/stderr recipe builds and then
+  fails at the user's. A note under that section says all of this, including
+  that Dart never calls `console.error`, so the two streams cannot be split
+  on the web at all.
+* `benchmarks.dart` gains the three sections those numbers come from: the
+  same cheap payload through eager interpolation, a tear-off and a closure
+  literal, at an enabled and at a disabled level, plus two loggers differing
+  in exactly one line — whether `processLog` is a closure or a method.
+* The hierarchical example renames `withAddedName` to `child`. The README
+  stopped teaching `withAddedName` in 0.6.0, because no published API has
+  that name, but the example it links to for that very section still defined
+  it.
+
 ## 0.6.0
 
 The 0.5.1 work below was never published; an independent review of the
