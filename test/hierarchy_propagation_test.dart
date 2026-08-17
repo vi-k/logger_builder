@@ -217,6 +217,90 @@ void main() {
     });
   });
 
+  group('publisher inheritance for levels registered later', () {
+    // Regression: M7 (project review 2026-08-17[1]) — the rule lived in a
+    // field written only by the common `publisher =` setter, so a logger
+    // configured entirely through `logger[level].publisher` had nothing
+    // cached: a level registered afterwards stayed on the no-op publisher
+    // while reporting isEnabled == true.
+    test('a level added after only per-level publishers stays unconfigured',
+        () {
+      final published = <String?>[];
+      final logger = VarLogger([Levels.info])..level = Levels.all;
+      logger[Levels.info].publisher =
+          CustomLogPublisher((log) => published.add(log.message));
+
+      logger.addLevel(Levels.error);
+      logger.logAt(Levels.error)('oops');
+
+      // Deliberately no guessing: handing the new level the publisher chosen
+      // for a *different* level would be an invention. What was wrong before
+      // is that this state was undetectable.
+      expect(logger[Levels.error].hasPublisher, isFalse);
+      expect(logger[Levels.error].isEnabled, isTrue);
+      expect(published, isEmpty);
+    });
+
+    test('a level added after a common publisher inherits it', () {
+      final published = <String?>[];
+      final logger = VarLogger([Levels.info])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => published.add(log.message))
+        ..addLevel(Levels.error)
+        ..level = Levels.all;
+
+      logger.logAt(Levels.error)('oops');
+
+      expect(logger[Levels.error].hasPublisher, isTrue);
+      expect(published, ['oops']);
+    });
+
+    test('a level added on a linked child takes the parent per-level publisher',
+        () {
+      final common = <String?>[];
+      final errorsOnly = <String?>[];
+      final parent = VarLogger([Levels.info, Levels.error])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => common.add(log.message));
+      parent[Levels.error].publisher =
+          CustomLogPublisher((log) => errorsOnly.add(log.message));
+
+      final child = VarLogger.sub(parent, [Levels.info])
+        ..addLevel(Levels.error);
+      child.logAt(Levels.error)('oops');
+
+      expect(child.publisherLinked, isTrue);
+      expect(
+        errorsOnly,
+        ['oops'],
+        reason: 'the child must not diverge from the parent for that level',
+      );
+      expect(common, isEmpty);
+    });
+
+    test('hasPublisher exposes a level that is enabled but goes nowhere', () {
+      final logger = VarLogger([Levels.info])..level = Levels.all;
+
+      expect(logger[Levels.info].isEnabled, isTrue);
+      expect(
+        logger[Levels.info].hasPublisher,
+        isFalse,
+        reason: 'enabled and unconfigured must be tellable apart',
+      );
+
+      logger.publisher = CustomLogPublisher((log) {});
+
+      expect(logger[Levels.info].hasPublisher, isTrue);
+    });
+
+    test('inheriting from a parent with no publisher does not fake one', () {
+      final parent = VarLogger([Levels.info]);
+      final child = VarLogger.sub(parent, [Levels.info]);
+
+      expect(child[Levels.info].hasPublisher, isFalse);
+    });
+  });
+
   group('sublogger pruning', () {
     // Regression: M1
     test('pruneSubloggers keeps live subloggers', () {

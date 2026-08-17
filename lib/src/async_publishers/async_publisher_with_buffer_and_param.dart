@@ -13,6 +13,21 @@ import 'internal/buffered_pipeline.dart';
 /// This bridges the batched workflow of buffer-based publishers with the
 /// contextual routing of parameter-based publishers.
 ///
+/// > [!IMPORTANT]
+/// > The buffer is unbounded. If the handler cannot keep up — or keeps
+/// > handing batches back through the retry buffer while the sink is down —
+/// > the queue grows until the process runs out of memory. There is no
+/// > overflow policy; bound the input yourself if the sink can stall for
+/// > long. Entries handed back to the retry buffer *after* [close] was called
+/// > cannot be processed and are dropped — set [onDropped] to see them.
+/// > Entries already queued when [close] was called are drained (see
+/// > [close]).
+/// >
+/// > The queue is created lazily, on the first publish, [flush], [close] or
+/// > [isClosed], not in the constructor. Without an [onError] the zone that
+/// > receives handler errors is therefore the one that touched the publisher
+/// > first, not the one that built it.
+///
 /// Example usage:
 ///
 /// ```dart
@@ -64,11 +79,24 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// while.
   final Duration retryDelay;
 
+  /// Called with the entries dropped when [close] is reached while a batch
+  /// still wants to be retried.
+  ///
+  /// Closing drains what is queued, but entries handed back to the retry
+  /// buffer *after* [close] was called can never be processed. Without this
+  /// callback they are gone without a trace — no error, no counter. Use it
+  /// to persist them somewhere durable, or at least to count them.
+  ///
+  /// A throwing handler does not derail the shutdown: its own error goes to
+  /// the current zone.
+  final void Function(List<(Param, Log)> entries)? onDropped;
+
   late final BufferedPipeline<(Param, Log)> _pipeline =
       BufferedPipeline<(Param, Log)>(
     handle: handle,
     sync: sync,
     onError: onError,
+    onDropped: onDropped,
     retryDelay: retryDelay,
   );
 
@@ -76,6 +104,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   AsyncPublisherWithBufferAndParamBase({
     this.sync = false,
     this.onError,
+    this.onDropped,
     this.retryDelay = Duration.zero,
   });
 
@@ -112,7 +141,11 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   ///
   /// Drain semantics: the returned future also waits for logs published
   /// after this call, until the buffer becomes empty. Completes immediately
-  /// when the publisher is idle or closed.
+  /// when the publisher is idle.
+  ///
+  /// While a [close] is draining this returns that same future rather than an
+  /// already-completed one — reporting "the queue is empty" while logs are
+  /// still in flight would be a false all-clear at exactly the wrong moment.
   @override
   Future<void> flush() => _pipeline.flush();
 
@@ -166,6 +199,7 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
     this.handler, {
     super.sync,
     super.onError,
+    super.onDropped,
     super.retryDelay,
   });
 
@@ -239,6 +273,7 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     required this.output,
     super.sync,
     super.onError,
+    super.onDropped,
     super.retryDelay,
   });
 

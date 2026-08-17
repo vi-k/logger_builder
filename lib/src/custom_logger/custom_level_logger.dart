@@ -4,8 +4,9 @@ part of 'custom_logger.dart';
 /// a [CustomLogger].
 ///
 /// Instances of this class handle logging operations for a particular log
-/// level. They manage the conversion of log data into [CustomLog] objects
-/// using a builder, and dispatching the formatted output to a printer.
+/// level. A subclass builds a [CustomLog] in [processLog] and hands it to
+/// [publishLog], which applies the logger's [CustomLogger.transformer] and
+/// then the level's [CustomLogPublisher].
 ///
 /// When the logger's level is above this level logger's configured [level],
 /// calls to the actual logic will be replaced with a no-op function to avoid
@@ -58,6 +59,14 @@ abstract base class CustomLevelLogger<
   /// Current publisher.
   CustomLogPublisher<Log> _publisher;
 
+  /// Whether [_publisher] is a real publisher rather than the no-op default.
+  ///
+  /// Kept as a flag because the no-op publisher is private and generic, so
+  /// there is no supported way to recognise it from the outside — which used
+  /// to make an enabled-but-unconfigured level indistinguishable from a
+  /// working one.
+  bool _hasPublisher;
+
   /// Reentrancy guard for the publish step, held per level logger.
   ///
   /// Per level logger, not per logger: a cycle always comes back to *some*
@@ -85,7 +94,8 @@ abstract base class CustomLevelLogger<
         shortName = shortName ?? _firstCharacter(name),
         _noLog = noLog,
         _log = noLog,
-        _publisher = publisher ?? const CustomLogPublisher.noOp();
+        _publisher = publisher ?? const CustomLogPublisher.noOp(),
+        _hasPublisher = publisher != null;
 
   static int _checkLevel(int level) {
     // Checked in every build mode, like the name: Levels.all and Levels.off
@@ -139,6 +149,20 @@ abstract base class CustomLevelLogger<
 
   /// Returns the custom log publisher assigned to this particular level.
   CustomLogPublisher<Log> get publisher => _publisher;
+
+  /// Whether this level has a publisher that actually goes somewhere.
+  ///
+  /// `false` means the level still sits on the no-op publisher every level
+  /// starts on: [isEnabled] can be `true` and the log function can return
+  /// normally while nothing is ever written. That combination is otherwise
+  /// undetectable from the outside, because the no-op publisher is private,
+  /// so this is the check to assert on when a level looks silent.
+  bool get hasPublisher => _hasPublisher;
+
+  void _setPublisher(CustomLogPublisher<Log> publisher) {
+    _publisher = publisher;
+    _hasPublisher = true;
+  }
 
   /// Sets the log message publisher for a specific level.
   ///

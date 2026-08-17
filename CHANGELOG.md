@@ -26,6 +26,18 @@ unreleased section became a minor bump instead.
 
 **New**
 
+* `AsyncPublisherWithBufferBase.onDropped` and the same on
+  `AsyncPublisherWithBufferAndParamBase` — called with the entries dropped
+  because they were handed back to the retry buffer after `close()`. That
+  loss is by design (they can never be processed), but it used to be
+  invisible: no error, no callback, no counter. A randomized stress run
+  dropped 163 entries without a trace.
+* `CustomLevelLogger.hasPublisher` — whether a level has a publisher that
+  goes somewhere, or is still on the no-op one every level starts on. The
+  second state is indistinguishable from a working level otherwise: the log
+  function returns normally and `isEnabled` is `true`, because the level *is*
+  enabled. The no-op publisher is private, so nothing outside the package
+  could tell.
 * `CustomLogger.onError` — one hook for every error the logger catches on the
   publish path: a throwing `transformer`, a reentrancy guard violation, and a
   throwing publisher. With no handler set each case keeps its previous
@@ -41,6 +53,20 @@ unreleased section became a minor bump instead.
 
 **Fixes**
 
+* `close()` on a buffered publisher no longer sleeps through a pending
+  `retryDelay`. The retry `Timer` was not kept anywhere, so shutdown latency
+  scaled with `retryDelay` — and the entries it waited for were dropped
+  afterwards anyway. The timer is now cancelled and one prompt final attempt
+  is made instead.
+* `flush()` on a buffered publisher no longer reports an empty queue while a
+  `close()` is still draining. `isClosed` flips when `close()` is *called*,
+  so `flush()` short-circuited to an already-completed future: a false
+  all-clear at exactly the moment durability matters. It now returns the
+  close.
+* A level registered on a sublogger that still follows its parent takes the
+  parent's publisher for *that* level, instead of the parent's common
+  publisher. Parent and child used to publish the same level to different
+  destinations while `publisherLinked` reported `true`.
 * A buffered publisher whose handler keeps returning its batch through the
   retry buffer no longer starves the event loop. Retries were re-ticked
   through the microtask queue, which never yields: with the sink down,
@@ -102,9 +128,10 @@ unreleased section became a minor bump instead.
   defined `debug`/`info`/`error` getters while step 5 called `i`/`e`. The
   prose also swapped `Levels.all` with `Levels.off` and named the `CustomLog`
   field `levelShortName` instead of `shortLevelName`.
-* The reentrancy guard is documented at its real reach: it is synchronous
-  and per logger, so it does not catch a cycle through a sublogger that
-  inherited the same transformer, nor one that crosses an asynchronous hop.
+* The reentrancy guard is documented at its real reach: it is synchronous —
+  per logger for the transformer, per level logger for the publisher — so it
+  does not catch a cycle through a sublogger that inherited the same
+  transformer, nor one that crosses an asynchronous hop.
 * The unbounded queues, the dropped retry buffer on `close`, the lazily
   created buffered queue and its zone, and `Lazy` calling any zero-argument
   value are all documented now.
@@ -117,6 +144,15 @@ unreleased section became a minor bump instead.
   its real reach: only what it placed in the retry buffer survives, the rest
   is dropped, and reporting the error does not preserve it. `format` is the
   one exception (it retries the whole batch) because `output` never ran.
+* The two parameterized publisher bases carry the same warnings as their
+  twins: the unbounded queue on `AsyncPublisherWithParamBase`, and the
+  unbounded buffer, the dropped-at-close entries and the lazily created queue
+  on `AsyncPublisherWithBufferAndParamBase`. Both omissions were the same
+  contracts, just undocumented on half the family.
+* The class documentation of `CustomLogger` and `CustomLevelLogger` no longer
+  describes "message builders and printers" — an API removed in 0.3.0 and
+  replaced by `CustomLogPublisher`. It was the first prose on the pub.dev API
+  page for the two most important classes in the package.
 * `AsyncPublisherWithBufferBase` no longer contradicts its own `close()`:
   the class note said logs in the retry buffer *when* `close` is called are
   dropped; only logs handed back *after* it are.

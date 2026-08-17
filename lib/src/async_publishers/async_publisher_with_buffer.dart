@@ -16,10 +16,10 @@ import 'internal/buffered_pipeline.dart';
 /// > The buffer is unbounded. If the handler cannot keep up — or keeps
 /// > handing batches back through the retry buffer while the sink is down —
 /// > the queue grows until the process runs out of memory. There is no
-/// > overflow policy and no dropped-log counter; bound the input yourself if
-/// > the sink can stall for long. Logs handed back to the retry buffer
-/// > *after* [close] was called are dropped silently — logs already queued
-/// > when it was called are drained (see [close]).
+/// > overflow policy; bound the input yourself if the sink can stall for
+/// > long. Logs handed back to the retry buffer *after* [close] was called
+/// > cannot be processed and are dropped — set [onDropped] to see them.
+/// > Logs already queued when [close] was called are drained (see [close]).
 /// >
 /// > The queue is created lazily, on the first [publish], [flush], [close]
 /// > or [isClosed], not in the constructor. Without an `onError` the zone
@@ -73,10 +73,23 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// while.
   final Duration retryDelay;
 
+  /// Called with the logs dropped when [close] is reached while a batch
+  /// still wants to be retried.
+  ///
+  /// Closing drains what is queued, but logs handed back to the retry
+  /// buffer *after* [close] was called can never be processed. Without this
+  /// callback they are gone without a trace — no error, no counter. Use it
+  /// to persist them somewhere durable, or at least to count them.
+  ///
+  /// A throwing handler does not derail the shutdown: its own error goes to
+  /// the current zone.
+  final void Function(List<Log> logs)? onDropped;
+
   late final BufferedPipeline<Log> _pipeline = BufferedPipeline<Log>(
     handle: handle,
     sync: sync,
     onError: onError,
+    onDropped: onDropped,
     retryDelay: retryDelay,
   );
 
@@ -84,6 +97,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   AsyncPublisherWithBufferBase({
     this.sync = false,
     this.onError,
+    this.onDropped,
     this.retryDelay = Duration.zero,
   });
 
@@ -110,14 +124,22 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   ///
   /// Drain semantics: the returned future also waits for logs published
   /// after this call, until the buffer becomes empty. Completes immediately
-  /// when the publisher is idle or closed.
+  /// when the publisher is idle.
+  ///
+  /// While a [close] is draining this returns that same future rather than an
+  /// already-completed one — reporting "the queue is empty" while logs are
+  /// still in flight would be a false all-clear at exactly the wrong moment.
   @override
   Future<void> flush() => _pipeline.flush();
 
   /// Closes the publisher after draining the queue: every log accepted
   /// before closing is processed, including logs published while a batch
   /// was in flight. Logs returned to the retry buffer after closing are
-  /// dropped.
+  /// dropped and handed to [onDropped].
+  ///
+  /// A retry that was waiting out [retryDelay] is not waited for: the pending
+  /// timer is cancelled and one prompt final attempt is made instead, so
+  /// shutdown latency does not scale with [retryDelay].
   ///
   /// After closing, [publish] throws a [StateError] and [flush] completes
   /// immediately. Repeated calls return the same future.
@@ -159,6 +181,7 @@ final class AsyncPublisherWithBuffer<Log extends CustomLog>
     this.handler, {
     super.sync,
     super.onError,
+    super.onDropped,
     super.retryDelay,
   });
 
@@ -224,6 +247,7 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
     required this.output,
     super.sync,
     super.onError,
+    super.onDropped,
     super.retryDelay,
   });
 

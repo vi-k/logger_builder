@@ -11,8 +11,9 @@ part 'custom_level_logger.dart';
 /// An abstract base class for creating customized loggers.
 ///
 /// This class serves as the core of a flexible logging system, supporting
-/// hierarchical subloggers, dynamically configurable levels, and customizable
-/// message builders and printers.
+/// hierarchical subloggers, dynamically configurable levels, and pluggable
+/// output: each level carries a [CustomLogPublisher], and a [transformer] can
+/// rewrite or drop a log on its way there.
 ///
 /// It uses four generic type parameters to ensure type safety across the
 /// system:
@@ -174,10 +175,16 @@ abstract base class CustomLogger<
       _setPublisher(publisher);
     }
     for (final parentLevelLogger in parent._levelLoggers.values) {
-      _inheritLevelPublisher(
-        parentLevelLogger.level,
-        parentLevelLogger._publisher,
-      );
+      // Only real publishers: copying the parent's no-op default down would
+      // make this logger's level report `hasPublisher` for a publisher that
+      // goes nowhere, which is exactly the state that getter exists to
+      // expose.
+      if (parentLevelLogger.hasPublisher) {
+        _inheritLevelPublisher(
+          parentLevelLogger.level,
+          parentLevelLogger._publisher,
+        );
+      }
     }
 
     _levelLinked = true;
@@ -200,9 +207,18 @@ abstract base class CustomLogger<
   /// logger between loggers would silently hand this logger's logs to the
   /// other one's publisher and transformer.
   ///
-  /// A level registered after [publisher] was assigned inherits that
-  /// publisher; otherwise it would look enabled and publish into the no-op
-  /// publisher.
+  /// The new level inherits a publisher rather than starting on the no-op
+  /// one, which would look enabled and publish into nothing. What it
+  /// inherits, in order: the parent's publisher for exactly this level if
+  /// this logger still follows its parent, then the last common publisher
+  /// assigned anywhere up the chain.
+  ///
+  /// If neither exists — a logger configured only through
+  /// `logger[level].publisher`, for instance — the level stays on the no-op
+  /// publisher. Handing it the publisher chosen for some *other* level would
+  /// be an invention, so it is left unconfigured and made visible instead:
+  /// [CustomLevelLogger.hasPublisher] is `false` while [isLoggable] and
+  /// `isEnabled` are `true`.
   @protected
   void registerLevel(LevelLogger levelLogger) {
     if (_levelLoggers.containsKey(levelLogger.level)) {
@@ -210,9 +226,40 @@ abstract base class CustomLogger<
     }
     _levelLoggers[levelLogger.level] = levelLogger;
     levelLogger._attach(this as Logger);
-    if (_defaultPublisher case final publisher?) {
-      levelLogger._publisher = publisher;
+    if (_publisherFor(levelLogger.level) case final publisher?) {
+      levelLogger._setPublisher(publisher);
     }
+  }
+
+  /// The publisher a level newly registered at [level] should start on.
+  ///
+  /// A single rule instead of a cached field: `_defaultPublisher` is written
+  /// only by the common `publisher =` setter, so a logger configured entirely
+  /// through `logger[level].publisher` had nothing cached and left later
+  /// levels on the no-op publisher — enabled, reporting `isEnabled == true`,
+  /// publishing into nothing.
+  CustomLogPublisher<Log>? _publisherFor(int level) {
+    final parent = _parent;
+    if (_publisherLinked && parent != null) {
+      final inherited =
+          parent._assignedPublisherFor(level) ?? parent._publisherFor(level);
+      if (inherited != null) {
+        return inherited;
+      }
+    }
+
+    return _defaultPublisher;
+  }
+
+  /// This logger's own publisher for [level], but only if one was really
+  /// assigned — the no-op default is not worth inheriting.
+  CustomLogPublisher<Log>? _assignedPublisherFor(int level) {
+    if (_levelLoggers[level] case final levelLogger?
+        when levelLogger.hasPublisher) {
+      return levelLogger._publisher;
+    }
+
+    return null;
   }
 
   /// The overall log level threshold of this logger.
@@ -265,7 +312,7 @@ abstract base class CustomLogger<
     _defaultPublisher = publisher;
 
     for (final logger in _levelLoggers.values) {
-      logger._publisher = publisher;
+      logger._setPublisher(publisher);
     }
 
     pruneSubloggers();
@@ -371,7 +418,7 @@ abstract base class CustomLogger<
 
   void _setLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;
-    this[level]._publisher = publisher;
+    this[level]._setPublisher(publisher);
     _propagateLevelPublisher(level, publisher);
   }
 
@@ -380,7 +427,7 @@ abstract base class CustomLogger<
   /// levels of its parent.
   void _inheritLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;
-    _levelLoggers[level]?._publisher = publisher;
+    _levelLoggers[level]?._setPublisher(publisher);
     _propagateLevelPublisher(level, publisher);
   }
 

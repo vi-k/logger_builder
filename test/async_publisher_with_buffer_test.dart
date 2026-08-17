@@ -503,6 +503,97 @@ void main() {
       ]);
     });
 
+    // Regression: M4 (project review 2026-08-17[1]) — the retry Timer was not
+    // kept anywhere, so close() had to wait out the whole retryDelay before it
+    // could drain, and the entries it waited for were dropped afterwards
+    // anyway.
+    test('close does not wait out a pending retryDelay', () async {
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) => retry.addAll(logs),
+        retryDelay: const Duration(seconds: 5),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('stuck');
+      // Let the first attempt run and arm the retry timer.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final stopwatch = Stopwatch()..start();
+      await publisher.close().timeout(const Duration(seconds: 2));
+      stopwatch.stop();
+
+      expect(
+        stopwatch.elapsed,
+        lessThan(const Duration(seconds: 1)),
+        reason: 'close must cancel the pending retry, not sleep through it',
+      );
+    });
+
+    // Regression: M6 (project review 2026-08-17[1]) — entries handed back after
+    // close() were dropped with no error, no callback and no counter.
+    test('onDropped receives the entries dropped at close', () async {
+      final dropped = <List<String?>>[];
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) => retry.addAll(logs),
+        onDropped: (logs) => dropped.add(messagesOf(logs)),
+        retryDelay: const Duration(milliseconds: 5),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('lost');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(dropped, isNotEmpty);
+      expect(dropped.expand((batch) => batch), contains('lost'));
+    });
+
+    test('a throwing onDropped does not derail the shutdown', () async {
+      final zoneErrors = <Object>[];
+      late Future<void> closeFuture;
+      runZonedGuarded(
+        () {
+          final publisher = AsyncPublisherWithBuffer<Log>(
+            (logs, retry) => retry.addAll(logs),
+            onDropped: (logs) => throw StateError('handler boom'),
+            retryDelay: const Duration(milliseconds: 5),
+          );
+          makeLogger(publisher).i('lost');
+          closeFuture = Future<void>.delayed(
+            const Duration(milliseconds: 20),
+            publisher.close,
+          );
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+      await closeFuture.timeout(const Duration(seconds: 2));
+
+      expect(zoneErrors.single, isA<StateError>());
+    });
+
+    // Regression: M5 (project review 2026-08-17[1]) — isClosed flips when
+    // close() is *called*, so flush() short-circuited to an already-completed
+    // future while the queue was still in flight: a false all-clear.
+    test('flush during a close waits for the close', () async {
+      final handled = <String?>[];
+      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        handled.addAll(messagesOf(logs));
+      });
+      final log = makeLogger(publisher);
+
+      log.i('in flight');
+      final closeFuture = publisher.close();
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(
+        handled,
+        ['in flight'],
+        reason: 'flush must not report an empty queue mid-shutdown',
+      );
+      await closeFuture;
+    });
+
     // Regression: H5 (project review 2026-08-17[1]) — pins the documented
     // asymmetry with `format`: `output` runs after the sink may already have
     // taken part of the batch, so a throw does not retry wholesale. Only what

@@ -12,6 +12,12 @@ import 'internal/async_param_publisher.dart';
 /// parameters and process them sequentially, ensuring that logs for the same
 /// context are handled properly without race conditions.
 ///
+/// > [!IMPORTANT]
+/// > The queue is unbounded: if [handle] is slower than the rate of logging,
+/// > pending events accumulate until the process runs out of memory. There
+/// > is no overflow policy and no dropped-log counter — bound the input
+/// > yourself if the destination can stall.
+///
 /// Example usage:
 ///
 /// ```dart
