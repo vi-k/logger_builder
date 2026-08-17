@@ -583,9 +583,16 @@ bool _processLog(Object? message, {Object? error, StackTrace? stackTrace}) {
 }
 ```
 
-Theoretically, the second option should be more performant, as it does not
-create a `closure` on each call. But in practice, the compiler makes the
-difference minimal.
+The two are equivalent in practice, and the usual argument for the method —
+that it avoids allocating a closure on every call — describes something that
+never happens. `processLog` is read once per level toggle: switching a level
+on assigns its result to the field that `log` dispatches through, so the
+closure is created when the level is enabled, not when a log is written.
+Measured over 1M calls per form
+([benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart)),
+the two land within 2 ns of each other and which one is ahead depends on the
+compiler: AOT gave 10.4 ns for the closure against 11.9 ns for the method,
+the JIT gave 11.9 against 11.7. Use whichever reads better.
 
 Inside `processLog`, you need to do three things:
 
@@ -663,7 +670,17 @@ log.info(() => jsonEncode(hugeObject));
 
 I recommend using closures in all cases when you pass something other than
 ready-made values, even if it's a simple string with minor interpolations or
-something like `i++`. Better safe than sorry.
+something like `i++`. The asymmetry is what makes it pay: with the level
+enabled the closure adds about 3 ns to a call that costs ~135 ns anyway,
+and with the level disabled it turns 41 ns into 4 ns. A rounding error when
+you lose, an order of magnitude when you win.
+
+A tear-off of an existing function is cheaper still: `log.d(buildMessage)`
+allocates nothing per call and comes to 1.9 ns on a disabled level, against
+3.7 ns for `log.d(() => ...)`, which allocates one closure on every call
+whether the level is on or off. Both are far below the 41 ns of building the
+string eagerly. (Measured over 1M calls per form, AOT; the JIT numbers differ
+in scale, not in shape.)
 
 The main class for lazy computations is `Lazy`:
 
@@ -1128,8 +1145,9 @@ a `Log` carrying a `message`, and a `Logger` with `d`, `i` and `e`.
 
 ### How to log to stdout and stderr
 
-`print` always writes to stdout, so error output ends up mixed into the
-program's normal output. Give the error level its own publisher:
+On native targets `print` always writes to stdout, so error output ends up
+mixed into the program's normal output. Give the error level its own
+publisher:
 
 ```dart
 import 'dart:io';
@@ -1142,6 +1160,16 @@ final log = Logger()
   ..[Levels.error].publisher =
       CustomLogFormatter(format: format, output: stderr.writeln);
 ```
+
+> [!NOTE]
+> Native only. The web has no stdout: `print` goes to `dartPrint` if the
+> embedder defines one and to `console.log` otherwise — the same code in
+> `dart compile js` and in `dart compile wasm`. `dart:io` is worse than
+> unavailable there: the import compiles, and `stdout`/`stderr` throw
+> `UnsupportedError` at runtime. Under Node `console.log` does land on
+> stdout, in a browser it lands in the devtools console, and Dart never
+> calls `console.error` — so on the web the two streams cannot be split
+> this way at all.
 
 ### How to log to a file
 

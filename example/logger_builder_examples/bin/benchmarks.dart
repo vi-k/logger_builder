@@ -29,6 +29,94 @@ final class BenchmarkLogPrinter implements CustomLogPublisher<Log> {
   }
 }
 
+// Two loggers that differ in exactly one line: how `processLog` is produced.
+// The README says the method-backed variant "should theoretically be more
+// performant, as it does not create a `closure` on each call", and the section
+// below is what that claim is measured against.
+//
+// The payload is deliberately the cheapest possible — one field, no lazy
+// wrapper, a publisher that only parks the message — so that the dispatch
+// itself is what the numbers are about.
+
+Object? sink;
+
+final class MicroLog extends CustomLog {
+  final Object? message;
+
+  MicroLog(super.levelLogger, {required this.message});
+}
+
+final class MicroPublisher implements CustomLogPublisher<MicroLog> {
+  const MicroPublisher();
+
+  @override
+  void publish(MicroLog log) {
+    sink = log.message;
+  }
+}
+
+final class ClosureLevelLogger extends CustomLevelLogger<ClosureLogger,
+    ClosureLevelLogger, LogFn, MicroLog> {
+  ClosureLevelLogger({required super.level, required super.name})
+      : super(
+          noLog: (_, {error, stackTrace}) => true,
+        );
+
+  @override
+  LogFn get processLog => (message, {error, stackTrace}) {
+        publishLog(MicroLog(this, message: message));
+
+        return true;
+      };
+}
+
+final class ClosureLogger
+    extends CustomLogger<ClosureLogger, ClosureLevelLogger, LogFn, MicroLog> {
+  ClosureLogger();
+
+  final ClosureLevelLogger _i =
+      ClosureLevelLogger(level: Levels.info, name: 'info');
+
+  LogFn get i => _i.log;
+
+  @override
+  void registerLevels() {
+    registerLevel(_i);
+  }
+}
+
+final class MethodLevelLogger extends CustomLevelLogger<MethodLogger,
+    MethodLevelLogger, LogFn, MicroLog> {
+  MethodLevelLogger({required super.level, required super.name})
+      : super(
+          noLog: (_, {error, stackTrace}) => true,
+        );
+
+  @override
+  LogFn get processLog => _processLog;
+
+  bool _processLog(Object? message, {Object? error, StackTrace? stackTrace}) {
+    publishLog(MicroLog(this, message: message));
+
+    return true;
+  }
+}
+
+final class MethodLogger
+    extends CustomLogger<MethodLogger, MethodLevelLogger, LogFn, MicroLog> {
+  MethodLogger();
+
+  final MethodLevelLogger _i =
+      MethodLevelLogger(level: Levels.info, name: 'info');
+
+  LogFn get i => _i.log;
+
+  @override
+  void registerLevels() {
+    registerLevel(_i);
+  }
+}
+
 Future<void> main() async {
   final log = Logger('root')..level = Levels.all;
 
@@ -333,6 +421,97 @@ Future<void> main() async {
       if (!logging) talkLogOn.info(evaluateMessage);
     }
   });
+
+  // The sections above compare packages. The two below compare `CustomLogger`
+  // with itself, because that is what the README's own advice is about.
+  //
+  // The three ways of handing over the same cheap message are not
+  // interchangeable. `evaluateMessage` is a tear-off of a function that
+  // already exists, so it costs no allocation per call; `() => ...` is a fresh
+  // closure on every call, capturing `counter`, and that allocation happens
+  // whether the level is on or off — the argument is built at the call site,
+  // before the logger sees it. Everything the README recommends is written in
+  // the second form.
+
+  //
+  title('Cheap payload, three ways (logging [on]enabled[/on]):');
+
+  log.level = Levels.all;
+
+  subtitle(r"eager: log.i('Info message #${++counter}'):");
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      log.i('Info message #${++counter}');
+    }
+  });
+
+  subtitle('tear-off: log.i(evaluateMessage):');
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      log.i(evaluateMessage);
+    }
+  });
+
+  subtitle(r"closure literal: log.i(() => 'Info message #${++counter}'):");
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      log.i(() => 'Info message #${++counter}');
+    }
+  });
+
+  //
+  title('Cheap payload, three ways (logging [off]disabled[/off]):');
+
+  log.level = Levels.off;
+
+  subtitle(r"eager: log.i('Info message #${++counter}'):");
+  runTest(mode: BenchmarkMode.worst, (count) {
+    for (var i = 0; i < count; i++) {
+      log.i('Info message #${++counter}');
+    }
+  });
+
+  subtitle('tear-off: log.i(evaluateMessage):');
+  runTest(mode: BenchmarkMode.best, (count) {
+    for (var i = 0; i < count; i++) {
+      log.i(evaluateMessage);
+    }
+  });
+
+  subtitle(r"closure literal: log.i(() => 'Info message #${++counter}'):");
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      log.i(() => 'Info message #${++counter}');
+    }
+  });
+
+  //
+  title('processLog: closure vs method (logging [on]enabled[/on]):');
+
+  final closureLog = ClosureLogger()
+    ..level = Levels.all
+    ..publisher = const MicroPublisher();
+  final methodLog = MethodLogger()
+    ..level = Levels.all
+    ..publisher = const MicroPublisher();
+
+  subtitle('LogFn get processLog => (message, {...}) { ... }:');
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      closureLog.i('Info message');
+    }
+  });
+
+  subtitle('LogFn get processLog => _processLog:');
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      methodLog.i('Info message');
+    }
+  });
+
+  // Touch the sink: a store nothing ever reads is a store the compiler is
+  // free to drop, and then the two variants above would be measured empty.
+  description('\nLast message parked by MicroPublisher: ${sink ?? '<none>'}');
 }
 
 class TalkerSimpleLoggerFormatter extends t.LoggerFormatter {
