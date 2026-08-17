@@ -15,8 +15,20 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # lints 6.x needs sdk ^3.8.0 while environment.sdk is ^3.6.0, so the
+      # oldest-supported job cannot even resolve it. Reopening the same PR
+      # every month is noise, not information — drop this entry the day the
+      # floor moves past 3.7 (which also means dropping
+      # require_trailing_commas, see analysis_options.yaml).
+      - dependency-name: lints
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: pub
     directory: /example/logger_builder_examples
     schedule:
       interval: monthly
+    ignore:
+      # Same floor, same reason as above.
+      - dependency-name: lints
+        update-types: [version-update:semver-major]
