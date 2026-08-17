@@ -120,6 +120,24 @@ unreleased section became a minor bump instead.
 * `AsyncPublisherWithBufferBase` no longer contradicts its own `close()`:
   the class note said logs in the retry buffer *when* `close` is called are
   dropped; only logs handed back *after* it are.
+* The README no longer teaches `withAddedName`, which does not exist in the
+  package and was never defined in the README either — the "Using
+  logger_builder in your own package" section was uncompilable end to end.
+  It now uses the `child(...)` the README itself builds, and says that the
+  name is yours to choose over the protected `CustomLogger.sub`.
+* The README's opening note said a logger needs only `..level = ...` before
+  it says a word. It also needs `..publisher = ...`: every level starts on a
+  no-op publisher, and an unconfigured level still reports `isEnabled` as
+  `true`, so the two mistakes look identical.
+* The README said `close()` "refuses new logs". It throws a `StateError` at
+  the logging call site, which is now stated, along with the two different
+  meanings of `flush()` — snapshot for the unbuffered publishers, drain for
+  the buffered ones.
+* New README section "The full set": the 2x2 table of the eight asynchronous
+  classes, what separates the `AsyncFormatter*` half from the rest, and the
+  three shared arguments. `AsyncFormatter`, `retryDelay`, `Flushable`,
+  `Closable`, `sync` and `isClosed` appeared in the README zero times before
+  this.
 
 ## 0.5.1 (unreleased, folded into 0.6.0)
 

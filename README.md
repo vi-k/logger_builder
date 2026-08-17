@@ -52,10 +52,17 @@ to do them will be explained below.
 
 > [!NOTE]
 > The snippets below show the output you get **once logging is switched on**.
-> A freshly built logger starts at `Levels.off` and prints nothing, so every
-> one of them needs `..level = Levels.all` (or any other threshold) before it
-> says a word. That default is deliberate — see
-> [Using logger_builder in your own package](#using-logger_builder-in-your-own-package).
+> Two things are needed for that, and a fresh logger has neither:
+>
+> - `..level = Levels.all` (or any other threshold) — a freshly built logger
+>   starts at `Levels.off`. That default is deliberate, see
+>   [Using logger_builder in your own package](#using-logger_builder-in-your-own-package);
+> - `..publisher = ...` — every level starts on a no-op publisher that
+>   discards what it gets.
+>
+> Get one of them wrong and you see silence with no hint which: an
+> unconfigured level still reports `isEnabled == true`, because it *is*
+> enabled — it just publishes into nothing.
 
 **Custom logging methods**
 
@@ -114,15 +121,21 @@ function or unit where needed. See
 
 ```dart
 final log = Logger('app');
-final authLog = log.withAddedName('auth');
-final loginLog = authLog.withAddedName('login');
-final logoutLog = authLog.withAddedName('logout');
+final authLog = log.child('auth');
+final loginLog = authLog.child('login');
+final logoutLog = authLog.child('logout');
 
 log.i('App started');                     // app | App started
 authLog.i('Check user authentification'); // app | auth | Check user authentification
 loginLog.i('User login');                 // app | auth | login | User login
 logoutLog.i('User logout');               // app | auth | logout | User logout
 ```
+
+`child` is not a package method — the package gives you the protected
+`CustomLogger.sub` constructor and you expose it under whatever name reads
+best. This snippet assumes the `Logger` built in
+[Hierarchical Loggers](#hierarchical-loggers), which is where `child` is
+defined.
 
 See example: [hierarchical_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart).
 
@@ -132,7 +145,9 @@ The output type does not necessarily have to be a `String`. It can be, for
 example, ready-made json or a type prepared for conversion to json:
 
 ```dart
-final log = JsonReporter()..level = Levels.all;
+final log = JsonReporter()
+  ..level = Levels.all
+  ..publisher = const DefaultJsonPublisher();
 log.i('info-event', data: {'id': 2, 'data': 'Info data'});
 // {"level":"info","timestamp":1786903488805201,"event":"info-event",
 //  "data":{"id":2,"data":"Info data"}}
@@ -858,7 +873,56 @@ Future<void> main() async {
 See also an example:
 [async_publisher_with_buffer.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/async_publisher_with_buffer.dart).
 
-And see also `AsyncPublisherWithBufferAndParam`.
+### The full set
+
+Two independent axes — does the handler need an extra parameter, and does it
+work on batches — give four base classes, and each comes in a "do it
+yourself" and a "format + output" flavour:
+
+|                      | one log at a time                        | batches                                                |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| **no parameter**     | `AsyncPublisher` / `AsyncFormatter`      | `AsyncPublisherWithBuffer` / `AsyncFormatterWithBuffer` |
+| **with a parameter** | `AsyncPublisherWithParam` / `AsyncFormatterWithParam` | `AsyncPublisherWithBufferAndParam` / `AsyncFormatterWithBufferAndParam` |
+
+The `Async*Publisher*` half takes one `handle`/handler callback and you do
+everything in it. The `AsyncFormatter*` half splits that in two — `format`
+turns the log (or the batch) into an `Out` object, `output` sends that
+object somewhere — which is what you want when the same payload goes to
+several destinations, or when formatting is the expensive part:
+
+```dart
+final asyncFormatter = AsyncFormatter<Log, Map<String, Object?>>(
+  format: (log) async => {'level': log.levelName, 'message': log.message},
+  output: (out) async => apiClient.post('/logs', data: out),
+);
+```
+
+Every one of the eight takes the same three optional arguments:
+
+- **`onError`** — called when the handler throws. Without it the error goes
+  to the current zone, and in a plain Dart program without an error zone an
+  uncaught asynchronous error **terminates the isolate**, after which nothing
+  keeps processing your logs. Set it, or wrap the app in `runZonedGuarded`;
+- **`sync`** — whether the internal `StreamController` delivers
+  synchronously. Leave it alone unless you know you need it;
+- **`retryDelay`** — buffered variants only: how long to wait before
+  retrying a batch that was handed back through `retryBuffer`. The default
+  `Duration.zero` still goes through the event loop, so a dead sink cannot
+  starve timers or your own `close()`, but it retries as fast as the loop
+  allows. Set a real delay when the destination can be down for a while —
+  and note that `close()` then waits for the pending retry.
+
+The `Base` classes (`AsyncPublisherBase` and friends) are for when you want a
+named class with its own state instead of a callback; `isClosed` tells you
+whether `close()` has been called.
+
+> [!IMPORTANT]
+> All of these queues are **unbounded**. If the destination cannot keep up,
+> pending logs accumulate until the process runs out of memory. There is no
+> overflow policy and no dropped-log counter — bound the input yourself if
+> the sink can stall. In the buffered variants, `retryBuffer` is also the
+> only thing that keeps a log across a failure: a throwing handler drops
+> everything it did not hand back.
 
 
 ## Several Publishers
@@ -901,6 +965,11 @@ Without `onError`, the error is reported to the current zone as an uncaught
 asynchronous error (in Flutter it ends up in `PlatformDispatcher.onError`,
 inside `runZonedGuarded` — in its handler). Note that a plain Dart program
 without an error zone terminates the isolate on such errors by default.
+
+`flush()` and `close()` cascade only to the publishers that can be flushed
+and closed — the ones implementing `Flushable` and `Closable`. All the
+asynchronous publishers do, including the adapter returned by `withParam()`;
+a plain `CustomLogPublisher` has nothing to drain and is skipped.
 
 See also an example:
 [multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
@@ -1089,6 +1158,11 @@ final log = Logger()
   ..publisher = filePublisher;
 ```
 
+The queue in front of the file is unbounded: if the disk stalls, pending
+batches pile up in memory until the process dies. That is the trade-off for
+never dropping a log silently — see
+[the full set](#the-full-set) for `retryDelay` and the rest.
+
 Drain the queue before the program exits, or the last batch never reaches
 the disk:
 
@@ -1096,9 +1170,27 @@ the disk:
 await filePublisher.close();
 ```
 
-`close()` is terminal: it processes everything accepted so far and then
-refuses new logs. Use `flush()` when you only want to wait for the queue
-to empty and keep logging afterwards.
+`close()` is terminal, and "refuses" is stronger than it sounds: it
+processes everything accepted so far, and **any later `log.i(...)` throws a
+`StateError` at the call site**. That is deliberate — closing a publisher and
+then logging is a shutdown-ordering bug, and finding out immediately beats
+feeding logs into a dead buffer — but it does mean a stray log line in a
+`finally` can bring the program down. Close last, or use `flush()` when you
+only want to wait for the queue to empty and keep logging afterwards.
+
+Note that `flush()` means two different things depending on which publisher
+you picked, and both are useful:
+
+- **snapshot** — `AsyncPublisher`, `AsyncFormatter` and their `WithParam`
+  variants complete when everything queued *at the moment of the call* has
+  been processed. Logs published after it land in the next round;
+- **drain** — the buffered variants complete when the buffer is *empty*,
+  including logs published after the call. Under a steady stream of logging
+  a drain-flush finishes later than a snapshot-flush, and on a busy logger it
+  may not finish promptly at all.
+
+A `MultiPublisher` holding one of each mixes the two guarantees, so reach for
+`close()` when you need a hard "everything is out" point.
 
 ### How to add a timestamp
 
@@ -1294,8 +1386,8 @@ assignment configures your whole package — while a user who wants only
 your HTTP layer can still say so:
 
 ```dart
-final httpLog = packageLog.withAddedName('http');
-final cacheLog = packageLog.withAddedName('cache');
+final httpLog = packageLog.child('http');
+final cacheLog = packageLog.child('cache');
 
 // In the app: everything at warning level, the HTTP layer in full.
 packageLog.level = Levels.warning;
