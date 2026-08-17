@@ -1,10 +1,7 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFn = bool Function(
-  Object? message, {
-  Object? error,
-  StackTrace? stackTrace,
-});
+typedef LogFn =
+    bool Function(Object? message, {Object? error, StackTrace? stackTrace});
 
 final class Log extends CustomLog {
   final LazyString _lazyMessage;
@@ -23,23 +20,16 @@ final class Log extends CustomLog {
 final class LevelLogger
     extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log> {
   LevelLogger({required super.level, required super.name, super.shortName})
-      : super(
-          noLog: (_, {error, stackTrace}) => true,
-        );
+    : super(noLog: (_, {error, stackTrace}) => true);
 
   @override
   LogFn get processLog => (message, {error, stackTrace}) {
-        publishLog(
-          Log(
-            this,
-            message: message,
-            error: error,
-            stackTrace: stackTrace,
-          ),
-        );
+    publishLog(
+      Log(this, message: message, error: error, stackTrace: stackTrace),
+    );
 
-        return true;
-      };
+    return true;
+  };
 }
 
 final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {

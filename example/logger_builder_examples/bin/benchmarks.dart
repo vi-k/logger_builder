@@ -246,16 +246,18 @@ Future<void> main() async {
   );
 
   subtitle('CustomLogger:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
-      (count) {
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best, (
+    count,
+  ) {
     for (var i = 0; i < count; i++) {
       assert(log.i(evaluateMessage));
     }
   });
 
   subtitle('logging:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
-      (count) {
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best, (
+    count,
+  ) {
     for (var i = 0; i < count; i++) {
       assert(() {
         logLog.info(evaluateMessage);
@@ -265,8 +267,9 @@ Future<void> main() async {
   });
 
   subtitle('talker:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
-      (count) {
+  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best, (
+    count,
+  ) {
     for (var i = 0; i < count; i++) {
       assert(() {
         talkLogOn.info(evaluateMessage);

@@ -121,17 +121,18 @@ final class TransformPublisher<Log extends CustomLog>
 
   @override
   Future<void> flush() => switch (_inner) {
-        // After close() this completes without touching the wrapped
-        // publisher, like every sibling: close() is terminal here even when
-        // the wrapped publisher is not Closable, and flushing through a
-        // publisher this one has already disowned is not a thing to do.
-        _ when isClosed => Future.value(),
-        final Flushable flushable => flushable.flush(),
-        _ => Future.value(),
-      };
+    // After close() this completes without touching the wrapped
+    // publisher, like every sibling: close() is terminal here even when
+    // the wrapped publisher is not Closable, and flushing through a
+    // publisher this one has already disowned is not a thing to do.
+    _ when isClosed => Future.value(),
+    final Flushable flushable => flushable.flush(),
+    _ => Future.value(),
+  };
 
   @override
-  Future<void> close() => _closeFuture ??= switch (_inner) {
+  Future<void> close() =>
+      _closeFuture ??= switch (_inner) {
         final Closable closable => closable.close(),
         _ => Future.value(),
       };

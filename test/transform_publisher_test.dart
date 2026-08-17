@@ -32,9 +32,10 @@ void main() {
 
     void setUpLogger(CustomLogPublisher<Log> publisher) {
       published = <Log>[];
-      logger = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher;
+      logger =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher;
     }
 
     test('inner receives the transformed log', () {
@@ -66,19 +67,16 @@ void main() {
 
     test('throwing transformer drops the log and reports to the zone', () {
       final errors = <Object>[];
-      runZonedGuarded(
-        () {
-          setUpLogger(
-            TransformPublisher(
-              CustomLogPublisher((log) => published.add(log)),
-              transformer: (log) => throw StateError('bad transformer'),
-            ),
-          );
+      runZonedGuarded(() {
+        setUpLogger(
+          TransformPublisher(
+            CustomLogPublisher((log) => published.add(log)),
+            transformer: (log) => throw StateError('bad transformer'),
+          ),
+        );
 
-          logger.i('secret');
-        },
-        (error, stackTrace) => errors.add(error),
-      );
+        logger.i('secret');
+      }, (error, stackTrace) => errors.add(error));
 
       expect(published, isEmpty);
       expect(errors, hasLength(1));
@@ -88,20 +86,17 @@ void main() {
     test('throwing transformer reports to onError instead of the zone', () {
       final errors = <Object>[];
       final zoneErrors = <Object>[];
-      runZonedGuarded(
-        () {
-          setUpLogger(
-            TransformPublisher(
-              CustomLogPublisher((log) => published.add(log)),
-              transformer: (log) => throw StateError('bad transformer'),
-              onError: (error, stackTrace) => errors.add(error),
-            ),
-          );
+      runZonedGuarded(() {
+        setUpLogger(
+          TransformPublisher(
+            CustomLogPublisher((log) => published.add(log)),
+            transformer: (log) => throw StateError('bad transformer'),
+            onError: (error, stackTrace) => errors.add(error),
+          ),
+        );
 
-          logger.i('secret');
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+        logger.i('secret');
+      }, (error, stackTrace) => zoneErrors.add(error));
 
       expect(published, isEmpty);
       expect(errors, hasLength(1));
@@ -110,24 +105,23 @@ void main() {
 
     test('throwing onError is reported to the zone, delivery continues', () {
       final zoneErrors = <Object>[];
-      runZonedGuarded(
-        () {
-          setUpLogger(
-            TransformPublisher(
-              CustomLogPublisher((log) => published.add(log)),
-              transformer: (log) => log.message == 'boom'
-                  ? throw StateError('bad transformer')
-                  : log,
-              onError: (error, stackTrace) => throw StateError('bad handler'),
-            ),
-          );
+      runZonedGuarded(() {
+        setUpLogger(
+          TransformPublisher(
+            CustomLogPublisher((log) => published.add(log)),
+            transformer:
+                (log) =>
+                    log.message == 'boom'
+                        ? throw StateError('bad transformer')
+                        : log,
+            onError: (error, stackTrace) => throw StateError('bad handler'),
+          ),
+        );
 
-          logger
-            ..i('boom')
-            ..i('fine');
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+        logger
+          ..i('boom')
+          ..i('fine');
+      }, (error, stackTrace) => zoneErrors.add(error));
 
       expect(zoneErrors, hasLength(1));
       expect(published, hasLength(1));
@@ -136,24 +130,21 @@ void main() {
 
     test('a reentrant transformer drops the nested log', () {
       final errors = <Object>[];
-      runZonedGuarded(
-        () {
-          setUpLogger(
-            TransformPublisher(
-              CustomLogPublisher((log) => published.add(log)),
-              transformer: (log) {
-                logger.i('from inside the transformer');
+      runZonedGuarded(() {
+        setUpLogger(
+          TransformPublisher(
+            CustomLogPublisher((log) => published.add(log)),
+            transformer: (log) {
+              logger.i('from inside the transformer');
 
-                return Log.copy(log, message: '***');
-              },
-              onError: (error, stackTrace) => errors.add(error),
-            ),
-          );
+              return Log.copy(log, message: '***');
+            },
+            onError: (error, stackTrace) => errors.add(error),
+          ),
+        );
 
-          logger.i('secret');
-        },
-        (error, stackTrace) => errors.add(error),
-      );
+        logger.i('secret');
+      }, (error, stackTrace) => errors.add(error));
 
       expect(published.single.message, '***');
       expect(errors.single, isA<StateError>());
@@ -161,24 +152,21 @@ void main() {
 
     test('chained transform publishers do not trip the guard', () {
       final errors = <Object>[];
-      runZonedGuarded(
-        () {
-          setUpLogger(
+      runZonedGuarded(() {
+        setUpLogger(
+          TransformPublisher(
             TransformPublisher(
-              TransformPublisher(
-                CustomLogPublisher((log) => published.add(log)),
-                transformer: (log) =>
-                    Log.copy(log, message: '${log.message}/inner'),
-              ),
-              transformer: (log) =>
-                  Log.copy(log, message: '${log.message}/outer'),
+              CustomLogPublisher((log) => published.add(log)),
+              transformer:
+                  (log) => Log.copy(log, message: '${log.message}/inner'),
             ),
-          );
+            transformer:
+                (log) => Log.copy(log, message: '${log.message}/outer'),
+          ),
+        );
 
-          logger.i('m');
-        },
-        (error, stackTrace) => errors.add(error),
-      );
+        logger.i('m');
+      }, (error, stackTrace) => errors.add(error));
 
       expect(published.single.message, 'm/outer/inner');
       expect(errors, isEmpty);

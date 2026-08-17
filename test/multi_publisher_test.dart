@@ -69,16 +69,20 @@ final class _ThrowingClosePublisher
 
 void main() {
   group('MultiPublisher', () {
-    Logger loggerWith(MultiPublisher<Log> publisher) => Logger('root')
-      ..level = Levels.all
-      ..publisher = publisher;
+    Logger loggerWith(MultiPublisher<Log> publisher) =>
+        Logger('root')
+          ..level = Levels.all
+          ..publisher = publisher;
 
     group('publish', () {
       test('continues delivering to remaining publishers when one throws', () {
         final before = _RecordingPublisher();
         final after = _RecordingPublisher();
-        final multi =
-            MultiPublisher<Log>([before, _ThrowingPublisher(), after]);
+        final multi = MultiPublisher<Log>([
+          before,
+          _ThrowingPublisher(),
+          after,
+        ]);
         final log = loggerWith(multi);
 
         runZonedGuarded(() => log.i('hello'), (error, stackTrace) {});
@@ -93,8 +97,9 @@ void main() {
         final records = <(CustomLogPublisher<Log>, Object, StackTrace)>[];
         final multi = MultiPublisher<Log>(
           [throwing, good],
-          onError: (publisher, error, stackTrace) =>
-              records.add((publisher, error, stackTrace)),
+          onError:
+              (publisher, error, stackTrace) =>
+                  records.add((publisher, error, stackTrace)),
         );
         final log = loggerWith(multi);
 
@@ -107,24 +112,21 @@ void main() {
       });
 
       // Regression: CR5 (cross-review 0.4.0)
-      test(
-          'a throwing onError does not interrupt delivery '
+      test('a throwing onError does not interrupt delivery '
           'or escape to the call site', () {
         final good = _RecordingPublisher();
         final zoneErrors = <Object>[];
-        runZonedGuarded(
-          () {
-            final multi = MultiPublisher<Log>(
-              [_ThrowingPublisher(), good],
-              onError: (publisher, error, stackTrace) =>
-                  throw StateError('handler boom'),
-            );
-            final log = loggerWith(multi);
+        runZonedGuarded(() {
+          final multi = MultiPublisher<Log>(
+            [_ThrowingPublisher(), good],
+            onError:
+                (publisher, error, stackTrace) =>
+                    throw StateError('handler boom'),
+          );
+          final log = loggerWith(multi);
 
-            expect(() => log.i('hello'), returnsNormally);
-          },
-          (error, stackTrace) => zoneErrors.add(error),
-        );
+          expect(() => log.i('hello'), returnsNormally);
+        }, (error, stackTrace) => zoneErrors.add(error));
 
         expect(good.received, ['hello']);
         expect(zoneErrors, [isA<StateError>()]);
@@ -144,58 +146,62 @@ void main() {
     });
 
     group('flush', () {
-      test('flushes remaining publishers when one flush throws synchronously',
-          () async {
-        final tracking = _FlushTrackingPublisher();
-        final multi =
-            MultiPublisher<Log>([_ThrowingFlushPublisher(), tracking]);
+      test(
+        'flushes remaining publishers when one flush throws synchronously',
+        () async {
+          final tracking = _FlushTrackingPublisher();
+          final multi = MultiPublisher<Log>([
+            _ThrowingFlushPublisher(),
+            tracking,
+          ]);
 
-        await expectLater(
-          Future.sync(multi.flush),
-          throwsA(isA<ParallelWaitError<Object?, Object?>>()),
-        );
-        expect(tracking.flushed, isTrue);
-      });
+          await expectLater(
+            Future.sync(multi.flush),
+            throwsA(isA<ParallelWaitError<Object?, Object?>>()),
+          );
+          expect(tracking.flushed, isTrue);
+        },
+      );
 
       // Regression: B8 (0.4.0)
-      test('with onError flush completes and routes the failing publisher',
-          () async {
-        final tracking = _FlushTrackingPublisher();
-        final throwing = _ThrowingFlushPublisher();
-        final records = <(CustomLogPublisher<Log>, Object)>[];
-        final multi = MultiPublisher<Log>(
-          [throwing, tracking],
-          onError: (publisher, error, stackTrace) =>
-              records.add((publisher, error)),
-        );
+      test(
+        'with onError flush completes and routes the failing publisher',
+        () async {
+          final tracking = _FlushTrackingPublisher();
+          final throwing = _ThrowingFlushPublisher();
+          final records = <(CustomLogPublisher<Log>, Object)>[];
+          final multi = MultiPublisher<Log>(
+            [throwing, tracking],
+            onError:
+                (publisher, error, stackTrace) =>
+                    records.add((publisher, error)),
+          );
 
-        await multi.flush().timeout(const Duration(seconds: 1));
+          await multi.flush().timeout(const Duration(seconds: 1));
 
-        expect(tracking.flushed, isTrue);
-        final (publisher, error) = records.single;
-        expect(publisher, same(throwing));
-        expect(error, isA<StateError>());
-      });
+          expect(tracking.flushed, isTrue);
+          final (publisher, error) = records.single;
+          expect(publisher, same(throwing));
+          expect(error, isA<StateError>());
+        },
+      );
     });
 
     // Regression: CR7 (cross-review 0.4.0)
-    test(
-        'a throwing onError does not fail flush; the secondary error '
+    test('a throwing onError does not fail flush; the secondary error '
         'goes to the zone', () async {
       final tracking = _FlushTrackingPublisher();
       final zoneErrors = <Object>[];
       late Future<void> flushFuture;
-      runZonedGuarded(
-        () {
-          final multi = MultiPublisher<Log>(
-            [_ThrowingFlushPublisher(), tracking],
-            onError: (publisher, error, stackTrace) =>
-                throw StateError('handler boom'),
-          );
-          flushFuture = multi.flush();
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+      runZonedGuarded(() {
+        final multi = MultiPublisher<Log>(
+          [_ThrowingFlushPublisher(), tracking],
+          onError:
+              (publisher, error, stackTrace) =>
+                  throw StateError('handler boom'),
+        );
+        flushFuture = multi.flush();
+      }, (error, stackTrace) => zoneErrors.add(error));
       await flushFuture.timeout(const Duration(seconds: 1));
 
       expect(tracking.flushed, isTrue);
@@ -259,10 +265,10 @@ void main() {
         final throwing = _ThrowingClosePublisher();
         final closable = _ClosableTrackingPublisher();
         final records = <CustomLogPublisher<Log>>[];
-        final multi = MultiPublisher<Log>(
-          [throwing, closable],
-          onError: (publisher, error, stackTrace) => records.add(publisher),
-        );
+        final multi = MultiPublisher<Log>([
+          throwing,
+          closable,
+        ], onError: (publisher, error, stackTrace) => records.add(publisher));
 
         await multi.close().timeout(const Duration(seconds: 1));
 
@@ -332,12 +338,13 @@ void main() {
 
       test('the buffered variant is drained too', () async {
         final handled = <String?>[];
-        final inner = AsyncPublisherWithBufferAndParam<String, Log>(
-          (entries, retry) async {
-            await Future<void>.delayed(const Duration(milliseconds: 10));
-            handled.addAll(entries.map((entry) => entry.$2.message));
-          },
-        );
+        final inner = AsyncPublisherWithBufferAndParam<String, Log>((
+          entries,
+          retry,
+        ) async {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          handled.addAll(entries.map((entry) => entry.$2.message));
+        });
         final multi = MultiPublisher<Log>([inner.withParam('p')]);
         final log = loggerWith(multi);
 
@@ -349,8 +356,9 @@ void main() {
       });
 
       test('several adapters over one queue close it once', () async {
-        final inner =
-            AsyncPublisherWithParam<String, Log>((param, log) async {});
+        final inner = AsyncPublisherWithParam<String, Log>(
+          (param, log) async {},
+        );
         final multi = MultiPublisher<Log>([
           inner.withParam('a'),
           inner.withParam('b'),

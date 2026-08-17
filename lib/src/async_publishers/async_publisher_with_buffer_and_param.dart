@@ -48,8 +48,11 @@ import 'internal/buffered_pipeline.dart';
 /// final publisher = MetricsPublisher();
 /// log.publisher = publisher.withParam(source);
 /// ```
-abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
-    Log extends CustomLog> implements Flushable, Closable {
+abstract base class AsyncPublisherWithBufferAndParamBase<
+  Param extends Object?,
+  Log extends CustomLog
+>
+    implements Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -192,14 +195,17 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
 ///
 /// log.publisher = asyncPublisher.withParam(collectionName);
 /// ```
-final class AsyncPublisherWithBufferAndParam<Param extends Object?,
-        Log extends CustomLog>
+final class AsyncPublisherWithBufferAndParam<
+  Param extends Object?,
+  Log extends CustomLog
+>
     extends AsyncPublisherWithBufferAndParamBase<Param, Log> {
   /// The function that processes a batch of buffered parameter-log entries.
   final FutureOr<void> Function(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) handler;
+  )
+  handler;
 
   /// Creates a publisher backed by [handler].
   AsyncPublisherWithBufferAndParam(
@@ -214,8 +220,7 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
   FutureOr<void> handle(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) =>
-      handler(entries, retryBuffer);
+  ) => handler(entries, retryBuffer);
 }
 
 /// An asynchronous publisher that applies format transformations onto a batch
@@ -241,8 +246,11 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
 ///   },
 /// );
 /// ```
-final class AsyncFormatterWithBufferAndParam<Param extends Object?,
-        Log extends CustomLog, Out extends Object?>
+final class AsyncFormatterWithBufferAndParam<
+  Param extends Object?,
+  Log extends CustomLog,
+  Out extends Object?
+>
     extends AsyncPublisherWithBufferAndParamBase<Param, Log> {
   /// Transforms a batch of parameter-log entries into an [Out] object.
   ///
@@ -257,7 +265,8 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
   final FutureOr<Out> Function(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) format;
+  )
+  format;
 
   /// Receives the formatted [Out] object along with the entries it covers.
   ///
@@ -271,7 +280,8 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     Out out,
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) output;
+  )
+  output;
 
   /// Creates a publisher that formats batches via [format] and hands the
   /// result to [output].
@@ -301,11 +311,8 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
 
     if (formatted is Future<Out>) {
       return formatted.then(
-        (out) => output(
-          out,
-          _remainingEntries(entries, retryBuffer),
-          retryBuffer,
-        ),
+        (out) =>
+            output(out, _remainingEntries(entries, retryBuffer), retryBuffer),
         onError: (Object error, StackTrace stackTrace) {
           _retryWholeBatch(entries, retryBuffer);
           Error.throwWithStackTrace(error, stackTrace);

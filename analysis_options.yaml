@@ -201,7 +201,12 @@ linter:
     # provide_deprecation_message: true # [core]
     public_member_api_docs: true # DO document all public members.
     # recursive_getters: true # [recommended]
-    require_trailing_commas: true
+    # require_trailing_commas: true # Obsolete since the 3.7 formatter, and
+    # actively harmful now: the tall style removes the very commas this rule
+    # demands, so the format gate on latest stable and the analyzer on the
+    # ^3.7.0 floor contradicted each other — 43 issues on 3.7.0 against
+    # a tree `dart format` had just produced. Newer analyzers stopped
+    # enforcing it for the same reason.
     # sized_box_for_whitespace: true # [flutter]
     # sized_box_shrink_expand: true # [flutter]
     # slash_for_doc_comments: true # [recommended]

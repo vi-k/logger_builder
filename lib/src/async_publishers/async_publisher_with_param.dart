@@ -31,8 +31,11 @@ import 'internal/async_param_publisher.dart';
 /// final publisher = FilePublisher();
 /// log.publisher = publisher.withParam('app.log');
 /// ```
-abstract base class AsyncPublisherWithParamBase<Param extends Object?,
-    Log extends CustomLog> implements Flushable, Closable {
+abstract base class AsyncPublisherWithParamBase<
+  Param extends Object?,
+  Log extends CustomLog
+>
+    implements Flushable, Closable {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
 
@@ -56,7 +59,7 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
 
   /// Creates the publisher and starts its processing queue.
   AsyncPublisherWithParamBase({this.sync = false, this.onError})
-      : _controller = StreamController<(Param, Log)>(sync: sync) {
+    : _controller = StreamController<(Param, Log)>(sync: sync) {
     _listen();
   }
 
@@ -198,8 +201,11 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
 ///
 /// log.publisher = asyncPublisher.withParam('app.log');
 /// ```
-final class AsyncPublisherWithParam<Param extends Object?,
-    Log extends CustomLog> extends AsyncPublisherWithParamBase<Param, Log> {
+final class AsyncPublisherWithParam<
+  Param extends Object?,
+  Log extends CustomLog
+>
+    extends AsyncPublisherWithParamBase<Param, Log> {
   /// The function that processes a single log event with its parameter.
   final FutureOr<void> Function(Param param, Log log) handler;
 
@@ -233,9 +239,11 @@ final class AsyncPublisherWithParam<Param extends Object?,
 /// log.publisher = asyncFormatter.withParam('app.log');
 /// ```
 final class AsyncFormatterWithParam<
-    Param extends Object?,
-    Log extends CustomLog,
-    Out extends Object?> extends AsyncPublisherWithParamBase<Param, Log> {
+  Param extends Object?,
+  Log extends CustomLog,
+  Out extends Object?
+>
+    extends AsyncPublisherWithParamBase<Param, Log> {
   /// Transforms a log event with its parameter into an [Out] object.
   final FutureOr<Out> Function(Param param, Log log) format;
 
@@ -253,7 +261,7 @@ final class AsyncFormatterWithParam<
 
   @override
   FutureOr<void> handle(Param param, Log log) => switch (format(param, log)) {
-        final Future<Out> future => future.then((out) => output(param, out)),
-        final Out out => output(param, out),
-      };
+    final Future<Out> future => future.then((out) => output(param, out)),
+    final Out out => output(param, out),
+  };
 }

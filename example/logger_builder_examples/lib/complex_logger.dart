@@ -1,11 +1,12 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFn = bool Function(
-  Object? source,
-  Object? message, {
-  Object? error,
-  StackTrace? stackTrace,
-});
+typedef LogFn =
+    bool Function(
+      Object? source,
+      Object? message, {
+      Object? error,
+      StackTrace? stackTrace,
+    });
 
 final class Log extends CustomLog {
   static int _lastSequenceNumber = 0;
@@ -24,10 +25,10 @@ final class Log extends CustomLog {
     required this.name,
     required Object? source,
     required Object? message,
-  })  : time = DateTime.now(),
-        sequenceNumber = ++_lastSequenceNumber,
-        _lazySource = LazyStringOrNull(source),
-        _lazyMessage = LazyStringOrNull(message);
+  }) : time = DateTime.now(),
+       sequenceNumber = ++_lastSequenceNumber,
+       _lazySource = LazyStringOrNull(source),
+       _lazyMessage = LazyStringOrNull(message);
 
   String? get source => _lazySource.value;
   String? get message => _lazyMessage.value;
@@ -36,25 +37,23 @@ final class Log extends CustomLog {
 final class LevelLogger
     extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log> {
   LevelLogger({required super.level, required super.name, super.shortName})
-      : super(
-          noLog: (_, __, {error, stackTrace}) => true,
-        );
+    : super(noLog: (_, __, {error, stackTrace}) => true);
 
   @override
   LogFn get processLog => (source, message, {error, stackTrace}) {
-        publishLog(
-          Log(
-            this,
-            error: error,
-            stackTrace: stackTrace,
-            name: logger.name,
-            source: source,
-            message: message,
-          ),
-        );
+    publishLog(
+      Log(
+        this,
+        error: error,
+        stackTrace: stackTrace,
+        name: logger.name,
+        source: source,
+        message: message,
+      ),
+    );
 
-        return true;
-      };
+    return true;
+  };
 }
 
 final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
@@ -102,5 +101,5 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
       '${entry.message}'
       '${entry.error == null ? '' : ': ${entry.error}'}'
       '${entry.stackTrace == null || entry.stackTrace == StackTrace.empty //
-          ? '' : '\n${entry.stackTrace}'}';
+                  ? '' : '\n${entry.stackTrace}'}';
 }

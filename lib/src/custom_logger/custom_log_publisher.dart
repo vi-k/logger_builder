@@ -52,10 +52,7 @@ final class CustomLogFormatter<Log extends CustomLog, Out extends Object?>
 
   /// Creates a publisher that formats a log via [format] and hands the
   /// result to [output].
-  const CustomLogFormatter({
-    required this.format,
-    required this.output,
-  });
+  const CustomLogFormatter({required this.format, required this.output});
 
   @override
   void publish(Log log) {

@@ -32,15 +32,17 @@ final class DefaultJsonPublisher implements CustomLogPublisher<JsonReport> {
   }
 
   static String jsonToString(Map<String, Object?> json) => jsonEncode(
-        json,
-        // Duck-typed on purpose rather than `try/catch NoSuchMethodError`:
-        // that form also swallows a NoSuchMethodError thrown *inside* a
-        // toJson that does exist, silently replacing a real failure with
-        // toString().
-        toEncodable: (nonEncodable) => nonEncodable is _HasToJson
-            ? nonEncodable.toJson()
-            : nonEncodable.toString(),
-      );
+    json,
+    // Duck-typed on purpose rather than `try/catch NoSuchMethodError`:
+    // that form also swallows a NoSuchMethodError thrown *inside* a
+    // toJson that does exist, silently replacing a real failure with
+    // toString().
+    toEncodable:
+        (nonEncodable) =>
+            nonEncodable is _HasToJson
+                ? nonEncodable.toJson()
+                : nonEncodable.toString(),
+  );
 
   static String format(JsonReport report) =>
       jsonToString(convertToJson(report));
@@ -74,9 +76,10 @@ final class NonEncodableClass {
 }
 
 Future<void> main() async {
-  final log = JsonReporter()
-    ..level = Levels.debug
-    ..publisher = const DefaultJsonPublisher();
+  final log =
+      JsonReporter()
+        ..level = Levels.debug
+        ..publisher = const DefaultJsonPublisher();
 
   title('Custom printer, no data:');
   log[Levels.error].publisher = CustomLogFormatter(

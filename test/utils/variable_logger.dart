@@ -8,7 +8,7 @@ final class VarLog extends CustomLog {
   final LazyStringOrNull _lazyMessage;
 
   VarLog(super.levelLogger, {required Object? message})
-      : _lazyMessage = LazyStringOrNull(message);
+    : _lazyMessage = LazyStringOrNull(message);
 
   String? get message => _lazyMessage.value;
 }
@@ -16,13 +16,13 @@ final class VarLog extends CustomLog {
 final class VarLevelLogger
     extends CustomLevelLogger<VarLogger, VarLevelLogger, VarLogFn, VarLog> {
   VarLevelLogger({required super.level, required super.name, super.shortName})
-      : super(noLog: (_) => true);
+    : super(noLog: (_) => true);
 
   @override
   VarLogFn get processLog => (message) {
-        publishLog(VarLog(this, message: message));
-        return true;
-      };
+    publishLog(VarLog(this, message: message));
+    return true;
+  };
 }
 
 base class VarLogger

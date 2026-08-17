@@ -5,9 +5,10 @@ import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 
-Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
-  ..level = Levels.all
-  ..publisher = publisher;
+Logger makeLogger(CustomLogPublisher<Log> publisher) =>
+    Logger('test')
+      ..level = Levels.all
+      ..publisher = publisher;
 
 void main() {
   // Regression: M15 (project review 2026-08-16[4]) — both "sync mode" tests
@@ -27,9 +28,7 @@ void main() {
 
     test('sync: false defers the handler', () {
       final handled = <String?>[];
-      final publisher = AsyncPublisher<Log>(
-        (log) => handled.add(log.message),
-      );
+      final publisher = AsyncPublisher<Log>((log) => handled.add(log.message));
       makeLogger(publisher).i('a');
 
       expect(handled, isEmpty);
@@ -106,33 +105,31 @@ void main() {
     });
 
     // Regression: B9
-    test('flush after close completes and does not resurrect the publisher',
-        () async {
-      final publisher = AsyncPublisher<Log>((log) {});
-      final log = makeLogger(publisher);
+    test(
+      'flush after close completes and does not resurrect the publisher',
+      () async {
+        final publisher = AsyncPublisher<Log>((log) {});
+        final log = makeLogger(publisher);
 
-      await publisher.close();
-      await publisher.flush().timeout(const Duration(seconds: 1));
+        await publisher.close();
+        await publisher.flush().timeout(const Duration(seconds: 1));
 
-      expect(publisher.isClosed, isTrue);
-      expect(() => log.i('late'), throwsStateError);
-    });
+        expect(publisher.isClosed, isTrue);
+        expect(() => log.i('late'), throwsStateError);
+      },
+    );
 
     // Regression: B5
-    test(
-        'onError receives an error thrown by an async handle '
+    test('onError receives an error thrown by an async handle '
         'and the pipeline continues', () async {
       final handled = <String?>[];
       final errors = <Object>[];
-      final publisher = AsyncPublisher<Log>(
-        (log) async {
-          if (log.message == 'bad') {
-            throw StateError('boom');
-          }
-          handled.add(log.message);
-        },
-        onError: (error, stackTrace) => errors.add(error),
-      );
+      final publisher = AsyncPublisher<Log>((log) async {
+        if (log.message == 'bad') {
+          throw StateError('boom');
+        }
+        handled.add(log.message);
+      }, onError: (error, stackTrace) => errors.add(error));
       final log = makeLogger(publisher);
 
       log.i('good');
@@ -166,29 +163,22 @@ void main() {
     });
 
     // Regression: CR2 (cross-review) — unbuffered variant keeps flowing
-    test(
-        'a throwing onError is reported to the zone '
+    test('a throwing onError is reported to the zone '
         'and the queue continues', () async {
       final handled = <String?>[];
       final zoneErrors = <Object>[];
       late AsyncPublisher<Log> publisher;
-      runZonedGuarded(
-        () {
-          publisher = AsyncPublisher<Log>(
-            (log) {
-              if (log.message == 'bad') {
-                throw StateError('boom');
-              }
-              handled.add(log.message);
-            },
-            onError: (error, stackTrace) => throw StateError('handler boom'),
-          );
-          makeLogger(publisher)
-            ..i('bad')
-            ..i('good');
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+      runZonedGuarded(() {
+        publisher = AsyncPublisher<Log>((log) {
+          if (log.message == 'bad') {
+            throw StateError('boom');
+          }
+          handled.add(log.message);
+        }, onError: (error, stackTrace) => throw StateError('handler boom'));
+        makeLogger(publisher)
+          ..i('bad')
+          ..i('good');
+      }, (error, stackTrace) => zoneErrors.add(error));
       await publisher.flush().timeout(const Duration(seconds: 2));
 
       expect(handled, ['good']);
@@ -211,26 +201,22 @@ void main() {
     });
 
     // Regression: B5
-    test(
-        'without onError the error is reported to the current zone '
+    test('without onError the error is reported to the current zone '
         'and the pipeline continues', () async {
       final handled = <String?>[];
       final errors = <Object>[];
       late AsyncPublisher<Log> publisher;
-      runZonedGuarded(
-        () {
-          publisher = AsyncPublisher<Log>((log) {
-            if (log.message == 'bad') {
-              throw StateError('boom');
-            }
-            handled.add(log.message);
-          });
-          makeLogger(publisher)
-            ..i('bad')
-            ..i('good');
-        },
-        (error, stackTrace) => errors.add(error),
-      );
+      runZonedGuarded(() {
+        publisher = AsyncPublisher<Log>((log) {
+          if (log.message == 'bad') {
+            throw StateError('boom');
+          }
+          handled.add(log.message);
+        });
+        makeLogger(publisher)
+          ..i('bad')
+          ..i('good');
+      }, (error, stackTrace) => errors.add(error));
       await publisher.flush();
 
       expect(handled, ['good']);
@@ -254,8 +240,7 @@ void main() {
     });
 
     // Regression: B3
-    test(
-        'with Out = Object? output receives the formatted value, '
+    test('with Out = Object? output receives the formatted value, '
         'not a Future', () async {
       final outputs = <Object?>[];
       final publisher = AsyncFormatter<Log, Object?>(

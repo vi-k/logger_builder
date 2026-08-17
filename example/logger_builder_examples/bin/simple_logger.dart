@@ -17,9 +17,10 @@ final class DefaultLogPublisher implements CustomLogPublisher<Log> {
 }
 
 Future<void> main() async {
-  final log = Logger()
-    ..level = Levels.all
-    ..publisher = const DefaultLogPublisher();
+  final log =
+      Logger()
+        ..level = Levels.all
+        ..publisher = const DefaultLogPublisher();
 
   title('Default usage:');
   log.d('Debug message');

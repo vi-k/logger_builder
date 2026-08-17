@@ -14,10 +14,11 @@ part of 'custom_logger.dart';
 ///
 /// It takes the same generic type parameters as [CustomLogger].
 abstract base class CustomLevelLogger<
-    Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log>,
-    LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
-    LogFn extends Function,
-    Log extends CustomLog> {
+  Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log>,
+  LevelLogger extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log>,
+  LogFn extends Function,
+  Log extends CustomLog
+> {
   /// Numerical value of the level of this [LevelLogger] logger.
   ///
   /// Must be greater than [Levels.all] (0) and less than [Levels.off]
@@ -89,13 +90,13 @@ abstract base class CustomLevelLogger<
     String? shortName,
     required LogFn noLog,
     CustomLogPublisher<Log>? publisher,
-  })  : level = _checkLevel(level),
-        name = _checkName(name),
-        shortName = shortName ?? _firstCharacter(name),
-        _noLog = noLog,
-        _log = noLog,
-        _publisher = publisher ?? const CustomLogPublisher.noOp(),
-        _hasPublisher = publisher != null;
+  }) : level = _checkLevel(level),
+       name = _checkName(name),
+       shortName = shortName ?? _firstCharacter(name),
+       _noLog = noLog,
+       _log = noLog,
+       _publisher = publisher ?? const CustomLogPublisher.noOp(),
+       _hasPublisher = publisher != null;
 
   static int _checkLevel(int level) {
     // Checked in every build mode, like the name: Levels.all and Levels.off
@@ -284,8 +285,7 @@ abstract base class CustomLevelLogger<
   static void _reportGuardViolation(
     void Function(Object error, StackTrace stackTrace)? onError,
     String message,
-  ) =>
-      _report(onError, StateError(message), StackTrace.current);
+  ) => _report(onError, StateError(message), StackTrace.current);
 
   static void _report(
     void Function(Object error, StackTrace stackTrace)? onError,

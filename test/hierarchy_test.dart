@@ -11,12 +11,13 @@ void main() {
     final buf = <String>[];
 
     setUp(() {
-      log = Logger('root')
-        ..level = Levels.all
-        ..publisher = CustomLogFormatter(
-          format: Logger.defaultFormat,
-          output: buf.add,
-        );
+      log =
+          Logger('root')
+            ..level = Levels.all
+            ..publisher = CustomLogFormatter(
+              format: Logger.defaultFormat,
+              output: buf.add,
+            );
       log2 = log.withAddedName('first');
       log3 = log2.withAddedName('second');
     });
@@ -256,11 +257,13 @@ void main() {
     // verbatim, differing only in these two factories. It runs once per
     // shape instead.
     final publisherShapes = <String, CustomLogPublisher<Log> Function(String)>{
-      'custom formatter': (prefix) => CustomLogFormatter(
+      'custom formatter':
+          (prefix) => CustomLogFormatter(
             format: (log) => '$prefix ${Logger.defaultFormat(log)}',
             output: buf.add,
           ),
-      'custom printer': (prefix) => CustomLogFormatter(
+      'custom printer':
+          (prefix) => CustomLogFormatter(
             format: Logger.defaultFormat,
             output: (message) => buf.add('$prefix $message'),
           ),

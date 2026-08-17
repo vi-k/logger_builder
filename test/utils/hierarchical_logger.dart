@@ -1,10 +1,7 @@
 import 'package:logger_builder/logger_builder.dart';
 
-typedef LogFn = bool Function(
-  Object? message, {
-  Object? error,
-  StackTrace? stackTrace,
-});
+typedef LogFn =
+    bool Function(Object? message, {Object? error, StackTrace? stackTrace});
 
 final class Log extends CustomLog {
   final DateTime timestamp;
@@ -17,9 +14,9 @@ final class Log extends CustomLog {
     super.stackTrace,
     required LazyString path,
     required Object? message,
-  })  : timestamp = DateTime.now(),
-        _lazyPath = path,
-        _lazyMessage = LazyStringOrNull(message);
+  }) : timestamp = DateTime.now(),
+       _lazyPath = path,
+       _lazyMessage = LazyStringOrNull(message);
 
   // ignore: use_super_parameters
   Log.copy(
@@ -27,15 +24,11 @@ final class Log extends CustomLog {
     Object? message,
     Object? error,
     StackTrace? stackTrace,
-  })  : timestamp = original.timestamp,
-        _lazyPath = original._lazyPath,
-        _lazyMessage =
-            message != null ? LazyStringOrNull(message) : original._lazyMessage,
-        super.copy(
-          original,
-          error: error,
-          stackTrace: stackTrace,
-        );
+  }) : timestamp = original.timestamp,
+       _lazyPath = original._lazyPath,
+       _lazyMessage =
+           message != null ? LazyStringOrNull(message) : original._lazyMessage,
+       super.copy(original, error: error, stackTrace: stackTrace);
 
   String get path => _lazyPath.value;
   String? get message => _lazyMessage.value;
@@ -44,24 +37,22 @@ final class Log extends CustomLog {
 final class LevelLogger
     extends CustomLevelLogger<Logger, LevelLogger, LogFn, Log> {
   LevelLogger({required super.level, required super.name, super.shortName})
-      : super(
-          noLog: (_, {error, stackTrace}) => true,
-        );
+    : super(noLog: (_, {error, stackTrace}) => true);
 
   @override
   LogFn get processLog => (message, {error, stackTrace}) {
-        publishLog(
-          Log(
-            this,
-            error: error,
-            stackTrace: stackTrace,
-            path: logger._lazyPath,
-            message: message,
-          ),
-        );
+    publishLog(
+      Log(
+        this,
+        error: error,
+        stackTrace: stackTrace,
+        path: logger._lazyPath,
+        message: message,
+      ),
+    );
 
-        return true;
-      };
+    return true;
+  };
 }
 
 final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
@@ -69,16 +60,17 @@ final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
   final String pathSeparator;
 
   Logger(Object name, {this.pathSeparator = ' | '})
-      : _lazyPath = LazyString(name);
+    : _lazyPath = LazyString(name);
 
   Logger._(super.parent, Object name)
-      : _lazyPath = LazyString(
-          () => '${parent.path}'
-              '${parent.pathSeparator}'
-              '${LazyString(name).value}',
-        ),
-        pathSeparator = parent.pathSeparator,
-        super.sub();
+    : _lazyPath = LazyString(
+        () =>
+            '${parent.path}'
+            '${parent.pathSeparator}'
+            '${LazyString(name).value}',
+      ),
+      pathSeparator = parent.pathSeparator,
+      super.sub();
 
   String get path => _lazyPath.value;
 

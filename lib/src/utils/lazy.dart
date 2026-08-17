@@ -49,14 +49,10 @@ base class Lazy {
   bool _isResolved;
 
   /// Creates a lazy value from a direct value or a function computing it.
-  Lazy(Object? unresolved)
-      : _slot = unresolved,
-        _isResolved = false;
+  Lazy(Object? unresolved) : _slot = unresolved, _isResolved = false;
 
   /// Creates a lazy value from an already resolved value.
-  Lazy.resolved(Object? resolved)
-      : _slot = resolved,
-        _isResolved = true;
+  Lazy.resolved(Object? resolved) : _slot = resolved, _isResolved = true;
 
   /// The resolved value.
   ///
@@ -124,9 +120,7 @@ abstract base class TypedLazy<T extends Object?> extends Lazy {
   TypedLazy(super.unresolved) : _isConverted = false;
 
   /// Creates a lazy typed value from an already resolved value of type [T].
-  TypedLazy.resolved(T super.resolved)
-      : _isConverted = true,
-        super.resolved();
+  TypedLazy.resolved(T super.resolved) : _isConverted = true, super.resolved();
 
   /// The resolved value converted to [T].
   ///
@@ -163,7 +157,7 @@ final class LazyString extends TypedLazy<String> {
 
   /// Creates a lazy string from an already resolved value.
   LazyString.resolved(super.resolved, [this.fallbackValue = 'null'])
-      : super.resolved();
+    : super.resolved();
 
   @override
   String convert(Object? resolved) => resolved?.toString() ?? fallbackValue;

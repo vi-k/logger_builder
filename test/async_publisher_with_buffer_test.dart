@@ -6,9 +6,10 @@ import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 
-Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
-  ..level = Levels.all
-  ..publisher = publisher;
+Logger makeLogger(CustomLogPublisher<Log> publisher) =>
+    Logger('test')
+      ..level = Levels.all
+      ..publisher = publisher;
 
 /// A log with value equality — legal for a user subclass of [CustomLog], and
 /// the case that tells an identity-keyed map from a structurally keyed one.
@@ -95,52 +96,50 @@ void main() {
       expect(handled, ['one', 'two']);
     });
 
-    test('retryBuffer entries are retried at the front of the next batch',
-        () async {
-      var failFirst = true;
-      final gate = Completer<void>();
-      final batches = <List<String?>>[];
-      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
-        if (failFirst) {
-          failFirst = false;
-          retry.addAll(logs);
-          // Hold the first batch open until 'b' is published.
-          await gate.future;
-          return;
-        }
-        batches.add(messagesOf(logs));
-      });
-      final log = makeLogger(publisher);
+    test(
+      'retryBuffer entries are retried at the front of the next batch',
+      () async {
+        var failFirst = true;
+        final gate = Completer<void>();
+        final batches = <List<String?>>[];
+        final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+          if (failFirst) {
+            failFirst = false;
+            retry.addAll(logs);
+            // Hold the first batch open until 'b' is published.
+            await gate.future;
+            return;
+          }
+          batches.add(messagesOf(logs));
+        });
+        final log = makeLogger(publisher);
 
-      log.i('a');
-      await Future<void>.delayed(Duration.zero);
-      log.i('b');
-      gate.complete();
-      await publisher.flush().timeout(const Duration(seconds: 1));
+        log.i('a');
+        await Future<void>.delayed(Duration.zero);
+        log.i('b');
+        gate.complete();
+        await publisher.flush().timeout(const Duration(seconds: 1));
 
-      expect(batches, [
-        ['a', 'b'],
-      ]);
-    });
+        expect(batches, [
+          ['a', 'b'],
+        ]);
+      },
+    );
 
     // Regression: B5
-    test(
-        'an error thrown by handle reports to onError, keeps the '
+    test('an error thrown by handle reports to onError, keeps the '
         'retryBuffer, and flush completes', () async {
       var first = true;
       final errors = <Object>[];
       final batches = <List<String?>>[];
-      final publisher = AsyncPublisherWithBuffer<Log>(
-        (logs, retry) async {
-          if (first) {
-            first = false;
-            retry.addAll(logs);
-            throw StateError('boom');
-          }
-          batches.add(messagesOf(logs));
-        },
-        onError: (error, stackTrace) => errors.add(error),
-      );
+      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+        if (first) {
+          first = false;
+          retry.addAll(logs);
+          throw StateError('boom');
+        }
+        batches.add(messagesOf(logs));
+      }, onError: (error, stackTrace) => errors.add(error));
       final log = makeLogger(publisher);
 
       log.i('a');
@@ -153,68 +152,60 @@ void main() {
     });
 
     // Regression: CR2 (cross-review)
-    test('a throwing onError does not stall the pipeline (sync handle)',
-        () async {
-      var first = true;
-      final batches = <List<String?>>[];
-      final zoneErrors = <Object>[];
-      late AsyncPublisherWithBuffer<Log> publisher;
-      runZonedGuarded(
-        () {
-          publisher = AsyncPublisherWithBuffer<Log>(
-            (logs, retry) {
-              if (first) {
-                first = false;
-                retry.addAll(logs);
-                throw StateError('boom');
-              }
-              batches.add(messagesOf(logs));
-            },
-            onError: (error, stackTrace) => throw StateError('handler boom'),
-          );
+    test(
+      'a throwing onError does not stall the pipeline (sync handle)',
+      () async {
+        var first = true;
+        final batches = <List<String?>>[];
+        final zoneErrors = <Object>[];
+        late AsyncPublisherWithBuffer<Log> publisher;
+        runZonedGuarded(() {
+          publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
+            if (first) {
+              first = false;
+              retry.addAll(logs);
+              throw StateError('boom');
+            }
+            batches.add(messagesOf(logs));
+          }, onError: (error, stackTrace) => throw StateError('handler boom'));
           makeLogger(publisher).i('a');
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
-      await publisher.flush().timeout(const Duration(seconds: 2));
+        }, (error, stackTrace) => zoneErrors.add(error));
+        await publisher.flush().timeout(const Duration(seconds: 2));
 
-      expect(batches, [
-        ['a'],
-      ]);
-      expect(zoneErrors, [isA<StateError>()]);
-    });
+        expect(batches, [
+          ['a'],
+        ]);
+        expect(zoneErrors, [isA<StateError>()]);
+      },
+    );
 
     // Regression: CR2 (cross-review)
-    test('a throwing onError does not stall the pipeline (async handle)',
-        () async {
-      var first = true;
-      final batches = <List<String?>>[];
-      final zoneErrors = <Object>[];
-      late AsyncPublisherWithBuffer<Log> publisher;
-      runZonedGuarded(
-        () {
-          publisher = AsyncPublisherWithBuffer<Log>(
-            (logs, retry) async {
-              if (first) {
-                first = false;
-                retry.addAll(logs);
-                throw StateError('boom');
-              }
-              batches.add(messagesOf(logs));
-            },
-            onError: (error, stackTrace) => throw StateError('handler boom'),
-          );
+    test(
+      'a throwing onError does not stall the pipeline (async handle)',
+      () async {
+        var first = true;
+        final batches = <List<String?>>[];
+        final zoneErrors = <Object>[];
+        late AsyncPublisherWithBuffer<Log> publisher;
+        runZonedGuarded(() {
+          publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+            if (first) {
+              first = false;
+              retry.addAll(logs);
+              throw StateError('boom');
+            }
+            batches.add(messagesOf(logs));
+          }, onError: (error, stackTrace) => throw StateError('handler boom'));
           makeLogger(publisher).i('a');
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
-      await publisher.flush().timeout(const Duration(seconds: 2));
+        }, (error, stackTrace) => zoneErrors.add(error));
+        await publisher.flush().timeout(const Duration(seconds: 2));
 
-      expect(batches, [
-        ['a'],
-      ]);
-      expect(zoneErrors, [isA<StateError>()]);
-    });
+        expect(batches, [
+          ['a'],
+        ]);
+        expect(zoneErrors, [isA<StateError>()]);
+      },
+    );
 
     // Regression: CR3 (cross-review)
     test('close processes logs published during an in-flight batch', () async {
@@ -255,52 +246,53 @@ void main() {
     // Regression: C1 (project review 2026-08-16[4]) — a handler that keeps
     // handing the batch back used to re-tick through the microtask queue,
     // which never yields: timers, I/O and close() itself were starved.
-    test('a permanently retrying handler does not starve the event loop',
-        () async {
-      var attempts = 0;
-      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
-        attempts++;
-        retry.addAll(logs);
-      });
-      final log = makeLogger(publisher);
+    test(
+      'a permanently retrying handler does not starve the event loop',
+      () async {
+        var attempts = 0;
+        final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
+          attempts++;
+          retry.addAll(logs);
+        });
+        final log = makeLogger(publisher);
 
-      log.i('undeliverable');
-      // A timer at all is the assertion: while the retries were a microtask
-      // loop, this delay never completed and the test hung instead.
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+        log.i('undeliverable');
+        // A timer at all is the assertion: while the retries were a microtask
+        // loop, this delay never completed and the test hung instead.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(attempts, greaterThan(1), reason: 'the batch should be retried');
+        expect(attempts, greaterThan(1), reason: 'the batch should be retried');
 
-      await publisher.close().timeout(const Duration(seconds: 2));
-    });
+        await publisher.close().timeout(const Duration(seconds: 2));
+      },
+    );
 
     // Regression: C1 — close() used to be reachable only when called
     // synchronously, before the first batch ever ran.
-    test('close from a later turn stops a permanently retrying handler',
-        () async {
-      final publisher = AsyncPublisherWithBuffer<Log>(
-        (logs, retry) => retry.addAll(logs),
-      );
-      final log = makeLogger(publisher);
+    test(
+      'close from a later turn stops a permanently retrying handler',
+      () async {
+        final publisher = AsyncPublisherWithBuffer<Log>(
+          (logs, retry) => retry.addAll(logs),
+        );
+        final log = makeLogger(publisher);
 
-      log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+        log.i('undeliverable');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      await publisher.close().timeout(const Duration(seconds: 2));
+        await publisher.close().timeout(const Duration(seconds: 2));
 
-      expect(publisher.isClosed, isTrue);
-    });
+        expect(publisher.isClosed, isTrue);
+      },
+    );
 
     // Regression: C1
     test('retryDelay spaces out the attempts', () async {
       var attempts = 0;
-      final publisher = AsyncPublisherWithBuffer<Log>(
-        (logs, retry) {
-          attempts++;
-          retry.addAll(logs);
-        },
-        retryDelay: const Duration(milliseconds: 10),
-      );
+      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
+        attempts++;
+        retry.addAll(logs);
+      }, retryDelay: const Duration(milliseconds: 10));
       final log = makeLogger(publisher);
 
       log.i('undeliverable');
@@ -356,8 +348,7 @@ void main() {
     });
 
     // Regression: B4
-    test(
-        'remainingLogs reflects retryBuffer additions made during '
+    test('remainingLogs reflects retryBuffer additions made during '
         'an async format', () async {
       var first = true;
       final remainings = <List<String?>>[];
@@ -370,8 +361,8 @@ void main() {
           }
           return 'batch';
         },
-        output: (out, remaining, retry) =>
-            remainings.add(messagesOf(remaining)),
+        output:
+            (out, remaining, retry) => remainings.add(messagesOf(remaining)),
       );
       final log = makeLogger(publisher);
 
@@ -383,8 +374,7 @@ void main() {
     });
 
     // Regression: B3
-    test(
-        'with Out = Object? output receives the formatted value, '
+    test('with Out = Object? output receives the formatted value, '
         'not a Future', () async {
       final outputs = <Object?>[];
       final publisher = AsyncFormatterWithBuffer<Log, Object?>(
@@ -481,19 +471,21 @@ void main() {
 
       final batches = <List<String?>>[];
       var first = true;
-      final publisher = AsyncFormatterWithBuffer<Log, String>(
-        format: (logs, retry) {
-          if (first) {
-            first = false;
-            retry.add(logs.first);
-          }
+      final publisher =
+          AsyncFormatterWithBuffer<Log, String>(
+              format: (logs, retry) {
+                if (first) {
+                  first = false;
+                  retry.add(logs.first);
+                }
 
-          return 'batch';
-        },
-        output: (out, remaining, retry) => batches.add(messagesOf(remaining)),
-      )
-        ..publish(sample)
-        ..publish(sample);
+                return 'batch';
+              },
+              output:
+                  (out, remaining, retry) => batches.add(messagesOf(remaining)),
+            )
+            ..publish(sample)
+            ..publish(sample);
 
       await publisher.flush().timeout(const Duration(seconds: 2));
 
@@ -551,21 +543,18 @@ void main() {
     test('a throwing onDropped does not derail the shutdown', () async {
       final zoneErrors = <Object>[];
       late Future<void> closeFuture;
-      runZonedGuarded(
-        () {
-          final publisher = AsyncPublisherWithBuffer<Log>(
-            (logs, retry) => retry.addAll(logs),
-            onDropped: (logs) => throw StateError('handler boom'),
-            retryDelay: const Duration(milliseconds: 5),
-          );
-          makeLogger(publisher).i('lost');
-          closeFuture = Future<void>.delayed(
-            const Duration(milliseconds: 20),
-            publisher.close,
-          );
-        },
-        (error, stackTrace) => zoneErrors.add(error),
-      );
+      runZonedGuarded(() {
+        final publisher = AsyncPublisherWithBuffer<Log>(
+          (logs, retry) => retry.addAll(logs),
+          onDropped: (logs) => throw StateError('handler boom'),
+          retryDelay: const Duration(milliseconds: 5),
+        );
+        makeLogger(publisher).i('lost');
+        closeFuture = Future<void>.delayed(
+          const Duration(milliseconds: 20),
+          publisher.close,
+        );
+      }, (error, stackTrace) => zoneErrors.add(error));
       await closeFuture.timeout(const Duration(seconds: 2));
 
       expect(zoneErrors.single, isA<StateError>());
@@ -586,11 +575,9 @@ void main() {
       final closeFuture = publisher.close();
       await publisher.flush().timeout(const Duration(seconds: 2));
 
-      expect(
-        handled,
-        ['in flight'],
-        reason: 'flush must not report an empty queue mid-shutdown',
-      );
+      expect(handled, [
+        'in flight',
+      ], reason: 'flush must not report an empty queue mid-shutdown');
       await closeFuture;
     });
 
@@ -641,27 +628,27 @@ void main() {
 
       final delivered = <EqLog>[];
       var first = true;
-      final publisher = AsyncFormatterWithBuffer<EqLog, String>(
-        format: (logs, retry) {
-          if (first) {
-            first = false;
-            retry.add(logs[1]);
-          }
+      final publisher =
+          AsyncFormatterWithBuffer<EqLog, String>(
+              format: (logs, retry) {
+                if (first) {
+                  first = false;
+                  retry.add(logs[1]);
+                }
 
-          return 'batch';
-        },
-        output: (out, remaining, retry) => delivered.addAll(remaining),
-      )
-        ..publish(a)
-        ..publish(b);
+                return 'batch';
+              },
+              output: (out, remaining, retry) => delivered.addAll(remaining),
+            )
+            ..publish(a)
+            ..publish(b);
 
       await publisher.flush().timeout(const Duration(seconds: 2));
 
-      expect(
-        delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(),
-        ['a', 'b'],
-        reason: 'each distinct log must reach output exactly once',
-      );
+      expect(delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(), [
+        'a',
+        'b',
+      ], reason: 'each distinct log must reach output exactly once');
     });
   });
 }

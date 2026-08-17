@@ -50,8 +50,7 @@ void main() {
     });
 
     // Regression: B2
-    test(
-        'resolved after value returns the converted value, '
+    test('resolved after value returns the converted value, '
         'never the internal sentinel', () {
       final lazy = LazyString(() => 'hello');
 

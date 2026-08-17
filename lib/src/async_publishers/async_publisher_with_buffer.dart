@@ -246,7 +246,7 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
   /// error goes to `onError` or the current zone. Catch inside [output] and
   /// `retryBuffer.addAll(logs)` when the destination should be retried.
   final FutureOr<void> Function(Out out, List<Log> logs, List<Log> retryBuffer)
-      output;
+  output;
 
   /// Creates a publisher that formats batches via [format] and hands the
   /// result to [output].

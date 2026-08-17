@@ -41,8 +41,10 @@ Future<void> main() async {
 
   title('AsyncPublisherWithBufferAndParam');
 
-  final asyncPublisher =
-      AsyncPublisherWithBufferAndParam<bool, Log>((entries, _) async {
+  final asyncPublisher = AsyncPublisherWithBufferAndParam<bool, Log>((
+    entries,
+    _,
+  ) async {
     description('Handle ${entries.length} message(s)');
     for (final (isError, log) in entries) {
       final str = await defaultAsyncFormat(isError, log);
@@ -72,30 +74,30 @@ Future<void> main() async {
 
   final asyncFormatter =
       AsyncFormatterWithBufferAndParam<bool, Log, List<(bool, String)>>(
-    format: (entries, retryBuffer) async {
-      description('Format ${entries.length} message(s)');
-      try {
-        // Formatting in parallel.
-        final outs =
-            await entries.map((e) => defaultAsyncFormat(e.$1, e.$2)).wait;
-        return outs.indexed.map((e) => (entries[e.$1].$1, e.$2)).toList();
-      } on Object {
-        retryBuffer.addAll(entries);
-        return [];
-      }
-    },
-    output: (out, entries, retryBuffer) async {
-      description('Output ${out.length} message(s)');
-      try {
-        // Output sequentially.
-        for (final (isError, str) in out) {
-          await defaultAsyncOutput(isError, str);
-        }
-      } on Object {
-        retryBuffer.addAll(entries);
-      }
-    },
-  );
+        format: (entries, retryBuffer) async {
+          description('Format ${entries.length} message(s)');
+          try {
+            // Formatting in parallel.
+            final outs =
+                await entries.map((e) => defaultAsyncFormat(e.$1, e.$2)).wait;
+            return outs.indexed.map((e) => (entries[e.$1].$1, e.$2)).toList();
+          } on Object {
+            retryBuffer.addAll(entries);
+            return [];
+          }
+        },
+        output: (out, entries, retryBuffer) async {
+          description('Output ${out.length} message(s)');
+          try {
+            // Output sequentially.
+            for (final (isError, str) in out) {
+              await defaultAsyncOutput(isError, str);
+            }
+          } on Object {
+            retryBuffer.addAll(entries);
+          }
+        },
+      );
 
   log.publisher = asyncFormatter.withParam(false);
   log[Levels.error].publisher = asyncFormatter.withParam(true);

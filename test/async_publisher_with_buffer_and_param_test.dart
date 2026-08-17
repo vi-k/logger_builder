@@ -40,10 +40,11 @@ void main() {
       final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
         (entries, retry) async => batches.add(entriesOf(entries)),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('common')
-        ..[Levels.error].publisher = publisher.withParam('errors');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('common')
+            ..[Levels.error].publisher = publisher.withParam('errors');
 
       log.i('info');
       log.e('oops');
@@ -55,26 +56,26 @@ void main() {
     });
 
     // Regression: B5
-    test(
-        'an error thrown by handle reports to onError, keeps the '
+    test('an error thrown by handle reports to onError, keeps the '
         'retryBuffer, and flush completes', () async {
       var first = true;
       final errors = <Object>[];
       final batches = <List<(String, String?)>>[];
-      final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
-        (entries, retry) async {
-          if (first) {
-            first = false;
-            retry.addAll(entries);
-            throw StateError('boom');
-          }
-          batches.add(entriesOf(entries));
-        },
-        onError: (error, stackTrace) => errors.add(error),
-      );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final publisher = AsyncPublisherWithBufferAndParam<String, Log>((
+        entries,
+        retry,
+      ) async {
+        if (first) {
+          first = false;
+          retry.addAll(entries);
+          throw StateError('boom');
+        }
+        batches.add(entriesOf(entries));
+      }, onError: (error, stackTrace) => errors.add(error));
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       await publisher.flush().timeout(const Duration(seconds: 2));
@@ -90,9 +91,10 @@ void main() {
       final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
         (entries, retry) async => retry.addAll(entries),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       await publisher.close();
@@ -104,8 +106,7 @@ void main() {
 
   group('AsyncFormatterWithBufferAndParam', () {
     // Regression: B4
-    test(
-        'remainingLogs reflects retryBuffer additions made during '
+    test('remainingLogs reflects retryBuffer additions made during '
         'an async format', () async {
       var first = true;
       final remainings = <List<(String, String?)>>[];
@@ -120,9 +121,10 @@ void main() {
         },
         output: (out, remaining, retry) => remainings.add(entriesOf(remaining)),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       log.i('b');
@@ -132,18 +134,19 @@ void main() {
     });
 
     // Regression: B3
-    test(
-        'with Out = Object? output receives the formatted value, '
+    test('with Out = Object? output receives the formatted value, '
         'not a Future', () async {
       final outputs = <Object?>[];
       final publisher = AsyncFormatterWithBufferAndParam<String, Log, Object?>(
-        format: (entries, retry) async =>
-            entries.map((entry) => entry.$2.message).join(','),
+        format:
+            (entries, retry) async =>
+                entries.map((entry) => entry.$2.message).join(','),
         output: (out, entries, retry) => outputs.add(out),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       await publisher.flush().timeout(const Duration(seconds: 1));
@@ -156,13 +159,15 @@ void main() {
     test('a synchronous format still reaches output', () async {
       final outputs = <Object?>[];
       final publisher = AsyncFormatterWithBufferAndParam<String, Log, String>(
-        format: (entries, retry) =>
-            entries.map((entry) => entry.$2.message).join(','),
+        format:
+            (entries, retry) =>
+                entries.map((entry) => entry.$2.message).join(','),
         output: (out, entries, retry) => outputs.add(out),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       log.i('b');
@@ -190,9 +195,10 @@ void main() {
         output: (out, entries, retry) => outputs.add(out),
         onError: (error, stackTrace) => errors.add(error),
       );
-      final log = Logger('test')
-        ..level = Levels.all
-        ..publisher = publisher.withParam('p');
+      final log =
+          Logger('test')
+            ..level = Levels.all
+            ..publisher = publisher.withParam('p');
 
       log.i('a');
       await publisher.flush().timeout(const Duration(seconds: 2));
@@ -223,19 +229,19 @@ void main() {
 
           return 'batch';
         },
-        output: (out, entries, retry) =>
-            delivered.addAll(entries.map((entry) => entry.$2)),
+        output:
+            (out, entries, retry) =>
+                delivered.addAll(entries.map((entry) => entry.$2)),
       );
       publisher.withParam('p')
         ..publish(a)
         ..publish(b);
       await publisher.flush().timeout(const Duration(seconds: 2));
 
-      expect(
-        delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(),
-        ['a', 'b'],
-        reason: 'each distinct log must reach output exactly once',
-      );
+      expect(delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(), [
+        'a',
+        'b',
+      ], reason: 'each distinct log must reach output exactly once');
     });
   });
 }

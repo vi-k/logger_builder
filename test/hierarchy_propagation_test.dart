@@ -14,7 +14,7 @@ final class _RelinkOverridingLogger extends VarLogger {
   late final String tag;
 
   _RelinkOverridingLogger.sub(VarLogger parent)
-      : super.sub(parent, [Levels.info]) {
+    : super.sub(parent, [Levels.info]) {
     tag = 'ready';
   }
 
@@ -34,7 +34,7 @@ final class _SetterOverridingLogger extends VarLogger {
   late final String tag;
 
   _SetterOverridingLogger.sub(VarLogger parent)
-      : super.sub(parent, [Levels.info]) {
+    : super.sub(parent, [Levels.info]) {
     tag = 'ready';
   }
 
@@ -69,8 +69,9 @@ void main() {
       final parent = VarLogger([Levels.info, Levels.error])..level = Levels.all;
       final child = VarLogger.sub(parent, [Levels.info]);
 
-      parent[Levels.error].publisher =
-          CustomLogPublisher((log) => published.add(log.message));
+      parent[Levels.error].publisher = CustomLogPublisher(
+        (log) => published.add(log.message),
+      );
 
       expect(child.publisherLinked, isTrue);
       parent.logAt(Levels.error)('oops');
@@ -82,11 +83,14 @@ void main() {
     // reporting itself enabled, so its logs vanished without a trace.
     test('a level registered after the publisher inherits it', () {
       final published = <String?>[];
-      final logger = VarLogger([Levels.info])
-        ..level = Levels.all
-        ..publisher = CustomLogPublisher((log) => published.add(log.message))
-        ..addLevel(Levels.error)
-        ..level = Levels.all;
+      final logger =
+          VarLogger([Levels.info])
+            ..level = Levels.all
+            ..publisher = CustomLogPublisher(
+              (log) => published.add(log.message),
+            )
+            ..addLevel(Levels.error)
+            ..level = Levels.all;
 
       logger.logAt(Levels.error)('late level');
 
@@ -99,12 +103,14 @@ void main() {
     test('relink gives the parent common publisher to extra child levels', () {
       final published = <String?>[];
       final parent = VarLogger([Levels.info])..level = Levels.all;
-      final child = VarLogger.sub(parent, [Levels.info, Levels.error])
-        ..level = Levels.all
-        ..publisher = const CustomLogPublisher.noOp();
+      final child =
+          VarLogger.sub(parent, [Levels.info, Levels.error])
+            ..level = Levels.all
+            ..publisher = const CustomLogPublisher.noOp();
 
-      parent.publisher =
-          CustomLogPublisher((log) => published.add(log.message));
+      parent.publisher = CustomLogPublisher(
+        (log) => published.add(log.message),
+      );
 
       expect(child.relink(), isTrue);
       child.logAt(Levels.error)('extra level');
@@ -119,8 +125,9 @@ void main() {
       final childWithout = VarLogger.sub(parent, [Levels.info]);
       final childWith = VarLogger.sub(parent, [Levels.info, Levels.error]);
 
-      parent[Levels.error].publisher =
-          CustomLogPublisher((log) => published.add('parent:${log.message}'));
+      parent[Levels.error].publisher = CustomLogPublisher(
+        (log) => published.add('parent:${log.message}'),
+      );
 
       expect(childWithout.publisherLinked, isTrue);
       childWith.logAt(Levels.error)('oops');
@@ -141,16 +148,18 @@ void main() {
       final parentPublished = <String?>[];
       final parent = VarLogger([Levels.info])..level = Levels.off;
       // Created linked, then immediately unlinked (level and publisher).
-      final child = VarLogger.sub(parent, [Levels.info])
-        ..level = Levels.all
-        ..publisher = const CustomLogPublisher.noOp();
+      final child =
+          VarLogger.sub(parent, [Levels.info])
+            ..level = Levels.all
+            ..publisher = const CustomLogPublisher.noOp();
       expect(child.levelLinked, isFalse);
       expect(child.publisherLinked, isFalse);
 
       parent
         ..level = Levels.all
-        ..publisher =
-            CustomLogPublisher((log) => parentPublished.add(log.message));
+        ..publisher = CustomLogPublisher(
+          (log) => parentPublished.add(log.message),
+        );
       child.logAt(Levels.info)('before relink');
       expect(parentPublished, isEmpty);
 
@@ -223,31 +232,37 @@ void main() {
     // configured entirely through `logger[level].publisher` had nothing
     // cached: a level registered afterwards stayed on the no-op publisher
     // while reporting isEnabled == true.
-    test('a level added after only per-level publishers stays unconfigured',
-        () {
-      final published = <String?>[];
-      final logger = VarLogger([Levels.info])..level = Levels.all;
-      logger[Levels.info].publisher =
-          CustomLogPublisher((log) => published.add(log.message));
+    test(
+      'a level added after only per-level publishers stays unconfigured',
+      () {
+        final published = <String?>[];
+        final logger = VarLogger([Levels.info])..level = Levels.all;
+        logger[Levels.info].publisher = CustomLogPublisher(
+          (log) => published.add(log.message),
+        );
 
-      logger.addLevel(Levels.error);
-      logger.logAt(Levels.error)('oops');
+        logger.addLevel(Levels.error);
+        logger.logAt(Levels.error)('oops');
 
-      // Deliberately no guessing: handing the new level the publisher chosen
-      // for a *different* level would be an invention. What was wrong before
-      // is that this state was undetectable.
-      expect(logger[Levels.error].hasPublisher, isFalse);
-      expect(logger[Levels.error].isEnabled, isTrue);
-      expect(published, isEmpty);
-    });
+        // Deliberately no guessing: handing the new level the publisher chosen
+        // for a *different* level would be an invention. What was wrong before
+        // is that this state was undetectable.
+        expect(logger[Levels.error].hasPublisher, isFalse);
+        expect(logger[Levels.error].isEnabled, isTrue);
+        expect(published, isEmpty);
+      },
+    );
 
     test('a level added after a common publisher inherits it', () {
       final published = <String?>[];
-      final logger = VarLogger([Levels.info])
-        ..level = Levels.all
-        ..publisher = CustomLogPublisher((log) => published.add(log.message))
-        ..addLevel(Levels.error)
-        ..level = Levels.all;
+      final logger =
+          VarLogger([Levels.info])
+            ..level = Levels.all
+            ..publisher = CustomLogPublisher(
+              (log) => published.add(log.message),
+            )
+            ..addLevel(Levels.error)
+            ..level = Levels.all;
 
       logger.logAt(Levels.error)('oops');
 
@@ -255,28 +270,32 @@ void main() {
       expect(published, ['oops']);
     });
 
-    test('a level added on a linked child takes the parent per-level publisher',
-        () {
-      final common = <String?>[];
-      final errorsOnly = <String?>[];
-      final parent = VarLogger([Levels.info, Levels.error])
-        ..level = Levels.all
-        ..publisher = CustomLogPublisher((log) => common.add(log.message));
-      parent[Levels.error].publisher =
-          CustomLogPublisher((log) => errorsOnly.add(log.message));
+    test(
+      'a level added on a linked child takes the parent per-level publisher',
+      () {
+        final common = <String?>[];
+        final errorsOnly = <String?>[];
+        final parent =
+            VarLogger([Levels.info, Levels.error])
+              ..level = Levels.all
+              ..publisher = CustomLogPublisher(
+                (log) => common.add(log.message),
+              );
+        parent[Levels.error].publisher = CustomLogPublisher(
+          (log) => errorsOnly.add(log.message),
+        );
 
-      final child = VarLogger.sub(parent, [Levels.info])
-        ..addLevel(Levels.error);
-      child.logAt(Levels.error)('oops');
+        final child = VarLogger.sub(parent, [Levels.info])
+          ..addLevel(Levels.error);
+        child.logAt(Levels.error)('oops');
 
-      expect(child.publisherLinked, isTrue);
-      expect(
-        errorsOnly,
-        ['oops'],
-        reason: 'the child must not diverge from the parent for that level',
-      );
-      expect(common, isEmpty);
-    });
+        expect(child.publisherLinked, isTrue);
+        expect(errorsOnly, [
+          'oops',
+        ], reason: 'the child must not diverge from the parent for that level');
+        expect(common, isEmpty);
+      },
+    );
 
     test('hasPublisher exposes a level that is enabled but goes nowhere', () {
       final logger = VarLogger([Levels.info])..level = Levels.all;
@@ -327,8 +346,10 @@ void main() {
       final b = VarLogger.sub(a, [Levels.info])..attach(a);
 
       expect(
-        () => root.publisher =
-            CustomLogPublisher((log) => published.add(log.message)),
+        () =>
+            root.publisher = CustomLogPublisher(
+              (log) => published.add(log.message),
+            ),
         returnsNormally,
       );
       b.logAt(Levels.info)('through the cycle');
@@ -341,10 +362,7 @@ void main() {
       final a = VarLogger.sub(root, [Levels.info]);
       VarLogger.sub(a, [Levels.info]).attach(a);
 
-      expect(
-        () => root.transformer = (log) => log,
-        returnsNormally,
-      );
+      expect(() => root.transformer = (log) => log, returnsNormally);
       expect(a.transformer, isNotNull);
     });
 
@@ -382,7 +400,8 @@ void main() {
       expect(
         collected,
         isTrue,
-        reason: 'the parent must not keep a discarded sublogger alive; '
+        reason:
+            'the parent must not keep a discarded sublogger alive; '
             'skipping here would hide exactly the leak this test guards',
       );
 
@@ -400,7 +419,8 @@ void main() {
       expect(
         collected,
         isTrue,
-        reason: 'the parent must not keep a discarded sublogger alive; '
+        reason:
+            'the parent must not keep a discarded sublogger alive; '
             'skipping here would hide exactly the leak this test guards',
       );
 
@@ -441,10 +461,9 @@ void main() {
     // while still reporting themselves as linked.
     test('an unreferenced intermediate logger keeps the chain alive', () async {
       final root = VarLogger([Levels.info]);
-      final leaf = VarLogger.sub(
-        VarLogger.sub(root, [Levels.info]),
-        [Levels.info],
-      );
+      final leaf = VarLogger.sub(VarLogger.sub(root, [Levels.info]), [
+        Levels.info,
+      ]);
 
       root.level = Levels.all;
       expect(leaf.level, Levels.all);
