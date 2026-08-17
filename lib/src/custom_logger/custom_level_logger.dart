@@ -58,6 +58,16 @@ abstract base class CustomLevelLogger<
   /// Current publisher.
   CustomLogPublisher<Log> _publisher;
 
+  /// Reentrancy guard for the publish step, held per level logger.
+  ///
+  /// Per level logger, not per logger: a cycle always comes back to *some*
+  /// level logger, so this still catches every runaway recursion — including
+  /// one that travels through several levels or several loggers — while a
+  /// provably terminating pattern (an error publisher noting what it did at
+  /// info level, through a publisher that logs nothing) is no longer
+  /// rejected.
+  bool _publishing = false;
+
   /// Creates a level logger.
   ///
   /// The [level] must lie strictly between [Levels.all] and [Levels.off],
@@ -151,8 +161,14 @@ abstract base class CustomLevelLogger<
   ///
   /// Returning `null` from the transformer drops the log. A throwing
   /// transformer also drops it (fail-closed: the untransformed log is
-  /// never published) and reports the error to the current zone via
-  /// [Zone.handleUncaughtError].
+  /// never published).
+  ///
+  /// Every error caught here — a throwing transformer, a reentrancy guard
+  /// violation, a throwing publisher — is routed through
+  /// [CustomLogger.onError]. With no handler set, the first two go to the
+  /// current zone via [Zone.handleUncaughtError] and a publisher error keeps
+  /// propagating out of the logging call, which is where it has always
+  /// surfaced.
   ///
   /// Subclasses must call this from [processLog] instead of
   /// `publisher.publish(...)` — otherwise [CustomLogger.transformer] is
@@ -163,11 +179,13 @@ abstract base class CustomLevelLogger<
     // re-attached mid-transform clear the guard on the wrong owner and leave
     // the original latched forever.
     final owner = logger;
+    final onError = owner.onError;
     var published = log;
 
     if (owner._transformer case final transformer?) {
       if (owner._transforming) {
         _reportGuardViolation(
+          onError,
           'A log transformer must not log through its own logger; '
           'the nested log was dropped',
         );
@@ -180,7 +198,7 @@ abstract base class CustomLevelLogger<
       try {
         transformed = transformer(log);
       } on Object catch (error, stackTrace) {
-        Zone.current.handleUncaughtError(error, stackTrace);
+        _report(onError, error, stackTrace);
 
         return;
       } finally {
@@ -196,25 +214,62 @@ abstract base class CustomLevelLogger<
       published = transformed;
     }
 
-    if (owner._publishing) {
+    if (_publishing) {
       _reportGuardViolation(
-        'A publisher must not log through the logger it publishes for; '
+        onError,
+        'A publisher must not log through the level it publishes for; '
         'the nested log was dropped',
       );
 
       return;
     }
 
-    owner._publishing = true;
+    _publishing = true;
     try {
       _publisher.publish(published);
+    } on Object catch (error, stackTrace) {
+      // Without a handler the error keeps propagating out of the logging
+      // call, as it always has; with one, logging cannot break its caller.
+      if (onError == null) {
+        rethrow;
+      }
+      _invokeHandler(onError, error, stackTrace);
     } finally {
-      owner._publishing = false;
+      _publishing = false;
     }
   }
 
-  static void _reportGuardViolation(String message) {
-    Zone.current.handleUncaughtError(StateError(message), StackTrace.current);
+  static void _reportGuardViolation(
+    void Function(Object error, StackTrace stackTrace)? onError,
+    String message,
+  ) =>
+      _report(onError, StateError(message), StackTrace.current);
+
+  static void _report(
+    void Function(Object error, StackTrace stackTrace)? onError,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (onError == null) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+
+      return;
+    }
+
+    _invokeHandler(onError, error, stackTrace);
+  }
+
+  static void _invokeHandler(
+    void Function(Object error, StackTrace stackTrace) onError,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    try {
+      onError(error, stackTrace);
+    } on Object catch (handlerError, handlerStackTrace) {
+      // A throwing error handler must not wedge logging.
+      Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
+    }
   }
 
   void _attach(Logger logger) {

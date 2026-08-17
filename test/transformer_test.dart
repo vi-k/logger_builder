@@ -379,5 +379,230 @@ void main() {
       );
       expect(errors, isEmpty);
     });
+
+    // Regression: M3 (project review 2026-08-17[1]) — the publisher guard was
+    // one flag on the whole logger, so it also rejected a provably
+    // terminating pattern: an error publisher noting what it did at info
+    // level, through a publisher that logs nothing. The nested log was
+    // dropped and a StateError reported.
+    test('a publisher logging at another level of the same logger is allowed',
+        () {
+      final errors = <Object>[];
+      final notes = <String?>[];
+      runZonedGuarded(
+        () {
+          logger[Levels.info].publisher =
+              CustomLogPublisher<Log>((log) => notes.add(log.message));
+          logger[Levels.severe].publisher = CustomLogPublisher<Log>((log) {
+            published.add(log);
+            logger.i('rotated');
+          });
+          logger.e('disk full');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(published.single.message, 'disk full');
+      expect(notes, ['rotated'], reason: 'the nested log must go through');
+      expect(errors, isEmpty);
+    });
+
+    test('a cycle across two levels of one logger is still caught', () {
+      final errors = <Object>[];
+      var severePublishes = 0;
+      runZonedGuarded(
+        () {
+          logger[Levels.info].publisher =
+              CustomLogPublisher<Log>((log) => logger.e('back to severe'));
+          logger[Levels.severe].publisher = CustomLogPublisher<Log>((log) {
+            severePublishes++;
+            logger.i('to info');
+          });
+          logger.e('start');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(severePublishes, 1, reason: 'the cycle must not run twice');
+      expect(errors.single, isA<StateError>());
+    });
+  });
+
+  group('CustomLogger.onError', () {
+    late List<Log> published;
+    late Logger logger;
+
+    setUp(() {
+      published = <Log>[];
+      logger = Logger('app')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(published.add);
+    });
+
+    // Regression: H2 (project review 2026-08-17[1]) — a throwing transformer
+    // went to Zone.handleUncaughtError with no way to opt out, and in a plain
+    // Dart program that terminates the isolate: a bug in masking code took
+    // the process down.
+    test('receives a throwing transformer instead of the zone', () {
+      final handled = <Object>[];
+      final zoneErrors = <Object>[];
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = collect
+            ..transformer = ((log) => throw StateError('masking bug'))
+            ..i('secret');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(handled.single, isA<StateError>());
+      expect(zoneErrors, isEmpty, reason: 'the zone must not see it');
+      expect(published, isEmpty, reason: 'fail-closed still holds');
+    });
+
+    test('receives a guard violation instead of the zone', () {
+      final handled = <Object>[];
+      final zoneErrors = <Object>[];
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = collect
+            ..transformer = ((log) {
+              logger.i('from inside the transformer');
+
+              return log;
+            })
+            ..i('secret');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(handled.single, isA<StateError>());
+      expect(zoneErrors, isEmpty);
+    });
+
+    // Regression: M1 (project review 2026-08-17[1]) — a throwing publisher
+    // surfaced at the `log.i(...)` call site, so a logging call could take
+    // down the business logic that made it.
+    test('keeps a throwing publisher from reaching the call site', () {
+      final handled = <Object>[];
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+
+      logger
+        ..onError = collect
+        ..publisher = CustomLogPublisher<Log>((log) {
+          throw StateError('sink down');
+        });
+
+      expect(() => logger.i('hello'), returnsNormally);
+      expect(handled.single, isA<StateError>());
+    });
+
+    test('without a handler a throwing publisher still reaches the call site',
+        () {
+      logger.publisher = CustomLogPublisher<Log>((log) {
+        throw StateError('sink down');
+      });
+
+      expect(() => logger.i('hello'), throwsStateError);
+    });
+
+    test('the logger keeps working after a handled publisher failure', () {
+      final handled = <Object>[];
+      var fail = true;
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+
+      logger
+        ..onError = collect
+        ..publisher = CustomLogPublisher<Log>((log) {
+          if (fail) {
+            throw StateError('sink down');
+          }
+          published.add(log);
+        });
+
+      logger.i('dropped');
+      fail = false;
+      logger.i('delivered');
+
+      expect(handled, hasLength(1));
+      expect(published.single.message, 'delivered');
+    });
+
+    test('a throwing handler goes to the zone and does not wedge logging', () {
+      final zoneErrors = <Object>[];
+      void boom(Object error, StackTrace stackTrace) =>
+          throw StateError('handler boom');
+
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = boom
+            ..transformer = ((log) => throw StateError('masking bug'))
+            ..i('secret')
+            ..transformer = null
+            ..i('after');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(zoneErrors.single, isA<StateError>());
+      expect(published.single.message, 'after');
+    });
+
+    test('a sublogger inherits the handler through the parent chain', () {
+      final handled = <Object>[];
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+
+      logger.onError = collect;
+      final child = logger.withAddedName('child');
+      final grandchild = child.withAddedName('grandchild');
+
+      expect(child.onError, isNotNull);
+      expect(grandchild.onError, isNotNull);
+
+      grandchild
+        ..transformer = ((log) => throw StateError('masking bug'))
+        ..i('secret');
+
+      expect(handled.single, isA<StateError>());
+    });
+
+    test('a sublogger handler overrides the inherited one', () {
+      final parentHandled = <Object>[];
+      final childHandled = <Object>[];
+      void collectParent(Object error, StackTrace stackTrace) =>
+          parentHandled.add(error);
+      void collectChild(Object error, StackTrace stackTrace) =>
+          childHandled.add(error);
+
+      logger.onError = collectParent;
+      final child = logger.withAddedName('child')
+        ..onError = collectChild
+        ..transformer = ((log) => throw StateError('masking bug'));
+
+      child.i('secret');
+
+      expect(childHandled, hasLength(1));
+      expect(parentHandled, isEmpty);
+    });
+
+    test('assigning null restores the inherited handler', () {
+      final handled = <Object>[];
+      void collect(Object error, StackTrace stackTrace) => handled.add(error);
+      void other(Object error, StackTrace stackTrace) {}
+
+      logger.onError = collect;
+      final child = logger.withAddedName('child')
+        ..onError = other
+        ..onError = null;
+
+      expect(child.onError, isNotNull, reason: 'the parent handler is back');
+    });
   });
 }

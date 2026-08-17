@@ -226,6 +226,21 @@ void main() {
 
         expect(closable.closed, isTrue);
       });
+
+      // Regression: M21 (project review 2026-08-17[1]) — the 0.6.0 fix and its
+      // dartdoc both say flush after close does not touch the wrapped
+      // publishers, but only "flush completes" was pinned: removing the
+      // short-circuit passed the whole suite.
+      test('flush after close does not touch the wrapped publishers', () async {
+        final closable = _ClosableTrackingPublisher();
+        final multi = MultiPublisher<Log>([closable]);
+
+        await multi.close();
+        await multi.flush().timeout(const Duration(seconds: 1));
+
+        expect(closable.closed, isTrue);
+        expect(closable.flushed, isFalse);
+      });
     });
 
     // Regression: D3 (0.4.0)

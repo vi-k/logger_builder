@@ -24,6 +24,21 @@ unreleased section became a minor bump instead.
   `transformer` changes stopped reaching its descendants while they still
   reported themselves linked and `relink()` returned `false` forever.
 
+**New**
+
+* `CustomLogger.onError` — one hook for every error the logger catches on the
+  publish path: a throwing `transformer`, a reentrancy guard violation, and a
+  throwing publisher. With no handler set each case keeps its previous
+  behaviour, so nothing changes for existing code: the first two go to the
+  current zone, and a publisher error keeps propagating out of the logging
+  call. Setting it is what makes logging unable to break the application that
+  logs — in a plain Dart program without an error zone, the zone route
+  terminates the isolate, so a bug in a masking transformer used to take the
+  process down with no way to opt out. Unlike `level`, the publishers and
+  `transformer`, it is resolved through the parent chain instead of being
+  copied down: a sublogger with no handler of its own uses its parent's,
+  there is no link flag, and `relink()` does not affect it.
+
 **Fixes**
 
 * A buffered publisher whose handler keeps returning its batch through the
@@ -32,11 +47,17 @@ unreleased section became a minor bump instead.
   timers, I/O and the application's own `close()` never got a turn and the
   isolate wedged. Retries now go through the event loop, and the new
   `retryDelay` (default `Duration.zero`) spaces them out.
-* A publisher that logs through the logger it publishes for is now caught
-  the same way a reentrant transformer is: the nested log is dropped and a
-  `StateError` is reported. It used to recurse about 2570 frames into a
-  `StackOverflowError`, running the transformer and the publisher's side
-  effects once per frame.
+* A *synchronous* publisher that logs through the level it publishes for is
+  now caught the same way a reentrant transformer is: the nested log is
+  dropped and a `StateError` is reported. It used to recurse about 2570
+  frames into a `StackOverflowError`, running the transformer and the
+  publisher's side effects once per frame. The guard is per level logger, so
+  a publisher that logs at a *different* level of the same logger is allowed
+  — a cycle still trips it on the way back. An asynchronous publisher is
+  outside the guard entirely: its `handle` runs after `publish` returned, so
+  a handler that logs into its own logger grows the queue without bound
+  instead of overflowing the stack. That limit is now documented rather than
+  glossed over.
 * A throwing `format` in `AsyncFormatterWithBuffer` and
   `AsyncFormatterWithBufferAndParam` returns the whole batch to the retry
   buffer instead of dropping it. There was no other point at which the

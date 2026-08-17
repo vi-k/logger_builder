@@ -36,6 +36,11 @@ import 'async_publisher.dart';
 /// > detected — the nested log is dropped and a [StateError] goes to
 /// > [onError] (or to the current zone). Chained transform publishers are
 /// > not affected: the guard is released before the log is handed on.
+/// >
+/// > The guard is synchronous. A nested log deferred with `scheduleMicrotask`,
+/// > a `Future` or an `await` runs after it has been released, and so does the
+/// > `handle` of an asynchronous publisher wrapped by this one — neither is
+/// > guarded, and an unconditional cycle through either loops forever.
 final class TransformPublisher<Log extends CustomLog>
     implements CustomLogPublisher<Log>, Flushable, Closable {
   final CustomLogPublisher<Log> _inner;

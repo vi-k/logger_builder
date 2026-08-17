@@ -47,7 +47,7 @@ abstract base class CustomLogger<
   LogTransformer<Log>? _transformer;
   bool _transformerLinked = false;
   bool _transforming = false;
-  bool _publishing = false;
+  void Function(Object error, StackTrace stackTrace)? _onError;
   int _prunedAt = 0;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
@@ -287,28 +287,36 @@ abstract base class CustomLogger<
   /// no transformation.
   ///
   /// Fail-closed: if the transformer throws, the log is NOT published and
-  /// the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. Use `TransformPublisher` with its
-  /// `onError` for a custom error callback.
+  /// the error goes to [onError], or to the current zone via
+  /// [Zone.handleUncaughtError] when no handler is set. `TransformPublisher`
+  /// has its own `onError` for the per-destination case.
   ///
   /// > [!WARNING]
   /// > A transformer must not log through its own logger, and neither must
   /// > a publisher: the nested call comes straight back and recurses until
   /// > the stack is exhausted. Both cycles are detected — the nested log is
-  /// > dropped and a [StateError] is reported to the current zone. Treat
-  /// > that as a guard against runaway recursion, not as a supported way to
-  /// > log from a transformer or a publisher.
+  /// > dropped and a [StateError] goes to [onError] or the current zone.
+  /// > Treat that as a guard against runaway recursion, not as a supported
+  /// > way to log from a transformer or a publisher.
   /// >
-  /// > The guard is synchronous and per logger. It catches any cycle that
-  /// > comes back to the same logger while its transformer or its publisher
-  /// > is still running, cycles through several loggers included. It does
-  /// > **not** catch two things. A cycle through a sublogger that inherited
-  /// > the same transformer: a sublogger is a separate logger with its own
-  /// > guard, so the nested log is transformed again and published. And an
-  /// > asynchronous hop: a transformer that defers the nested log with
-  /// > `scheduleMicrotask` or a `Future` is outside the guard entirely, and
-  /// > an unconditional one will loop forever. Logging into an unrelated
-  /// > logger is untouched.
+  /// > The guard is **synchronous**, and that word carries all three of its
+  /// > limits. The transformer half is per logger: it catches any cycle that
+  /// > returns to this logger while its transformer is still running, across
+  /// > several levels or several loggers. The publisher half is per level
+  /// > logger, so a publisher that logs at a *different* level of the same
+  /// > logger is allowed — a cycle still trips the guard the moment it comes
+  /// > back to a level whose publisher is running.
+  /// >
+  /// > Three things it does **not** catch. A cycle through a sublogger that
+  /// > inherited the same transformer: a sublogger is a separate logger with
+  /// > its own guard, so the nested log is transformed again and published.
+  /// > A deferred nested log — `scheduleMicrotask`, a `Future`, an `await` —
+  /// > runs after the guard has been released, so an unconditional one loops
+  /// > forever. And, for the same reason, **an asynchronous publisher**: its
+  /// > `handle` runs long after `publish` returned, so a handler that logs
+  /// > into its own logger is not guarded at all and will grow the queue
+  /// > without bound instead of overflowing the stack. Logging into an
+  /// > unrelated logger is untouched.
   LogTransformer<Log>? get transformer => _transformer;
 
   /// Sets the log [transformer].
@@ -333,6 +341,33 @@ abstract base class CustomLogger<
       }
     }
   }
+
+  /// Called for every error this logger catches on the publish path: a
+  /// throwing [transformer], a throwing publisher, and a reentrancy guard
+  /// violation.
+  ///
+  /// When `null` (the default) each case keeps its historical behaviour: the
+  /// transformer error and the guard violation are reported to the current
+  /// zone via [Zone.handleUncaughtError], and a publisher error propagates
+  /// out of the logging call. Note what the zone route means in a plain Dart
+  /// program without an error zone: an uncaught asynchronous error terminates
+  /// the isolate by default, so a bug in a masking [transformer] takes the
+  /// process down. Setting this callback is how logging stops being able to
+  /// break the application that logs.
+  ///
+  /// Unlike [level], the publishers and [transformer], this is resolved
+  /// dynamically through the parent chain rather than copied down: a
+  /// sublogger with no handler of its own uses its parent's. There is no link
+  /// flag and [relink] does not affect it — assigning `null` restores the
+  /// inherited handler instead of detaching.
+  ///
+  /// A throwing handler cannot wedge logging: its own error goes to the
+  /// current zone.
+  void Function(Object error, StackTrace stackTrace)? get onError =>
+      _onError ?? _parent?.onError;
+
+  set onError(void Function(Object error, StackTrace stackTrace)? value) =>
+      _onError = value;
 
   void _setLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     _publisherLinked = false;

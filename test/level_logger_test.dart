@@ -97,5 +97,34 @@ void main() {
         throwsStateError,
       );
     });
+
+    // Regression: M20 (project review 2026-08-17[1]) — nothing pinned the
+    // documented default. Almost every test assigns `level` first, so the
+    // window between registerLevel and that first assignment was untested:
+    // making _attach enable every level unconditionally passed the whole
+    // suite, and a logger used without touching `level` would have logged
+    // everything instead of nothing.
+    test('a freshly built logger has every level disabled', () {
+      final log = VarLogger([Levels.finest, Levels.info, Levels.severe]);
+
+      expect(log.level, Levels.off);
+      for (final level in log.levels) {
+        expect(
+          log[level].isEnabled,
+          isFalse,
+          reason: 'level $level must start disabled',
+        );
+      }
+    });
+
+    test('a freshly built logger publishes nothing', () {
+      final published = <String?>[];
+      final log = VarLogger([Levels.info])
+        ..publisher = CustomLogPublisher((log) => published.add(log.message));
+
+      log.logAt(Levels.info)('before any level assignment');
+
+      expect(published, isEmpty);
+    });
   });
 }

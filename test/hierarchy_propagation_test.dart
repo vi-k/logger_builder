@@ -266,6 +266,32 @@ void main() {
       expect(parent.subLoggersCount, 0);
     });
 
+    // Regression: M22 (project review 2026-08-17[1]) — every existing pruning
+    // test either calls pruneSubloggers() by hand or changes a setting, and
+    // both prune unconditionally. That hid the amortized prune on
+    // registration: raising its threshold so it never fires passed the whole
+    // suite, while a parent that only ever creates short-lived subloggers —
+    // the documented "sublogger per request" pattern — would accumulate dead
+    // references without bound.
+    test('registration alone compacts the sublogger list', () {
+      const total = 2000;
+      final parent = VarLogger([Levels.info])..level = Levels.all;
+
+      for (var i = 0; i < total; i++) {
+        createDiscardedSublogger(parent);
+        // Allocation pressure, so the discarded subloggers become collectable
+        // during the loop rather than only after it. No setting is touched
+        // here on purpose: registration must carry the pruning on its own.
+        List<Object>.generate(2000, (_) => Object(), growable: false);
+      }
+
+      expect(
+        parent.subLoggersCount,
+        lessThan(total),
+        reason: 'registration must prune as it grows, not only on propagation',
+      );
+    });
+
     // Regression: H1 (project review 2026-08-16[4]) — the parent reference
     // used to be weak too, so an intermediate logger the user did not keep
     // was collected and its descendants silently stopped following the root
