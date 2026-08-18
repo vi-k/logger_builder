@@ -1052,9 +1052,12 @@ root.level = Levels.error; // db → error, http stays at all
 ```
 
 Assigning the same value is the idiom for unlinking without changing
-anything: `child.level = child.level`, `child.transformer =
-child.transformer`, and, for publishers, `child[Levels.info].publisher =
-child[Levels.info].publisher`.
+anything: `child.level = child.level` and `child.transformer =
+child.transformer`. Publishers work per level instead: `child[Levels.info]
+.publisher = X` pins that one level — the others keep following the
+parent — and `child[Levels.info].relink()` puts it back under the chain.
+There is no idiom for detaching every publisher at once without changing
+values; assign a common publisher, or loop over `levels`.
 
 **How to re-attach.** `relink()` re-inherits all three from the parent and
 turns propagation back on. It returns `false` only for a root logger:

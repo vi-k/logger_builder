@@ -193,10 +193,11 @@ abstract base class CustomLevelLogger<
   /// Whether this level holds a publisher of its own rather than one taken
   /// from above.
   ///
-  /// `true` after `logger[level].publisher = ...`;
-  /// [CustomLogger.relink] turns it back to `false`. See [hasPublisher]
-  /// for the other question — whether the publisher goes anywhere at
-  /// all.
+  /// `true` after `logger[level].publisher = ...`; [relink] on this level
+  /// turns it back to `false`, and so does [CustomLogger.relink] on the
+  /// whole logger, which drops every other level's pin along with it. See
+  /// [hasPublisher] for the other question — whether the publisher goes
+  /// anywhere at all.
   bool get hasOwnPublisher => _hasOwnPublisher;
 
   void _setPublisher(CustomLogPublisher<Log> publisher) {
@@ -215,10 +216,11 @@ abstract base class CustomLevelLogger<
   /// log[Levels.info].publisher = CustomLogPublisher((log) => print(log));
   /// ```
   ///
-  /// Assigning here also detaches the whole logger from its parent's
-  /// publishers — the link flag is per logger, not per level — so a single
-  /// per-level assignment stops this logger from inheriting any publisher
-  /// change from the parent until [CustomLogger.relink] is called.
+  /// Assigning here pins this level: it keeps this publisher until
+  /// [relink] is called, and neither a parent update nor this logger's own
+  /// common [CustomLogger.publisher] setter overrules it. The other levels
+  /// keep following the parent, and [CustomLogger.publisherLinked] stays
+  /// up — the pin is per level, the link is per logger.
   set publisher(CustomLogPublisher<Log> publisher) {
     // We set the publisher via the logger to update the publisher in the
     // subloggers.

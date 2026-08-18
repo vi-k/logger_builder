@@ -121,6 +121,10 @@ abstract base class CustomLogger<
   /// Supported API, not a test hook: with [relink] public, "is this sublogger
   /// still following its parent?" is a question production code may need to
   /// answer.
+  ///
+  /// Only the common [publisher] setter drops this link. Pinning a single
+  /// level through `logger[level].publisher` leaves it up — that question
+  /// belongs to the level: [CustomLevelLogger.hasOwnPublisher].
   bool get publisherLinked => _publisherLinked;
 
   /// Returns `true` if this logger's transformer is synchronized with its
@@ -152,9 +156,9 @@ abstract base class CustomLogger<
   /// A sublogger detaches implicitly when its [level], [publisher] or
   /// [transformer] is assigned directly (`child.level = child.level` and
   /// `child.transformer = child.transformer` are the idioms to unlink
-  /// without changing the value; for publishers, assign
-  /// `child[level].publisher = child[level].publisher`); this method is the
-  /// reverse operation.
+  /// without changing the value); this method is the reverse operation,
+  /// and it also drops every per-level pin. To put a single level back
+  /// under the chain, use [CustomLevelLogger.relink].
   ///
   /// Levels this logger registered but the parent did not are given the
   /// parent's common publisher, if it ever assigned one; the parent's
@@ -323,11 +327,14 @@ abstract base class CustomLogger<
   bool isLoggable(int level) =>
       level > Levels.all && level < Levels.off && _level <= level;
 
-  /// Assigns a common [CustomLogPublisher] to all registered log levels.
+  /// Assigns a common [CustomLogPublisher] to every registered log level
+  /// that does not hold a publisher of its own.
   ///
-  /// This overwrites any per-level publisher set earlier through
-  /// `logger[level].publisher`, so assign the common publisher first and the
-  /// per-level exceptions after it.
+  /// A level pinned through `logger[level].publisher` keeps what it was
+  /// given: its own logger does not overrule it either, so the order of
+  /// the two assignments no longer matters.
+  /// [CustomLevelLogger.relink] puts a pinned level back under this
+  /// setter.
   ///
   /// Propagates the publisher change to linked subloggers. Detaches this
   /// logger's publisher link if it is a sublogger (use [relink] to

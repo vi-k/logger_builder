@@ -1074,9 +1074,13 @@ root.level = Levels.error; // db → error, http остаётся на all
 ```
 
 Присваивание того же самого значения — идиома отвязки без изменения
-чего бы то ни было: `child.level = child.level`, `child.transformer =
-child.transformer`, а для паблишеров — `child[Levels.info].publisher =
-child[Levels.info].publisher`.
+чего бы то ни было: `child.level = child.level` и `child.transformer =
+child.transformer`. С паблишерами так уже не работает: `child[Levels.info]
+.publisher = X` ставит пин на этот один уровень — остальные по-прежнему
+следуют за родителем — а `child[Levels.info].relink()` возвращает его
+обратно в цепочку. Идиомы, чтобы отвязать разом все паблишеры без
+изменения значений, больше нет: присвойте общий паблишер или пройдитесь
+циклом по `levels`.
 
 **Как привязаться обратно.** `relink()` заново наследует все три вещи от
 родителя и включает распространение изменений. `false` он возвращает
