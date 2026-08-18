@@ -149,6 +149,75 @@ void main() {
     });
   });
 
+  group('common publisher against pins', () {
+    test('a pinned level survives its own logger common setter', () {
+      final pinned = <String?>[];
+      final common = <String?>[];
+      final logger = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+
+      logger[Levels.error].publisher =
+          CustomLogPublisher((log) => pinned.add(log.message));
+      logger.publisher = CustomLogPublisher((log) => common.add(log.message));
+
+      logger.logAt(Levels.error)('pinned');
+      logger.logAt(Levels.info)('common');
+
+      expect(pinned, ['pinned']);
+      expect(common, ['common']);
+    });
+
+    test('assigning the common publisher twice covers everything again', () {
+      final first = <String?>[];
+      final second = <String?>[];
+      final logger = VarLogger([Levels.info, Levels.error])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => first.add(log.message))
+        ..publisher = CustomLogPublisher((log) => second.add(log.message));
+
+      logger.logAt(Levels.info)('info');
+      logger.logAt(Levels.error)('error');
+
+      expect(first, isEmpty);
+      expect(second, ['info', 'error']);
+    });
+
+    test('the common publisher is recorded even when it covers nothing', () {
+      final common = <String?>[];
+      final logger = VarLogger([Levels.info])..level = Levels.all;
+
+      logger[Levels.info].publisher = const CustomLogPublisher.noOp();
+      logger
+        ..publisher = CustomLogPublisher((log) => common.add(log.message))
+        ..addLevel(Levels.error)
+        ..level = Levels.all;
+
+      logger.logAt(Levels.error)('late level');
+
+      expect(logger[Levels.error].hasOwnPublisher, isFalse);
+      expect(common, ['late level']);
+    });
+
+    test('a mixed child does not hand the new publisher below its pin', () {
+      final pinned = <String?>[];
+      final fresh = <String?>[];
+      final root = VarLogger([Levels.info, Levels.error])
+        ..level = Levels.all
+        ..publisher = const CustomLogPublisher.noOp();
+      final a = VarLogger.sub(root, [Levels.info, Levels.error]);
+      final b = VarLogger.sub(a, [Levels.info, Levels.error]);
+
+      a[Levels.error].publisher =
+          CustomLogPublisher((log) => pinned.add(log.message));
+      root.publisher = CustomLogPublisher((log) => fresh.add(log.message));
+
+      b.logAt(Levels.error)('below the pin');
+      b.logAt(Levels.info)('below the link');
+
+      expect(pinned, ['below the pin']);
+      expect(fresh, ['below the link']);
+    });
+  });
+
   // Regression: D7 (0.4.0)
   group('hierarchy management API', () {
     test('levels lists the registered levels', () {

@@ -335,16 +335,47 @@ abstract base class CustomLogger<
     _publisherLinked = false;
     _defaultPublisher = publisher;
 
-    for (final logger in _levelLoggers.values) {
-      logger._setPublisher(publisher);
+    for (final levelLogger in _levelLoggers.values) {
+      // A pinned level holds its own publisher; its own logger does not
+      // overrule it either, so the order of the two assignments stops
+      // mattering.
+      if (!levelLogger._hasOwnPublisher) {
+        levelLogger._setPublisher(publisher);
+      }
     }
 
+    _propagatePublisher(publisher);
+  }
+
+  /// The common publisher of [parent], arriving from above.
+  ///
+  /// Not [_setPublisher]: a level here follows the parent's value *for
+  /// that level*, which is [publisher] only where the parent holds no pin
+  /// of its own. Handing [publisher] to every level would overwrite what a
+  /// pinned level of the parent still publishes into.
+  void _inheritPublisher(Logger parent, CustomLogPublisher<Log> publisher) {
+    _defaultPublisher = publisher;
+
+    for (final levelLogger in _levelLoggers.values) {
+      if (levelLogger._hasOwnPublisher) {
+        continue;
+      }
+      levelLogger._setPublisher(
+        parent._assignedPublisherFor(levelLogger.level) ?? publisher,
+      );
+    }
+
+    _propagatePublisher(publisher);
+  }
+
+  void _propagatePublisher(CustomLogPublisher<Log> publisher) {
     pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
           when sublogger._publisherLinked) {
         sublogger
-          .._setPublisher(publisher)
+          .._publisherLinked = false
+          .._inheritPublisher(this as Logger, publisher)
           .._publisherLinked = true;
       }
     }
