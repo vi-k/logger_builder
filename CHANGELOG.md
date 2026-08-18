@@ -1,38 +1,38 @@
 ## 0.7.0 (unreleased)
 
-### Breaking
+The 0.6.2 work below was never published; the per-level publisher pin
+landed on top of it and needed a breaking-change bump, so the unreleased
+section became 0.7.0 instead.
 
-- `logger[level].publisher = ...` no longer detaches the whole logger
+**[breaking changes]**
+
+* `logger[level].publisher = ...` no longer detaches the whole logger
   from its parent. It pins that one level; the others keep following the
   parent, and `publisherLinked` stays up.
-- The common `logger.publisher = ...` setter no longer overwrites a
+* The common `logger.publisher = ...` setter no longer overwrites a
   pinned level. This applies to a lone logger as well as a sublogger, so
   the order of a common assignment and its per-level exceptions no
   longer matters.
-- `publisherLinked` therefore reports `true` in cases where it used to
+* `publisherLinked` therefore reports `true` in cases where it used to
   report `false` — the getter itself is unchanged, the rule that clears
   it is.
-- The idiom for unlinking without changing a value is per level now
+* The idiom for unlinking without changing a value is per level now
   (`child[level].publisher = child[level].publisher`), and there is no
   idiom left for detaching every publisher at once: assign a common
   publisher, or loop over `levels`.
-- `CustomLevelLogger` gains `hasOwnPublisher` and `relink()`. A subclass
+* `CustomLevelLogger` gains `hasOwnPublisher` and `relink()`. A subclass
   that already declares a member of either name stops compiling.
 
-### Added
+**New**
 
-- `CustomLevelLogger.hasOwnPublisher` tells a pinned level from one that
+* `CustomLevelLogger.hasOwnPublisher` tells a pinned level from one that
   takes its publisher from above — next to `hasPublisher`, which tells a
   real publisher from the no-op one.
-- `CustomLevelLogger.relink()` drops the pin and takes from the chain
+* `CustomLevelLogger.relink()` drops the pin and takes from the chain
   again. Unlike `CustomLogger.relink()`, it works on a root logger too:
   the level returns under that logger's common publisher.
 
 ## 0.6.2 (unreleased, folded into 0.7.0)
-
-The 0.6.2 work below was never published; the per-level publisher pin
-landed on top of it and needed a breaking-change bump, so the unreleased
-section became 0.7.0 instead.
 
 Documentation and the example only: `lib/` is untouched, so there is nothing
 to migrate. The example moves to `ansi_escape_codes` 4.x, and the README

@@ -69,11 +69,12 @@ abstract base class CustomLevelLogger<
 
   /// Whether this level holds a publisher of its own.
   ///
-  /// Set by `logger[level].publisher = ...` and cleared by
-  /// [CustomLogger.relink]. A level that holds its own publisher takes
-  /// nothing from above: neither a parent update nor its own logger's
-  /// common `publisher` setter overrules it, so the order of the two
-  /// assignments stops mattering.
+  /// Set by `logger[level].publisher = ...` and cleared by [relink] on
+  /// this level, or by [CustomLogger.relink] on the whole logger, which
+  /// drops every other level's pin along with it. A level that holds its
+  /// own publisher takes nothing from above: neither a parent update nor
+  /// its own logger's common `publisher` setter overrules it, so the
+  /// order of the two assignments stops mattering.
   ///
   /// Different question from [hasPublisher], which asks whether the
   /// publisher is a real one rather than the no-op default: an inherited
