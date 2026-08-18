@@ -204,6 +204,11 @@ abstract base class CustomLevelLogger<
     _hasPublisher = true;
   }
 
+  void _resetPublisher() {
+    _publisher = const CustomLogPublisher.noOp();
+    _hasPublisher = false;
+  }
+
   /// Sets the log message publisher for a specific level.
   ///
   /// ```dart
@@ -219,6 +224,20 @@ abstract base class CustomLevelLogger<
     // subloggers.
     logger._setLevelPublisher(level, publisher);
   }
+
+  /// Drops the publisher this level holds of its own and takes what the
+  /// chain offers again: the parent's publisher for exactly this level,
+  /// then the last common publisher assigned anywhere up the chain.
+  ///
+  /// When there is nothing to take — a root logger that was only ever
+  /// configured per level — this level goes back to the no-op publisher
+  /// and [hasPublisher] becomes `false`. Handing it the publisher chosen
+  /// for some *other* level would be an invention.
+  ///
+  /// Returns nothing, unlike [CustomLogger.relink]: that one answers
+  /// `false` when there is no parent to follow, while a level always has
+  /// something above it — at worst its own logger.
+  void relink() => logger._relinkLevel(level);
 
   /// Publishes [log], first applying the logger's
   /// [CustomLogger.transformer].

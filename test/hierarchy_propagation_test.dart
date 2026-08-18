@@ -218,6 +218,68 @@ void main() {
     });
   });
 
+  group('per-level relink', () {
+    test('a relinked level follows the parent again', () {
+      final parentPublished = <String?>[];
+      final parent = VarLogger([Levels.info])..level = Levels.all;
+      final child = VarLogger.sub(parent, [Levels.info]);
+
+      child[Levels.info].publisher = const CustomLogPublisher.noOp();
+      parent.publisher =
+          CustomLogPublisher((log) => parentPublished.add(log.message));
+      child.logAt(Levels.info)('while pinned');
+
+      child[Levels.info].relink();
+      child.logAt(Levels.info)('after relink');
+
+      expect(child[Levels.info].hasOwnPublisher, isFalse);
+      expect(parentPublished, ['after relink']);
+    });
+
+    test('a root level returns under its own common publisher', () {
+      final common = <String?>[];
+      final root = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+
+      root[Levels.info].publisher = const CustomLogPublisher.noOp();
+      root.publisher = CustomLogPublisher((log) => common.add(log.message));
+      root.logAt(Levels.info)('while pinned');
+
+      root[Levels.info].relink();
+      root.logAt(Levels.info)('after relink');
+
+      expect(common, ['after relink']);
+    });
+
+    test('a level with nothing above it goes back to no publisher', () {
+      final root = VarLogger([Levels.info])..level = Levels.all;
+
+      root[Levels.info].publisher = const CustomLogPublisher.noOp();
+      expect(root[Levels.info].hasPublisher, isTrue);
+
+      root[Levels.info].relink();
+
+      expect(root[Levels.info].hasOwnPublisher, isFalse);
+      expect(root[Levels.info].hasPublisher, isFalse);
+      expect(root[Levels.info].isEnabled, isTrue);
+    });
+
+    test('relink on the logger drops every pin', () {
+      final parentPublished = <String?>[];
+      final parent = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+      final child = VarLogger.sub(parent, [Levels.info, Levels.error]);
+
+      child[Levels.error].publisher = const CustomLogPublisher.noOp();
+      parent.publisher =
+          CustomLogPublisher((log) => parentPublished.add(log.message));
+
+      expect(child.relink(), isTrue);
+      child.logAt(Levels.error)('after relink');
+
+      expect(child[Levels.error].hasOwnPublisher, isFalse);
+      expect(parentPublished, ['after relink']);
+    });
+  });
+
   // Regression: D7 (0.4.0)
   group('hierarchy management API', () {
     test('levels lists the registered levels', () {

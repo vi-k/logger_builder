@@ -171,6 +171,12 @@ abstract base class CustomLogger<
       return false;
     }
 
+    // A full relink drops every pin: the logger goes back to following
+    // its parent in whole, levels included.
+    for (final levelLogger in _levelLoggers.values) {
+      levelLogger._hasOwnPublisher = false;
+    }
+
     // Private setters throughout: the public ones are overridable, and this
     // runs from the `sub` constructor, before a subclass body has executed.
     _setLevel(parent.level);
@@ -528,6 +534,23 @@ abstract base class CustomLogger<
           .._publisherLinked = true;
       }
     }
+  }
+
+  void _relinkLevel(int level) {
+    final levelLogger = this[level];
+    if (!levelLogger._hasOwnPublisher) {
+      return;
+    }
+
+    levelLogger._hasOwnPublisher = false;
+    final inherited = _publisherFor(level);
+    if (inherited != null) {
+      levelLogger._setPublisher(inherited);
+    } else {
+      levelLogger._resetPublisher();
+    }
+
+    _propagateLevelPublisher(level, levelLogger._publisher);
   }
 
   /// Subscribes a [sublogger] to level and publisher updates dynamically.
