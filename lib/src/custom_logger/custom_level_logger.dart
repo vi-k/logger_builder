@@ -67,6 +67,18 @@ abstract base class CustomLevelLogger<
   /// working one.
   bool _hasPublisher;
 
+  /// Whether this level holds a publisher of its own.
+  ///
+  /// Set by `logger[level].publisher = ...` and cleared by [CustomLogger.relink]. A
+  /// level that holds its own publisher takes nothing from above: neither
+  /// a parent update nor its own logger's common `publisher` setter
+  /// overrules it, so the order of the two assignments stops mattering.
+  ///
+  /// Different question from [hasPublisher], which asks whether the
+  /// publisher is a real one rather than the no-op default: an inherited
+  /// publisher is real but not its own.
+  bool _hasOwnPublisher = false;
+
   /// Reentrancy guard for the publish step, held per level logger.
   ///
   /// Per level logger, not per logger: a cycle always comes back to *some*
@@ -176,6 +188,14 @@ abstract base class CustomLevelLogger<
   /// undetectable from the outside, because the no-op publisher is private,
   /// so this is the check to assert on when a level looks silent.
   bool get hasPublisher => _hasPublisher;
+
+  /// Whether this level holds a publisher of its own rather than one taken
+  /// from above.
+  ///
+  /// `true` after `logger[level].publisher = ...`; [CustomLogger.relink] turns it back
+  /// to `false`. See [hasPublisher] for the other question — whether the
+  /// publisher goes anywhere at all.
+  bool get hasOwnPublisher => _hasOwnPublisher;
 
   void _setPublisher(CustomLogPublisher<Log> publisher) {
     _publisher = publisher;

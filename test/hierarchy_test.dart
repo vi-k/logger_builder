@@ -383,7 +383,8 @@ void main() {
           test('log2.info=custom builder', () {
             log2[Levels.info].publisher = makePublisher('+');
             expect(log.publisherLinked, isFalse);
-            expect(log2.publisherLinked, isFalse);
+            expect(log2.publisherLinked, isTrue);
+            expect(log2[Levels.info].hasOwnPublisher, isTrue);
             expect(log3.publisherLinked, isTrue);
             logAll();
             expect(buf, [
@@ -400,7 +401,8 @@ void main() {
             log3[Levels.info].publisher = makePublisher('+');
             expect(log.publisherLinked, isFalse);
             expect(log2.publisherLinked, isTrue);
-            expect(log3.publisherLinked, isFalse);
+            expect(log3.publisherLinked, isTrue);
+            expect(log3[Levels.info].hasOwnPublisher, isTrue);
             logAll();
             expect(buf, [
               '[d] root | debug',
@@ -419,8 +421,11 @@ void main() {
               log2[Levels.info].publisher = makePublisher('+');
               log[Levels.info].publisher = makePublisher('#');
               expect(log.publisherLinked, isFalse);
-              expect(log2.publisherLinked, isFalse);
-              expect(log3.publisherLinked, isFalse);
+              expect(log2.publisherLinked, isTrue);
+              expect(log3.publisherLinked, isTrue);
+              expect(log[Levels.info].hasOwnPublisher, isTrue);
+              expect(log2[Levels.info].hasOwnPublisher, isTrue);
+              expect(log3[Levels.info].hasOwnPublisher, isTrue);
               logAll();
               expect(buf, [
                 '[d] root | debug',

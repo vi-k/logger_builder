@@ -454,29 +454,45 @@ abstract base class CustomLogger<
   set onError(void Function(Object error, StackTrace stackTrace)? value) =>
       _onError = value;
 
+  // A direct per-level assignment pins the level and leaves this logger's
+  // link to its parent alone: pinning one level must not stop the others
+  // from following the parent.
   void _setLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
-    _publisherLinked = false;
-    this[level]._setPublisher(publisher);
+    this[level]
+      .._setPublisher(publisher)
+      .._hasOwnPublisher = true;
     _propagateLevelPublisher(level, publisher);
   }
 
-  /// Same as [_setLevelPublisher], but silently skips this logger when it
-  /// did not register [level]: a sublogger is not required to have all the
-  /// levels of its parent.
+  /// Same as [_setLevelPublisher], but arriving from the parent: the level
+  /// takes the value without pinning, and this logger is silently skipped
+  /// when it did not register [level] — a sublogger is not required to
+  /// have all the levels of its parent.
+  ///
+  /// A pinned level stops the descent here: it does not change, so nothing
+  /// below it inherits a change either.
   void _inheritLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
-    _publisherLinked = false;
-    _levelLoggers[level]?._setPublisher(publisher);
+    if (_levelLoggers[level] case final levelLogger?) {
+      if (levelLogger._hasOwnPublisher) {
+        return;
+      }
+      levelLogger._setPublisher(publisher);
+    }
     _propagateLevelPublisher(level, publisher);
   }
 
-  // The flag is cleared before recursing and restored after, which also
-  // breaks cycles in the sublogger graph — see the note on [_setLevel].
+  // The link flag is cleared before recursing and restored after, which
+  // also breaks cycles in the sublogger graph — see the note on
+  // [_setLevel]. It stays the marker on this path too: the pin cannot
+  // serve, because a logger that did not register [level] has no pin to
+  // raise and a cycle through it would recurse until the stack is gone.
   void _propagateLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
     pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
           when sublogger._publisherLinked) {
         sublogger
+          .._publisherLinked = false
           .._inheritLevelPublisher(level, publisher)
           .._publisherLinked = true;
       }

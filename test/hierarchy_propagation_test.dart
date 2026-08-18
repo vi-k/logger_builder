@@ -126,6 +126,27 @@ void main() {
       childWith.logAt(Levels.error)('oops');
       expect(published, ['parent:oops']);
     });
+
+    // Regression: a per-level assignment used to clear the link flag of
+    // the whole logger, so the parent's next common publisher reached
+    // none of the child's levels.
+    test('a per-level assignment keeps the other levels following', () {
+      final published = <String?>[];
+      final parent = VarLogger([Levels.info, Levels.error])
+        ..level = Levels.all
+        ..publisher = const CustomLogPublisher.noOp();
+      final child = VarLogger.sub(parent, [Levels.info, Levels.error]);
+
+      child[Levels.error].publisher = const CustomLogPublisher.noOp();
+      parent.publisher =
+          CustomLogPublisher((log) => published.add(log.message));
+      child.logAt(Levels.info)('info');
+
+      expect(published, ['info']);
+      expect(child.publisherLinked, isTrue);
+      expect(child[Levels.error].hasOwnPublisher, isTrue);
+      expect(child[Levels.info].hasOwnPublisher, isFalse);
+    });
   });
 
   // Regression: D7 (0.4.0)
@@ -355,6 +376,19 @@ void main() {
 
       expect(
         () => root[Levels.info].publisher = const CustomLogPublisher.noOp(),
+        returnsNormally,
+      );
+    });
+
+    // The pin cannot be the in-progress marker: `a` and `b` do not
+    // register the level being propagated, so neither has a pin to raise.
+    test('per-level propagation terminates on a cycle without the level', () {
+      final root = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+      final a = VarLogger.sub(root, [Levels.info]);
+      VarLogger.sub(a, [Levels.info]).attach(a);
+
+      expect(
+        () => root[Levels.error].publisher = const CustomLogPublisher.noOp(),
         returnsNormally,
       );
     });
