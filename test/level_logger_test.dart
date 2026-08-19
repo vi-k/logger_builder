@@ -68,6 +68,27 @@ void main() {
     // Regression: M2 (project review 2026-08-16[4]) — one level logger
     // registered in two loggers used to hand the first logger's logs to the
     // second one's publisher and transformer, without a word.
+    // Regression: coverage audit for the 2026-08-19[2] review — the early
+    // return in `_toggle` survived being deleted. It is not only an
+    // optimisation: `processLog` allocates a fresh closure in every
+    // documented pattern, so re-toggling an already-enabled level changed
+    // the identity of the function a caller may have hoisted, and the
+    // dartdoc of `log` warns callers about exactly that field.
+    test('re-enabling an already enabled level keeps the same log function',
+        () {
+      final logger = VarLogger([Levels.info])..level = Levels.all;
+      final before = logger[Levels.info].log;
+
+      logger.level = Levels.debug;
+
+      expect(logger[Levels.info].isEnabled, isTrue);
+      expect(
+        identical(logger[Levels.info].log, before),
+        isTrue,
+        reason: 'the level never changed state, so nothing should be swapped',
+      );
+    });
+
     test('registering one level logger in two loggers throws StateError', () {
       final shared = VarLevelLogger(level: Levels.info, name: 'info');
 

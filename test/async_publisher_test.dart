@@ -287,4 +287,42 @@ void main() {
       expect(outputs, ['formatted:msg']);
     });
   });
+
+  group('AsyncPublisher zone pinning', () {
+    // Regression: coverage audit for the 2026-08-19[2] review — `_listen`
+    // wraps the subscription in the construction zone, and its comment says
+    // why: `flush` re-subscribes, so subscribing from there would silently
+    // move every later zone-reported handler error to whoever happened to
+    // flush last. Deleting the wrapper broke no test.
+    test('a flush does not move where a handler error is reported', () async {
+      final constructionZone = <Object>[];
+      final flushZone = <Object>[];
+      late final AsyncPublisher<Log> publisher;
+
+      runZonedGuarded(
+        () => publisher = AsyncPublisher<Log>((log) {
+          throw StateError('handler down');
+        }),
+        (error, stackTrace) => constructionZone.add(error),
+      );
+
+      Future<void>? flushing;
+      runZonedGuarded(
+        () {
+          flushing = publisher.flush();
+        },
+        (error, stackTrace) => flushZone.add(error),
+      );
+      await flushing;
+
+      Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher
+        ..i('boom');
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(constructionZone, hasLength(1));
+      expect(flushZone, isEmpty, reason: 'the flusher must not inherit it');
+    });
+  });
 }

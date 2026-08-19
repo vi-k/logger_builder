@@ -697,6 +697,34 @@ void main() {
   });
 
   group('sublogger pruning', () {
+    // Regression: coverage audit for the 2026-08-19[2] review — two
+    // mutations survived here, one moving the threshold back to "prune on
+    // every registration" and one dropping the `_prunedAt` bookkeeping that
+    // makes the doubling work. Both are invisible in behaviour: the list
+    // ends up the same, it just costs O(n²) to get there. The count is the
+    // only observable, so the count is what this asserts.
+    test('registration prunes on a doubling schedule, not every time', () {
+      final root = PruneCountingLogger([Levels.info]);
+      // Held on purpose: an unreferenced sublogger may be collected mid-loop
+      // and pruned away, which would make the count depend on the garbage
+      // collector — the one thing `docs/conventions.md` section 3 says these
+      // tests must not do.
+      final kept = <PruneCountingLogger>[
+        for (var i = 0; i < 1000; i++)
+          PruneCountingLogger.sub(root, [
+            Levels.info,
+          ]),
+      ];
+
+      expect(kept, hasLength(1000));
+      expect(root.subLoggersCount, 1000);
+      expect(
+        root.pruneCount,
+        lessThan(12),
+        reason: '16, 32, 64 ... 512 is six prunes; every-time would be ~985',
+      );
+    });
+
     // Regression: M1
     test('pruneSubloggers keeps live subloggers', () {
       final parent = VarLogger([Levels.info]);

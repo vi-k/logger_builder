@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
@@ -62,6 +64,48 @@ void main() {
 
       expect(copy.error, same(error));
       expect(copy.stackTrace, isNull);
+    });
+
+    // Regression: coverage audit for the 2026-08-19[2] review — the whole
+    // group tests `copy`, and `copy` assigns verbatim by contract. Nothing
+    // covered the *main* constructor, so a mutation dropping
+    // `?? stackTraceFromError(error)` survived and every log carrying a
+    // thrown Error would have lost its trace in silence.
+    test('the main constructor derives the trace from a thrown Error', () {
+      late final StateError thrown;
+      try {
+        throw StateError('boom');
+        // ignore: avoid_catching_errors
+      } on StateError catch (error) {
+        thrown = error;
+      }
+      expect(thrown.stackTrace, isNotNull);
+
+      final log = capture((logger) => logger.e('fail', error: thrown));
+
+      expect(log.stackTrace, same(thrown.stackTrace));
+    });
+
+    test('a non-Error carries no derived trace', () {
+      final log = capture(
+        (logger) => logger.e('fail', error: Exception('plain')),
+      );
+
+      expect(log.stackTrace, isNull);
+    });
+
+    // Regression: coverage audit — `zone` defaulting to `Zone.current` is
+    // sold by its dartdoc as the way a formatter reads zone-locals, and
+    // swapping it for `Zone.root` broke nothing.
+    test('the main constructor captures the zone of the call', () {
+      late final Log log;
+
+      runZoned(
+        () => log = capture((logger) => logger.i('hello')),
+        zoneValues: {#requestId: 'r-1'},
+      );
+
+      expect(log.zone[#requestId], 'r-1');
     });
 
     test('drops error when copied without one', () {

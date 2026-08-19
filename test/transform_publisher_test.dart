@@ -194,6 +194,41 @@ void main() {
       expect(errors.single, isA<StateError>());
     });
 
+    // Regression: M17 (project review 2026-08-19[2]) — the guard above was
+    // never executed by any test. The existing reentrancy test logs into
+    // the *same* level, where the level logger's own guard fires first, so
+    // deleting this one left the suite green. Logging into a different
+    // level of the same logger is the case that reaches it.
+    test('a transformer logging into another level trips this guard', () {
+      final published = <Log>[];
+      final errors = <Object>[];
+      late final Logger logger;
+
+      final publisher = TransformPublisher<Log>(
+        CustomLogPublisher<Log>(published.add),
+        transformer: (log) {
+          if (log.message == 'outer') {
+            logger.e('nested');
+          }
+
+          return log;
+        },
+        onError: (error, stackTrace) => errors.add(error),
+      );
+      logger = Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher;
+
+      logger.i('outer');
+
+      expect(
+        published.map((log) => log.message),
+        ['outer'],
+        reason: 'the nested log must be dropped, not published',
+      );
+      expect(errors.single, isA<StateError>());
+    });
+
     test('chained transform publishers do not trip the guard', () {
       final errors = <Object>[];
       runZonedGuarded(

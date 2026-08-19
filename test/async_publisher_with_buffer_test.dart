@@ -457,6 +457,42 @@ void main() {
       await publisher.close().timeout(const Duration(seconds: 2));
     });
 
+    // Regression: coverage audit for the 2026-08-19[2] review — handing the
+    // live retry buffer to `onDropped` instead of a copy survived as a
+    // mutation. The handler legitimately still holds that buffer: it is the
+    // list it was given, and an asynchronous one may write to it after its
+    // future has completed. Both drop paths hand a list out, so both are
+    // run here — the first version of this test covered only the budget
+    // one, and the mutation on the close path went on surviving.
+    for (final path in ['a spent budget', 'a close']) {
+      test('onDropped receives a copy of the retry buffer after $path',
+          () async {
+        final atClose = path == 'a close';
+        List<Log>? handlerBuffer;
+        List<Log>? reported;
+        final publisher = AsyncPublisherWithBuffer<Log>(
+          (logs, retry) {
+            handlerBuffer = retry;
+            retry.addAll(logs);
+          },
+          maxRetries: atClose ? 100 : 0,
+          retryDelay: atClose ? const Duration(milliseconds: 5) : Duration.zero,
+          onDropped: (logs) => reported ??= logs,
+        );
+        final log = makeLogger(publisher);
+
+        log.i('undeliverable');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await publisher.close().timeout(const Duration(seconds: 2));
+
+        expect(reported, hasLength(1));
+
+        handlerBuffer!.clear();
+
+        expect(reported, hasLength(1), reason: 'onDropped must own its list');
+      });
+    }
+
     // Regression: B9
     test('publish after close throws StateError', () async {
       final publisher = AsyncPublisherWithBuffer<Log>(

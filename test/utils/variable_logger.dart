@@ -74,6 +74,27 @@ base class CountingLogger extends VarLogger {
   }
 }
 
+/// A [VarLogger] that counts how often it prunes its sublogger list.
+///
+/// Registration must not scan the whole list every time — creating n
+/// subloggers under one parent would cost O(n²), and one per request or per
+/// widget is the documented pattern. The amortization is invisible in
+/// behaviour and only shows up as this count.
+base class PruneCountingLogger extends VarLogger {
+  int pruneCount = 0;
+
+  PruneCountingLogger(super.levelValues);
+
+  PruneCountingLogger.sub(PruneCountingLogger super.parent, super.levelValues)
+      : super.sub();
+
+  @override
+  void pruneSubloggers() {
+    pruneCount++;
+    super.pruneSubloggers();
+  }
+}
+
 /// Registers a level logger handed in from outside, so a test can try to
 /// register the same instance in two loggers.
 ///
