@@ -68,6 +68,11 @@ section became 0.7.0 instead.
   sink grew the queue until the process ran out of memory, with no limit,
   no policy and nothing counting the cost. `maxQueueSize: null` restores
   the old unbounded behaviour for the code that wants it.
+* A publisher with no `onDropped` no longer loses logs in silence: it
+  prints the first loss at once and then a count, at most once every five
+  seconds and widening to a minute while the losses keep coming. This is
+  the first thing the package ever writes on its own. `onDropped: (_) {}`
+  makes it quiet again, and any real `onDropped` replaces it.
 
 **New**
 

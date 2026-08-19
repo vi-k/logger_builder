@@ -973,9 +973,12 @@ All eight take the same four optional arguments:
   log the full queue refused; in the buffered four it also means a batch
   that spent its `maxRetries` budget and entries handed back to
   `retryBuffer` after `close()` was called, which can never be processed.
-  Without this callback the loss leaves no trace. The unbuffered four hand
-  you one log at a time (with its `param`, where there is one), the
-  buffered four a list.
+  Leaving it unset does not hide the loss: the publisher says so itself,
+  printing the first one at once and counting the rest into a summary at
+  most once every five seconds — widening to a minute while they keep
+  coming. `onDropped: (_) {}` silences that. The unbuffered four hand you
+  one log at a time (with its `param`, where there is one), the buffered
+  four a list.
 
 The four buffered ones take two more:
 
@@ -1010,8 +1013,8 @@ awaits a flush cannot be told the queue is empty while it is not.
 > [!IMPORTANT]
 > All of these queues are **bounded**: `maxQueueSize` defaults to 10 000
 > entries accepted and not yet handled. Past that the incoming log is
-> refused and handed to `onDropped` — set it, or the pressure costs you
-> logs without a trace. Nothing already accepted is lost, so `flush()` and
+> refused and handed to `onDropped` — set it to keep those logs, or the
+> publisher will at least tell you how many it lost. Nothing already accepted is lost, so `flush()` and
 > `close()` keep their meaning. `maxQueueSize: null` gives the bound up and
 > lets pending logs accumulate until the process runs out of memory; that is
 > the right trade only when you bound the input yourself.

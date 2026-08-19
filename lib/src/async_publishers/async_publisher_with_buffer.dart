@@ -62,14 +62,19 @@ abstract base class _BufferedFacade<E extends Object?> {
   /// while.
   final Duration retryDelay;
 
-  /// Called with the entries dropped when [close] is reached while a batch
-  /// still wants to be retried.
+  /// Called with entries that will never be delivered.
   ///
-  /// Two things reach it. A batch that spends its [maxRetries] budget, and
-  /// entries handed back to the retry buffer *after* [close] was called, which
-  /// can never be processed. Without this callback both are gone without
-  /// a trace — no error, no counter. Use it to persist them somewhere
+  /// Three things reach it: an entry the full queue refused (see
+  /// [maxQueueSize]), a batch that spends its [maxRetries] budget, and
+  /// entries handed back to the retry buffer *after* [close] was called,
+  /// which can never be processed. Use it to persist them somewhere
   /// durable, or at least to count them.
+  ///
+  /// Leaving it unset does not hide the loss: the publisher then says so
+  /// itself. The first one prints a line at once, the rest are counted into
+  /// a summary at most once every five seconds — widening to a minute while
+  /// the losses keep coming, and back to five once they stop. Pass
+  /// `onDropped: (_) {}` to silence that.
   ///
   /// A throwing handler does not derail the shutdown: its own error goes to
   /// the current zone.

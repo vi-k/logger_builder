@@ -186,9 +186,14 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// Called with a log the queue refused because it was full.
   ///
   /// The log is not published and never will be: [maxQueueSize] was reached
-  /// when it arrived. Without this callback the loss leaves no trace — no
-  /// error, no counter. Use it to persist the log somewhere durable, or at
+  /// when it arrived. Use it to persist the log somewhere durable, or at
   /// least to count what the pressure costs.
+  ///
+  /// Leaving it unset does not hide the loss: the publisher then says so
+  /// itself. The first one prints a line at once, the rest are counted into
+  /// a summary at most once every five seconds — widening to a minute while
+  /// the losses keep coming, and back to five once they stop. Pass
+  /// `onDropped: (_) {}` to silence that.
   ///
   /// A throwing handler does not derail publishing: its own error goes to
   /// the current zone.
