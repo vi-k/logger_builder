@@ -2,7 +2,10 @@ import 'dart:async';
 
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
+import 'internal/async_param_publisher.dart';
 import 'internal/async_pipeline.dart';
+
+part 'async_publisher_with_param.dart';
 
 /// An interface for publishers that can be flushed.
 ///
@@ -25,6 +28,93 @@ typedef HasFlush = Flushable;
 abstract interface class Closable {
   /// Closes the handler after processing the already accepted log events.
   Future<void> close();
+}
+
+/// The wiring both unbuffered facades sit on: the two knobs, the queue, and
+/// the lifecycle around it.
+///
+/// [E] is whatever the queue carries — the log itself for the log-only
+/// facade, a `(Param, Log)` record for the parameterised one.
+///
+/// Three choices here are about the published docs rather than about the
+/// code, and the buffered pair made all three first: the class is private,
+/// the two facades are one library through `part`, and no interface is
+/// declared even though [flush] and [close] implement one. Why each of them,
+/// written out once — `_BufferedFacade` in `async_publisher_with_buffer.dart`.
+abstract base class _AsyncFacade<E extends Object?> {
+  /// Whether the underlying stream controller delivers events synchronously.
+  final bool sync;
+
+  /// Called when `handle` throws.
+  ///
+  /// When `null`, the error is reported to the current zone via
+  /// [Zone.handleUncaughtError]. In either case the queue keeps processing
+  /// subsequent log events.
+  ///
+  /// Note: in a plain Dart program without an error zone, an uncaught
+  /// asynchronous error terminates the isolate by default — and then nothing
+  /// keeps processing. Provide [onError] or wrap the app in
+  /// [runZonedGuarded].
+  final void Function(Object error, StackTrace stackTrace)? onError;
+
+  late final AsyncPipeline<E> _pipeline;
+
+  _AsyncFacade({this.sync = false, this.onError}) {
+    // In the constructor body rather than an initializer, for two reasons
+    // that both matter: [_entryHandler] reaches a subclass member and cannot
+    // be torn off in an initializer list, and the pipeline captures
+    // `Zone.current` when it is built — which must be the zone that built the
+    // publisher, not whichever one happens to publish first.
+    _pipeline = AsyncPipeline<E>(
+      handle: _entryHandler,
+      sync: sync,
+      onError: onError,
+    );
+  }
+
+  /// What the queue calls for every entry.
+  ///
+  /// The one thing the two facades disagree about, and the reason this is a
+  /// function the subclass hands over rather than a method it overrides: the
+  /// log-only facade hands the queue its `handle` directly, so the entry
+  /// reaches the user's code through the same single call as before this
+  /// class existed. The parameterised one unpacks the record first.
+  FutureOr<void> Function(E entry) get _entryHandler;
+
+  /// Whether [close] has been called.
+  bool get isClosed => _pipeline.isClosed;
+
+  /// Completes when every log event queued before this call has been
+  /// processed.
+  ///
+  /// While a [close] is draining this returns that same future rather than
+  /// an already-completed one — reporting "the queue is empty" while logs
+  /// are still in flight would be a false all-clear at exactly the wrong
+  /// moment.
+  ///
+  /// Concurrent calls are serialized: a later flush first waits for the
+  /// earlier one and then drains the events queued in between. The internal
+  /// queue listener is re-created, but always in the zone this publisher was
+  /// constructed in, so flushing does not move where later zone-reported
+  /// handler errors land.
+  ///
+  /// Each call replaces the internal [StreamController] and its
+  /// subscription, so flushing after every single log is far more expensive
+  /// than letting the queue drain on its own. Measured, per log including
+  /// the drain: 152 ns when the queue drains by itself against 1258 ns when
+  /// every log is followed by a flush. The buffered publishers are hit
+  /// harder still — 50 ns against 1417 — because flushing after each log is
+  /// exactly what stops them from batching.
+  Future<void> flush() => _pipeline.flush();
+
+  /// Closes the publisher after processing the already queued log events.
+  ///
+  /// After closing, publishing throws a [StateError] and [flush] hands back
+  /// this same future. Repeated calls return it too.
+  ///
+  /// Do not await this (or [flush]) from inside `handle`: closing waits for
+  /// the running handler to complete, so it would deadlock.
+  Future<void> close() => _pipeline.close();
 }
 
 /// A base class for publishers that process log events asynchronously.
@@ -51,37 +141,10 @@ abstract interface class Closable {
 /// }
 /// ```
 abstract base class AsyncPublisherBase<Log extends CustomLog>
+    extends _AsyncFacade<Log>
     implements CustomLogPublisher<Log>, Flushable, Closable {
-  /// Whether the underlying stream controller delivers events synchronously.
-  final bool sync;
-
-  /// Called when [handle] throws.
-  ///
-  /// When `null`, the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. In either case the queue keeps processing
-  /// subsequent log events.
-  ///
-  /// Note: in a plain Dart program without an error zone, an uncaught
-  /// asynchronous error terminates the isolate by default — and then nothing
-  /// keeps processing. Provide [onError] or wrap the app in
-  /// [runZonedGuarded].
-  final void Function(Object error, StackTrace stackTrace)? onError;
-
-  late final AsyncPipeline<Log> _pipeline;
-
   /// Creates the publisher and starts its processing queue.
-  AsyncPublisherBase({this.sync = false, this.onError}) {
-    // In the constructor body rather than an initializer, for two reasons
-    // that both matter: `handle` is a subclass member and cannot be torn off
-    // in an initializer list, and the pipeline captures `Zone.current` when
-    // it is built — which must be the zone that built the publisher, not
-    // whichever one happens to publish first.
-    _pipeline = AsyncPipeline<Log>(
-      handle: handle,
-      sync: sync,
-      onError: onError,
-    );
-  }
+  AsyncPublisherBase({super.sync, super.onError});
 
   /// Processes a single log event.
   ///
@@ -89,45 +152,11 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// handled until the future returned by this method completes.
   FutureOr<void> handle(Log log);
 
-  /// Whether [close] has been called.
-  bool get isClosed => _pipeline.isClosed;
+  @override
+  FutureOr<void> Function(Log log) get _entryHandler => handle;
 
   @override
   void publish(Log log) => _pipeline.add(log);
-
-  /// Completes when every log event queued before this call has been
-  /// processed.
-  ///
-  /// While a [close] is draining this returns that same future rather than
-  /// an already-completed one — reporting "the queue is empty" while logs
-  /// are still in flight would be a false all-clear at exactly the wrong
-  /// moment.
-  ///
-  /// Concurrent calls are serialized: a later flush first waits for the
-  /// earlier one and then drains the events queued in between. The internal
-  /// queue listener is re-created, but always in the zone this publisher was
-  /// constructed in, so flushing does not move where later zone-reported
-  /// handler errors land.
-  ///
-  /// Each call replaces the internal [StreamController] and its
-  /// subscription, so flushing after every single log is far more expensive
-  /// than letting the queue drain on its own. Measured, per log including
-  /// the drain: 152 ns when the queue drains by itself against 1258 ns when
-  /// every log is followed by a flush. The buffered publishers are hit
-  /// harder still — 50 ns against 1417 — because flushing after each log is
-  /// exactly what stops them from batching.
-  @override
-  Future<void> flush() => _pipeline.flush();
-
-  /// Closes the publisher after processing the already queued log events.
-  ///
-  /// After closing, [publish] throws a [StateError] and [flush] hands back
-  /// this same future. Repeated calls return it too.
-  ///
-  /// Do not await this (or [flush]) from inside [handle]: closing waits for
-  /// the running handler to complete, so it would deadlock.
-  @override
-  Future<void> close() => _pipeline.close();
 }
 
 /// A publisher that processes log events asynchronously.

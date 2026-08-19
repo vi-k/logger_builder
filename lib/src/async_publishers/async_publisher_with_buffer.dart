@@ -21,7 +21,8 @@ part 'async_publisher_with_buffer_and_param.dart';
 /// public member to be reachable from another library, and every public
 /// member of a base class shows up on the pub.dev page of the classes users
 /// extend. Here the members below are exactly the ones that were duplicated
-/// before, and nothing else becomes visible.
+/// before, and nothing else becomes visible. The unbuffered pair is built
+/// the same way, on `_AsyncFacade`.
 ///
 /// It also does not `implement` [Flushable] or [Closable], although it
 /// provides both methods and both facades declare both interfaces. Adding
