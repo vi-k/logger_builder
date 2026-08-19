@@ -646,13 +646,13 @@ Future<void> main() async {
 
   subtitle('AsyncPublisher, one log at a time:');
   await runAsyncTest((count) async {
-    // Wide enough for the 20 000 logs this test publishes in one synchronous
-    // burst: the default bound is 10 000, and half the batch would be refused
-    // rather than delivered — which measures the cost of a refusal, not of a
-    // log. The code path is the default one, the limit simply never trips.
+    // 20 000 logs in one synchronous burst, which the default bound of
+    // 100 000 carries whole: nothing is refused here, so the figure is the
+    // cost of a log and not the cost of a refusal. Getting that wrong once
+    // made this very line look eight times faster than it is. Narrow the
+    // default again and these three tests need a maxQueueSize of their own.
     final publisher = AsyncPublisher<Log>(
       (log) => sink = log.message,
-      maxQueueSize: 100000,
     );
     final log = Logger('async')
       ..level = Levels.all
@@ -669,7 +669,6 @@ Future<void> main() async {
     final publisher = AsyncPublisher<Log>(
       (log) => sink = log.message,
       sync: true,
-      maxQueueSize: 100000,
     );
     final log = Logger('async')
       ..level = Levels.all
@@ -685,7 +684,6 @@ Future<void> main() async {
   await runAsyncTest((count) async {
     final publisher = AsyncPublisherWithBuffer<Log>(
       (logs, retry) => sink = logs.length,
-      maxQueueSize: 100000,
     );
     final log = Logger('buffered')
       ..level = Levels.all

@@ -65,15 +65,17 @@ abstract base class _AsyncFacade<E extends Object?> {
   /// enters the queue. Everything already accepted is still delivered, so
   /// [flush] and [close] promise exactly what they promised before.
   ///
-  /// The default is 10 000 events. At a thousand logs a second that is ten
-  /// seconds of a sink that is not draining — an outage rather than a burst.
+  /// The default is 100 000 events. At a thousand logs a second that is a
+  /// hundred seconds of a sink that is not draining — an outage rather than
+  /// a burst — and around 20 MB held, at two hundred bytes a log.
   ///
   /// The queue drains only when the event loop turns, so a synchronous loop
   /// that publishes more than this without awaiting anything loses the rest
   /// however healthy the sink is — nothing has had a chance to run it yet.
-  /// Measured on this package's own benchmark, which publishes 20 000 logs
-  /// in exactly such a loop: at the default it delivers ten thousand of
-  /// them and refuses the rest.
+  /// That loop, not the outage, is what the default is sized against: this
+  /// package's own benchmark publishes 20 000 logs in exactly such a burst,
+  /// and the bound carries all of it. A batch job that writes millions of
+  /// lines without awaiting still needs a bound of its own, or `null`.
   ///
   /// `null` gives the bound up on purpose: the queue then grows until the
   /// process runs out of memory. That is the right trade only when the input
@@ -85,7 +87,7 @@ abstract base class _AsyncFacade<E extends Object?> {
   _AsyncFacade({
     this.sync = false,
     this.onError,
-    this.maxQueueSize = 10000,
+    this.maxQueueSize = 100000,
   }) : assert(
           maxQueueSize == null || maxQueueSize > 0,
           'maxQueueSize must be null or positive: a queue of zero would '

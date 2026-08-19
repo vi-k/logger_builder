@@ -61,7 +61,7 @@ section became 0.7.0 instead.
   own `onError` when one is set, as `MultiPublisher` does. Without a
   handler the error still reaches the logging call site, unchanged.
 * The queues of all eight asynchronous publishers are bounded:
-  `maxQueueSize` defaults to 10 000 entries accepted and not yet handled.
+  `maxQueueSize` defaults to 100 000 entries accepted and not yet handled.
   Past that the *incoming* log is refused — it goes to `onDropped` and
   never enters the queue, so nothing already accepted is lost and
   `flush()` and `close()` keep their meaning. Before this an unreachable

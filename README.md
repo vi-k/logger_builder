@@ -959,16 +959,18 @@ All eight take the same four optional arguments:
 - **`maxQueueSize`** — the most entries the queue accepts before it starts
   refusing them, counting what has been accepted and not yet handled: the
   entries waiting plus the one (or the batch) being handled right now.
-  Default 10 000. At the limit it is the **incoming** log that is refused —
-  it goes to `onDropped` and never enters the queue, so everything already
-  accepted is still delivered and `flush()` and `close()` mean exactly what
-  they meant before. The queue drains only when the event loop turns, so a
-  tight loop that publishes more than the bound without awaiting anything
-  loses the rest however healthy the sink is — this package's own benchmark,
-  which publishes 20 000 logs in exactly such a loop, was the first to
-  notice. `null` gives the bound up on purpose: the queue then
-  grows until the process runs out of memory, which is the right trade only
-  when the input is bounded elsewhere and losing a log is worse than dying;
+  Default 100 000 — about 20 MB at two hundred bytes a log. At the limit it
+  is the **incoming** log that is refused — it goes to `onDropped` and never
+  enters the queue, so everything already accepted is still delivered and
+  `flush()` and `close()` mean exactly what they meant before. The queue
+  drains only when the event loop turns, so a tight loop that publishes more
+  than the bound without awaiting anything loses the rest however healthy the
+  sink is; that loop, not a stalled sink, is what the default is sized
+  against — this package's own benchmark publishes 20 000 logs in exactly
+  such a burst, and the bound carries all of it. `null` gives the bound up on
+  purpose: the queue then grows until the process runs out of memory, which
+  is the right trade only when the input is bounded elsewhere and losing a
+  log is worse than dying;
 - **`onDropped`** — called with what was dropped. In all eight that means a
   log the full queue refused; in the buffered four it also means a batch
   that spent its `maxRetries` budget and entries handed back to
@@ -1011,13 +1013,14 @@ still draining hands you that close rather than an already-completed future
 awaits a flush cannot be told the queue is empty while it is not.
 
 > [!IMPORTANT]
-> All of these queues are **bounded**: `maxQueueSize` defaults to 10 000
+> All of these queues are **bounded**: `maxQueueSize` defaults to 100 000
 > entries accepted and not yet handled. Past that the incoming log is
 > refused and handed to `onDropped` — set it to keep those logs, or the
-> publisher will at least tell you how many it lost. Nothing already accepted is lost, so `flush()` and
-> `close()` keep their meaning. `maxQueueSize: null` gives the bound up and
-> lets pending logs accumulate until the process runs out of memory; that is
-> the right trade only when you bound the input yourself.
+> publisher will at least tell you how many it lost. Nothing already
+> accepted is lost, so `flush()` and `close()` keep their meaning.
+> `maxQueueSize: null` gives the bound up and lets pending logs accumulate
+> until the process runs out of memory; that is the right trade only when
+> you bound the input yourself.
 >
 > In the buffered variants `retryBuffer` is also the only thing that keeps a
 > log across a failure: a throwing handler drops everything it did not hand
@@ -1353,7 +1356,7 @@ final log = Logger()
   ..publisher = filePublisher;
 ```
 
-The queue in front of the file holds 10 000 entries by default: if the disk
+The queue in front of the file holds 100 000 entries by default: if the disk
 stalls for longer than that, the newest logs are refused rather than kept,
 and `onDropped` is where you see them. Pass `maxQueueSize: null` to let the
 queue grow instead until the process dies — see

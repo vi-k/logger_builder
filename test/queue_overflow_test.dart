@@ -162,6 +162,65 @@ final Map<String, _Case Function()> _bounded = {
   },
 };
 
+/// Every one of the eight built the way the README shows it — with no
+/// `maxQueueSize` at all — so the default can be read off the object.
+final Map<String, ({int? bound, Closable closable}) Function()> _defaults = {
+  'AsyncPublisher': () {
+    final publisher = AsyncPublisher<Log>((log) {});
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncFormatter': () {
+    final publisher = AsyncFormatter<Log, String?>(
+      format: (log) => log.message,
+      output: (out) {},
+    );
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncPublisherWithParam': () {
+    final publisher = AsyncPublisherWithParam<String, Log>((param, log) {});
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncFormatterWithParam': () {
+    final publisher = AsyncFormatterWithParam<String, Log, String?>(
+      format: (param, log) => log.message,
+      output: (param, out) {},
+    );
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncPublisherWithBuffer': () {
+    final publisher = AsyncPublisherWithBuffer<Log>((logs, retryBuffer) {});
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncFormatterWithBuffer': () {
+    final publisher = AsyncFormatterWithBuffer<Log, int>(
+      format: (logs, retryBuffer) => logs.length,
+      output: (out, logs, retryBuffer) {},
+    );
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncPublisherWithBufferAndParam': () {
+    final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
+      (entries, retryBuffer) {},
+    );
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+  'AsyncFormatterWithBufferAndParam': () {
+    final publisher = AsyncFormatterWithBufferAndParam<String, Log, int>(
+      format: (entries, retryBuffer) => entries.length,
+      output: (out, entries, retryBuffer) {},
+    );
+
+    return (bound: publisher.maxQueueSize, closable: publisher);
+  },
+};
+
 void main() {
   group('AsyncPublisher', () {
     test('a full queue refuses the incoming log', () async {
@@ -453,6 +512,21 @@ void main() {
       expect(handled.length + dropped.length, 20);
       expect(publisher.isClosed, isTrue);
     });
+  });
+  group('the default bound', () {
+    // 100 000 accepted and not yet handled. The number is written into the
+    // dartdoc of both bases and into both READMEs, which makes it a promise
+    // rather than an implementation detail — and one nothing else here
+    // would notice drifting.
+    for (final entry in _defaults.entries) {
+      test(entry.key, () async {
+        final subject = entry.value();
+
+        expect(subject.bound, 100000, reason: entry.key);
+
+        await subject.closable.close();
+      });
+    }
   });
   group('the default onDropped', () {
     /// Captures what the package prints: `print` goes through the current
