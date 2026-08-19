@@ -127,9 +127,9 @@ void main() {
       expect(published, ['parent:oops']);
     });
 
-    // Regression: a per-level assignment used to clear the link flag of
-    // the whole logger, so the parent's next common publisher reached
-    // none of the child's levels.
+    // Regression: 2026-08-18[1] §1 — a per-level assignment used to clear
+    // the link flag of the whole logger, so the parent's next common
+    // publisher reached none of the child's levels.
     test('a per-level assignment keeps the other levels following', () {
       final published = <String?>[];
       final parent = VarLogger([Levels.info, Levels.error])
@@ -261,6 +261,65 @@ void main() {
       expect(root[Levels.info].hasOwnPublisher, isFalse);
       expect(root[Levels.info].hasPublisher, isFalse);
       expect(root[Levels.info].isEnabled, isTrue);
+    });
+
+    test('a relinked level hands the inherited publisher down', () {
+      final common = <String?>[];
+      final root = VarLogger([Levels.info])..level = Levels.all;
+      final child = VarLogger.sub(root, [Levels.info]);
+
+      root.publisher = CustomLogPublisher((log) => common.add(log.message));
+      root[Levels.info].publisher = const CustomLogPublisher.noOp();
+      child.logAt(Levels.info)('while pinned');
+
+      root[Levels.info].relink();
+      child.logAt(Levels.info)('after relink');
+
+      expect(child[Levels.info].hasOwnPublisher, isFalse);
+      expect(common, ['after relink']);
+    });
+
+    // Regression: I1 (final review of the per-level pin) — the reset was
+    // not propagated as a reset. The level went back to the no-op
+    // publisher and that no-op was then handed down as a value, so every
+    // linked sublogger reported `hasPublisher` for a level publishing
+    // into nothing.
+    test('a relink into nothing takes the subloggers there too', () {
+      final published = <String?>[];
+      final root = VarLogger([Levels.info])..level = Levels.all;
+
+      root[Levels.info].publisher =
+          CustomLogPublisher((log) => published.add(log.message));
+      final child = VarLogger.sub(root, [Levels.info]);
+      expect(child[Levels.info].hasPublisher, isTrue);
+
+      root[Levels.info].relink();
+      child.logAt(Levels.info)('after relink');
+
+      expect(root[Levels.info].hasPublisher, isFalse);
+      expect(child[Levels.info].hasPublisher, isFalse);
+      expect(published, isEmpty);
+    });
+
+    test('a detached logger relinks a level to its own common publisher', () {
+      final own = <String?>[];
+      final parentPublished = <String?>[];
+      final parent = VarLogger([Levels.info])..level = Levels.all;
+      final child = VarLogger.sub(parent, [Levels.info])
+        ..publisher = CustomLogPublisher((log) => own.add(log.message));
+      final grandchild = VarLogger.sub(child, [Levels.info]);
+
+      child[Levels.info].publisher = const CustomLogPublisher.noOp();
+      parent.publisher =
+          CustomLogPublisher((log) => parentPublished.add(log.message));
+
+      child[Levels.info].relink();
+      child.logAt(Levels.info)('child');
+      grandchild.logAt(Levels.info)('grandchild');
+
+      expect(child.publisherLinked, isFalse);
+      expect(own, ['child', 'grandchild']);
+      expect(parentPublished, isEmpty);
     });
 
     test('relink on the logger drops every pin', () {

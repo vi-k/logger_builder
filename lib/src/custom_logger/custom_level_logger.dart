@@ -199,6 +199,11 @@ abstract base class CustomLevelLogger<
   /// whole logger, which drops every other level's pin along with it. See
   /// [hasPublisher] for the other question — whether the publisher goes
   /// anywhere at all.
+  ///
+  /// Only that assignment pins. A publisher handed to the constructor is
+  /// a starting value, not a pin: it is `false` here, and both an
+  /// inherited publisher and this logger's common [CustomLogger.publisher]
+  /// setter replace it.
   bool get hasOwnPublisher => _hasOwnPublisher;
 
   void _setPublisher(CustomLogPublisher<Log> publisher) {
@@ -236,6 +241,13 @@ abstract base class CustomLevelLogger<
   /// configured per level — this level goes back to the no-op publisher
   /// and [hasPublisher] becomes `false`. Handing it the publisher chosen
   /// for some *other* level would be an invention.
+  ///
+  /// Linked subloggers come along, in that case as in every other: their
+  /// own unpinned copy of this level arrives at the no-op publisher too,
+  /// rather than keeping what it used to inherit from here. An unpinned
+  /// level always equals what the chain offers, and reporting
+  /// [hasPublisher] for a publisher that goes nowhere is exactly the
+  /// state that getter exists to expose.
   ///
   /// Returns nothing, unlike [CustomLogger.relink]: that one answers
   /// `false` when there is no parent to follow, while a level always has

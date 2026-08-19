@@ -513,14 +513,26 @@ abstract base class CustomLogger<
   /// when it did not register [level] — a sublogger is not required to
   /// have all the levels of its parent.
   ///
+  /// A `null` [publisher] is the "there is nothing above this level any
+  /// more" case of [_relinkLevel]: an unpinned level goes back to the
+  /// no-op publisher instead of keeping the value it used to inherit.
+  /// Leaving it in place would break the rule that an unpinned level
+  /// always equals what the chain gives; handing the no-op publisher down
+  /// as a value would leave [CustomLevelLogger.hasPublisher] `true` on a
+  /// level that publishes nowhere.
+  ///
   /// A pinned level stops the descent here: it does not change, so nothing
   /// below it inherits a change either.
-  void _inheritLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
+  void _inheritLevelPublisher(int level, CustomLogPublisher<Log>? publisher) {
     if (_levelLoggers[level] case final levelLogger?) {
       if (levelLogger._hasOwnPublisher) {
         return;
       }
-      levelLogger._setPublisher(publisher);
+      if (publisher != null) {
+        levelLogger._setPublisher(publisher);
+      } else {
+        levelLogger._resetPublisher();
+      }
     }
     _propagateLevelPublisher(level, publisher);
   }
@@ -530,7 +542,10 @@ abstract base class CustomLogger<
   // [_setLevel]. It stays the marker on this path too: the pin cannot
   // serve, because a logger that did not register [level] has no pin to
   // raise and a cycle through it would recurse until the stack is gone.
-  void _propagateLevelPublisher(int level, CustomLogPublisher<Log> publisher) {
+  void _propagateLevelPublisher(
+    int level,
+    CustomLogPublisher<Log>? publisher,
+  ) {
     pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
@@ -557,7 +572,11 @@ abstract base class CustomLogger<
       levelLogger._resetPublisher();
     }
 
-    _propagateLevelPublisher(level, levelLogger._publisher);
+    // The chain's answer, not `levelLogger._publisher`: with nothing above,
+    // the second is the no-op publisher, and handing that down as a value
+    // would leave every linked sublogger reporting `hasPublisher == true`
+    // for a level that publishes nowhere. `null` propagates the reset.
+    _propagateLevelPublisher(level, inherited);
   }
 
   /// Subscribes a [sublogger] to level and publisher updates dynamically.
