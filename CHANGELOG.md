@@ -8,7 +8,10 @@ section became 0.7.0 instead.
 
 * `logger[level].publisher = ...` no longer detaches the whole logger
   from its parent. It pins that one level; the others keep following the
-  parent, and `publisherLinked` stays up.
+  parent, and `publisherLinked` stays up. The loudest consequence is
+  further down the tree: the coarse flag used to cut the branch off
+  whole, so every sublogger under such a logger follows the parent
+  again too.
 * The common `logger.publisher = ...` setter no longer overwrites a
   pinned level. This applies to a lone logger as well as a sublogger, so
   the order of a common assignment and its per-level exceptions no
