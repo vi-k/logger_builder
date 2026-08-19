@@ -646,7 +646,14 @@ Future<void> main() async {
 
   subtitle('AsyncPublisher, one log at a time:');
   await runAsyncTest((count) async {
-    final publisher = AsyncPublisher<Log>((log) => sink = log.message);
+    // Wide enough for the 20 000 logs this test publishes in one synchronous
+    // burst: the default bound is 10 000, and half the batch would be refused
+    // rather than delivered — which measures the cost of a refusal, not of a
+    // log. The code path is the default one, the limit simply never trips.
+    final publisher = AsyncPublisher<Log>(
+      (log) => sink = log.message,
+      maxQueueSize: 100000,
+    );
     final log = Logger('async')
       ..level = Levels.all
       ..publisher = publisher;
@@ -659,8 +666,11 @@ Future<void> main() async {
 
   subtitle('AsyncPublisher with sync: true:');
   await runAsyncTest((count) async {
-    final publisher =
-        AsyncPublisher<Log>((log) => sink = log.message, sync: true);
+    final publisher = AsyncPublisher<Log>(
+      (log) => sink = log.message,
+      sync: true,
+      maxQueueSize: 100000,
+    );
     final log = Logger('async')
       ..level = Levels.all
       ..publisher = publisher;
@@ -675,6 +685,7 @@ Future<void> main() async {
   await runAsyncTest((count) async {
     final publisher = AsyncPublisherWithBuffer<Log>(
       (logs, retry) => sink = logs.length,
+      maxQueueSize: 100000,
     );
     final log = Logger('buffered')
       ..level = Levels.all
