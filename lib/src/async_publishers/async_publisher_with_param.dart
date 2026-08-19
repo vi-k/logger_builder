@@ -4,6 +4,7 @@ import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
 import 'internal/async_param_publisher.dart';
+import 'internal/async_pipeline.dart';
 
 /// A base class for asynchronous publishers that require an additional
 /// parameter alongside the log event.
@@ -48,16 +49,19 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// [runZonedGuarded].
   final void Function(Object error, StackTrace stackTrace)? onError;
 
-  StreamController<(Param, Log)> _controller;
-  StreamSubscription<void>? _subscription;
-  Future<void>? _flushFuture;
-  Future<void>? _closeFuture;
-  final Zone _zone = Zone.current;
+  late final AsyncPipeline<(Param, Log)> _pipeline;
 
   /// Creates the publisher and starts its processing queue.
-  AsyncPublisherWithParamBase({this.sync = false, this.onError})
-      : _controller = StreamController<(Param, Log)>(sync: sync) {
-    _listen();
+  AsyncPublisherWithParamBase({this.sync = false, this.onError}) {
+    // In the constructor body rather than an initializer: `handle` is a
+    // subclass member, and the pipeline captures `Zone.current` when it is
+    // built — which must be the zone that built the publisher, not whichever
+    // one happens to publish first.
+    _pipeline = AsyncPipeline<(Param, Log)>(
+      handle: (entry) => handle(entry.$1, entry.$2),
+      sync: sync,
+      onError: onError,
+    );
   }
 
   /// Processes a single log event with its bound parameter.
@@ -67,7 +71,7 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   FutureOr<void> handle(Param param, Log log);
 
   /// Whether [close] has been called.
-  bool get isClosed => _closeFuture != null;
+  bool get isClosed => _pipeline.isClosed;
 
   /// Returns a [CustomLogPublisher] that publishes into this shared queue
   /// with the given [param] attached to every log event.
@@ -92,39 +96,12 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// queue listener is re-created, but always in the zone this publisher was
   /// constructed in, so flushing does not move where later zone-reported
   /// handler errors land.
+  ///
+  /// Each call replaces the internal [StreamController] and its
+  /// subscription, so flushing after every single log is measurably more
+  /// expensive than letting the queue drain on its own.
   @override
-  Future<void> flush() {
-    if (_closeFuture case final closing?) {
-      return closing;
-    }
-
-    final previous = _flushFuture;
-    return _flushFuture = _flush(previous);
-  }
-
-  Future<void> _flush(Future<void>? previous) async {
-    if (previous != null) {
-      try {
-        await previous;
-      } on Object {
-        // The previous flush already reported its failure to its caller.
-      }
-      // A close that started while this flush was queued is doing the
-      // draining now, and waiting it out is what this flush promised.
-      if (_closeFuture case final closing?) {
-        await closing;
-
-        return;
-      }
-    }
-
-    final oldController = _controller;
-    final oldSubscription = _subscription;
-    _controller = StreamController<(Param, Log)>(sync: sync);
-    await oldController.close();
-    await oldSubscription?.cancel();
-    _listen();
-  }
+  Future<void> flush() => _pipeline.flush();
 
   /// Closes the publisher after processing the already queued log events.
   ///
@@ -134,61 +111,9 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running handler to complete, so it would deadlock.
   @override
-  Future<void> close() => _closeFuture ??= _close();
+  Future<void> close() => _pipeline.close();
 
-  Future<void> _close() async {
-    await _controller.close();
-    await _subscription?.cancel();
-  }
-
-  void _listen() {
-    // Always the construction zone. `_listen` also runs from `flush`, and
-    // subscribing there would silently move every later zone-reported handler
-    // error to whoever happened to flush last.
-    _zone.run(() {
-      _subscription = _controller.stream
-          .asyncMap(_guardedHandle)
-          .listen((_) {}, onError: _lastResortError);
-    });
-  }
-
-  /// Last-resort guard for errors that escape [_guardedHandle]
-  /// (they should not — errors are routed via the `onError` callback).
-  void _lastResortError(Object error, StackTrace stackTrace) {
-    Zone.current.handleUncaughtError(error, stackTrace);
-  }
-
-  FutureOr<void> _guardedHandle((Param, Log) data) {
-    try {
-      final result = handle(data.$1, data.$2);
-      if (result is Future<void>) {
-        return result.onError<Object>(_reportError);
-      }
-    } on Object catch (error, stackTrace) {
-      _reportError(error, stackTrace);
-    }
-  }
-
-  void _reportError(Object error, StackTrace stackTrace) {
-    if (onError case final onError?) {
-      try {
-        onError(error, stackTrace);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing error handler must not break the queue.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
-    } else {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
-  }
-
-  void _publish(Param param, Log log) {
-    if (isClosed) {
-      throw StateError('The publisher is closed');
-    }
-
-    _controller.add((param, log));
-  }
+  void _publish(Param param, Log log) => _pipeline.add((param, log));
 }
 
 /// An asynchronous publisher that handles logs paired with a specific

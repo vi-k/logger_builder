@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/matchers.dart';
 
 List<(String, String?)> entriesOf(List<(String, Log)> entries) =>
     entries.map((entry) => (entry.$1, entry.$2.message)).toList();
@@ -98,7 +99,7 @@ void main() {
       await publisher.close();
 
       expect(publisher.isClosed, isTrue);
-      expect(() => log.i('b'), throwsStateError);
+      expect(() => log.i('b'), throwsPublisherClosed);
     });
   });
 

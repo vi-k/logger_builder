@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
+import 'internal/async_pipeline.dart';
 
 /// An interface for publishers that can be flushed.
 ///
@@ -66,16 +67,20 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// [runZonedGuarded].
   final void Function(Object error, StackTrace stackTrace)? onError;
 
-  StreamController<Log> _controller;
-  StreamSubscription<void>? _subscription;
-  Future<void>? _flushFuture;
-  Future<void>? _closeFuture;
-  final Zone _zone = Zone.current;
+  late final AsyncPipeline<Log> _pipeline;
 
   /// Creates the publisher and starts its processing queue.
-  AsyncPublisherBase({this.sync = false, this.onError})
-      : _controller = StreamController<Log>(sync: sync) {
-    _listen();
+  AsyncPublisherBase({this.sync = false, this.onError}) {
+    // In the constructor body rather than an initializer, for two reasons
+    // that both matter: `handle` is a subclass member and cannot be torn off
+    // in an initializer list, and the pipeline captures `Zone.current` when
+    // it is built — which must be the zone that built the publisher, not
+    // whichever one happens to publish first.
+    _pipeline = AsyncPipeline<Log>(
+      handle: handle,
+      sync: sync,
+      onError: onError,
+    );
   }
 
   /// Processes a single log event.
@@ -85,16 +90,10 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   FutureOr<void> handle(Log log);
 
   /// Whether [close] has been called.
-  bool get isClosed => _closeFuture != null;
+  bool get isClosed => _pipeline.isClosed;
 
   @override
-  void publish(Log log) {
-    if (isClosed) {
-      throw StateError('The publisher is closed');
-    }
-
-    _controller.add(log);
-  }
+  void publish(Log log) => _pipeline.add(log);
 
   /// Completes when every log event queued before this call has been
   /// processed.
@@ -114,38 +113,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// subscription, so flushing after every single log is measurably more
   /// expensive than letting the queue drain on its own.
   @override
-  Future<void> flush() {
-    if (_closeFuture case final closing?) {
-      return closing;
-    }
-
-    final previous = _flushFuture;
-    return _flushFuture = _flush(previous);
-  }
-
-  Future<void> _flush(Future<void>? previous) async {
-    if (previous != null) {
-      try {
-        await previous;
-      } on Object {
-        // The previous flush already reported its failure to its caller.
-      }
-      // A close that started while this flush was queued is doing the
-      // draining now, and waiting it out is what this flush promised.
-      if (_closeFuture case final closing?) {
-        await closing;
-
-        return;
-      }
-    }
-
-    final oldController = _controller;
-    final oldSubscription = _subscription;
-    _controller = StreamController<Log>(sync: sync);
-    await oldController.close();
-    await oldSubscription?.cancel();
-    _listen();
-  }
+  Future<void> flush() => _pipeline.flush();
 
   /// Closes the publisher after processing the already queued log events.
   ///
@@ -155,53 +123,7 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running handler to complete, so it would deadlock.
   @override
-  Future<void> close() => _closeFuture ??= _close();
-
-  Future<void> _close() async {
-    await _controller.close();
-    await _subscription?.cancel();
-  }
-
-  void _listen() {
-    // Always the construction zone. `_listen` also runs from `flush`, and
-    // subscribing there would silently move every later zone-reported handler
-    // error to whoever happened to flush last.
-    _zone.run(() {
-      _subscription = _controller.stream
-          .asyncMap(_guardedHandle)
-          .listen((_) {}, onError: _lastResortError);
-    });
-  }
-
-  /// Last-resort guard for errors that escape [_guardedHandle]
-  /// (they should not — errors are routed via the `onError` callback).
-  void _lastResortError(Object error, StackTrace stackTrace) {
-    Zone.current.handleUncaughtError(error, stackTrace);
-  }
-
-  FutureOr<void> _guardedHandle(Log log) {
-    try {
-      final result = handle(log);
-      if (result is Future<void>) {
-        return result.onError<Object>(_reportError);
-      }
-    } on Object catch (error, stackTrace) {
-      _reportError(error, stackTrace);
-    }
-  }
-
-  void _reportError(Object error, StackTrace stackTrace) {
-    if (onError case final onError?) {
-      try {
-        onError(error, stackTrace);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing error handler must not break the queue.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
-    } else {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
-  }
+  Future<void> close() => _pipeline.close();
 }
 
 /// A publisher that processes log events asynchronously.

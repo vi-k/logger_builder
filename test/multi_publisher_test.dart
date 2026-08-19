@@ -4,6 +4,7 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/matchers.dart';
 
 final class _RecordingPublisher implements CustomLogPublisher<Log> {
   final received = <String?>[];
@@ -212,7 +213,7 @@ void main() {
         await multi.close();
 
         expect(multi.isClosed, isTrue);
-        expect(() => log.i('late'), throwsStateError);
+        expect(() => log.i('late'), throwsPublisherClosed);
         expect(plain.received, isEmpty);
       });
 

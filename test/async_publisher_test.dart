@@ -4,6 +4,7 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/matchers.dart';
 
 Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..level = Levels.all
@@ -95,7 +96,7 @@ void main() {
 
       await publisher.close();
 
-      expect(() => log.i('late'), throwsStateError);
+      expect(() => log.i('late'), throwsPublisherClosed);
     });
 
     test('close is idempotent', () async {
@@ -115,7 +116,7 @@ void main() {
       await publisher.flush().timeout(const Duration(seconds: 1));
 
       expect(publisher.isClosed, isTrue);
-      expect(() => log.i('late'), throwsStateError);
+      expect(() => log.i('late'), throwsPublisherClosed);
     });
 
     // Regression: B5

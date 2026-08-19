@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/matchers.dart';
 
 Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..level = Levels.all
@@ -504,7 +505,7 @@ void main() {
       await publisher.close();
 
       expect(publisher.isClosed, isTrue);
-      expect(() => log.i('b'), throwsStateError);
+      expect(() => log.i('b'), throwsPublisherClosed);
     });
 
     // Regression: B9

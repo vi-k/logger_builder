@@ -4,6 +4,7 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/matchers.dart';
 
 final class _LifecyclePublisher
     implements CustomLogPublisher<Log>, Flushable, Closable {
@@ -294,7 +295,7 @@ void main() {
       await publisher.close();
 
       expect(publisher.isClosed, isTrue);
-      expect(() => publisher.publish(sample), throwsStateError);
+      expect(() => publisher.publish(sample), throwsPublisherClosed);
       expect(delivered, isEmpty);
     });
 

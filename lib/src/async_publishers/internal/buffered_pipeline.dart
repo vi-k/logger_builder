@@ -3,6 +3,8 @@
 
 import 'dart:async';
 
+import 'report.dart';
+
 /// Internal engine shared by the buffered async publishers: a tick-driven
 /// batch queue with retry reinjection, drain-style flush, and error routing.
 ///
@@ -225,27 +227,13 @@ final class BufferedPipeline<E> {
 
   void _reportDropped(List<E> dropped) {
     if (onDropped case final onDropped?) {
-      try {
-        onDropped(dropped);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing handler must not derail the shutdown.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
+      // A throwing handler must not derail the shutdown.
+      guarded(() => onDropped(dropped));
     }
   }
 
-  void _reportError(Object error, StackTrace stackTrace) {
-    if (onError case final onError?) {
-      try {
-        onError(error, stackTrace);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing error handler must not wedge the pipeline.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
-    } else {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
-  }
+  void _reportError(Object error, StackTrace stackTrace) =>
+      reportTo(onError, error, stackTrace);
 
   /// Last-resort guard: keeps the tick loop alive if an error ever escapes
   /// [_handleData] (it should not — errors are routed via [_reportError]).

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
+import 'internal/report.dart';
 
 /// A publisher that transforms every log before handing it to the wrapped
 /// publisher.
@@ -127,18 +128,8 @@ final class TransformPublisher<Log extends CustomLog>
     }
   }
 
-  void _reportError(Object error, StackTrace stackTrace) {
-    if (onError case final onError?) {
-      try {
-        onError(error, stackTrace);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing error handler must not interrupt delivery.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
-    } else {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
-  }
+  void _reportError(Object error, StackTrace stackTrace) =>
+      reportTo(onError, error, stackTrace);
 
   /// Delegated to the wrapped publisher, or completed at once when it is
   /// not [Flushable].

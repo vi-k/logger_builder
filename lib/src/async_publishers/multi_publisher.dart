@@ -3,6 +3,7 @@ import 'dart:async';
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
+import 'internal/report.dart';
 
 /// A handler that delegates an event to multiple publishers simultaneously.
 ///
@@ -92,16 +93,14 @@ base class MultiPublisher<Log extends CustomLog>
     Object error,
     StackTrace stackTrace,
   ) {
-    if (onError case final onError?) {
-      try {
-        onError(publisher, error, stackTrace);
-      } on Object catch (handlerError, handlerStackTrace) {
-        // A throwing error handler must not interrupt delivery.
-        Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-      }
-    } else {
-      Zone.current.handleUncaughtError(error, stackTrace);
-    }
+    // The handler here takes the failing publisher too, so it is adapted to
+    // the shared shape rather than passed straight through.
+    final handler = onError;
+    reportTo(
+      handler == null ? null : (e, st) => handler(publisher, e, st),
+      error,
+      stackTrace,
+    );
   }
 
   /// Flushes every [Flushable] publisher in the list.
