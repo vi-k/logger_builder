@@ -229,12 +229,12 @@ Dart SDK 3.13.0 (stable), если не сказано иное:
 |---|---|---|
 | `dart analyze` | 0 issues | `HEAD` |
 | `dart analyze --fatal-infos` | 0 issues | `HEAD` |
-| `dart test` | 225/225 зелёные | `HEAD` |
+| `dart test` | 226/226 зелёные | `HEAD` |
 | `dart format --output=none --set-exit-if-changed .` | чисто | `HEAD` |
 | `dart doc` | Found 0 warnings and 0 errors | `HEAD` |
 | `dart pub publish --dry-run` | `logger_builder 0.7.0`, архив 69 КБ, **0 предупреждений** | `HEAD` |
-| чистый клон + `pub get` в корне и в `example/`, `dart analyze --fatal-infos` + `dart test` | 0 issues, 225/225 (в 0.5.1 тут было exit 3 — `H3`) | `HEAD` |
-| то же на **Dart 3.7.0** (из Flutter 3.29, `~/fvm/versions/3.29.0`) | 0 issues, 225/225 | `HEAD` |
+| чистый клон + `pub get` в корне и в `example/`, `dart analyze --fatal-infos` + `dart test` | 0 issues, 225/225 (в 0.5.1 тут было exit 3 — `H3`) | `373eaa9` |
+| то же на **Dart 3.7.0** (из Flutter 3.29, `~/fvm/versions/3.29.0`) | 0 issues, 225/225 | `373eaa9` |
 | Flutter 3.29 и 3.47: `pub get` + `flutter analyze` пробного приложения | чисто | **0.6.1** |
 | все девять примеров | запускаются, exit 0 | **0.6.1** |
 | `dart compile js` / `dart compile wasm` | собираются | **0.6.1** |
