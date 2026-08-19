@@ -4,8 +4,155 @@ import 'dart:collection';
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
+import 'internal/async_param_publisher.dart';
 import 'internal/batch_format.dart';
 import 'internal/buffered_pipeline.dart';
+
+part 'async_publisher_with_buffer_and_param.dart';
+
+/// The wiring both buffered facades sit on: the five knobs, the lazily built
+/// batch queue, and the lifecycle around it.
+///
+/// [E] is whatever the queue carries — the log itself for the log-only
+/// facade, a `(Param, Log)` record for the parameterised one.
+///
+/// Private, and the two facades are one library through `part`, on purpose.
+/// A shared base in `internal/` would have to expose the queue through a
+/// public member to be reachable from another library, and every public
+/// member of a base class shows up on the pub.dev page of the classes users
+/// extend. Here the members below are exactly the ones that were duplicated
+/// before, and nothing else becomes visible.
+abstract base class _BufferedFacade<E extends Object?> {
+  /// Whether the underlying stream controller delivers events synchronously.
+  final bool sync;
+
+  /// Called when [handle] throws.
+  ///
+  /// When `null`, the error is reported to the current zone via
+  /// [Zone.handleUncaughtError]. In either case whatever [handle] placed in
+  /// the retry buffer is returned to the queue and processing continues —
+  /// but only that. Entries the throwing [handle] did not hand back are gone;
+  /// reporting the error does not preserve them.
+  ///
+  /// Note: in a plain Dart program without an error zone, an uncaught
+  /// asynchronous error terminates the isolate by default — and then nothing
+  /// keeps processing. Provide [onError] or wrap the app in
+  /// [runZonedGuarded].
+  final void Function(Object error, StackTrace stackTrace)? onError;
+
+  /// How long to wait before retrying a batch that was handed back through
+  /// the retry buffer.
+  ///
+  /// Applies only after a batch returned entries, so a handler that keeps
+  /// up pays nothing. Retries always go through the event loop, never the
+  /// microtask queue, so a permanently unavailable sink can no longer starve
+  /// timers, I/O or the application's own [close] call — but with the
+  /// default [Duration.zero] the queue still retries as fast as the event
+  /// loop allows. Set a non-zero value when the sink can be down for a
+  /// while.
+  final Duration retryDelay;
+
+  /// Called with the entries dropped when [close] is reached while a batch
+  /// still wants to be retried.
+  ///
+  /// Two things reach it. A batch that spends its [maxRetries] budget, and
+  /// entries handed back to the retry buffer *after* [close] was called, which
+  /// can never be processed. Without this callback both are gone without
+  /// a trace — no error, no counter. Use it to persist them somewhere
+  /// durable, or at least to count them.
+  ///
+  /// A throwing handler does not derail the shutdown: its own error goes to
+  /// the current zone.
+  final void Function(List<E> entries)? onDropped;
+
+  /// How many times a batch handed back through the retry buffer is
+  /// retried before it is dropped.
+  ///
+  /// Counts a run of failures, not the lifetime of the publisher: a batch
+  /// that gets through resets the budget, so a sink that comes back gets
+  /// the full allowance again. When the budget is spent the batch goes to
+  /// [onDropped] and the queue moves on.
+  ///
+  /// There is no unbounded setting, and that is the point. Retrying for
+  /// ever is not "never lose a log": a deterministically failing batch — a
+  /// `toString` that throws, a value that cannot be serialised — is never
+  /// delivered and never dropped either, it just holds the queue and burns
+  /// a core. Measured before this existed: 242 820 handler calls and as
+  /// many [onError] calls in half a second, from one log.
+  ///
+  /// Zero means a batch that is handed back is dropped at once.
+  ///
+  /// Together with [retryDelay] this also bounds how long a publisher
+  /// nobody closes keeps the isolate alive: a pending retry timer is
+  /// a live root for the event loop, so before the budget existed a
+  /// worker with a dead sink returned from `main` and never exited.
+  /// [close] does not wait any of it out — it cancels the pending
+  /// timer and makes one prompt final attempt.
+  final int maxRetries;
+
+  final Zone _zone = Zone.current;
+
+  BufferedPipeline<E>? _pipelineOrNull;
+
+  BufferedPipeline<E> get _pipeline => _pipelineOrNull ??= BufferedPipeline<E>(
+        handle: handle,
+        sync: sync,
+        onError: onError,
+        onDropped: onDropped,
+        retryDelay: retryDelay,
+        maxRetries: maxRetries,
+        zone: _zone,
+      );
+
+  _BufferedFacade({
+    this.sync = false,
+    this.onError,
+    this.onDropped,
+    this.retryDelay = Duration.zero,
+    this.maxRetries = 100,
+  });
+
+  /// Processes a batch of buffered [entries].
+  ///
+  /// Entries added to [retryBuffer] are placed back at the front of the
+  /// queue and retried with the next batch.
+  FutureOr<void> handle(List<E> entries, List<E> retryBuffer);
+
+  /// Whether [close] has been called.
+  ///
+  /// Reading this does not create the queue: asking whether a publisher is
+  /// closed used to materialise a `StreamController` with a live subscription
+  /// nobody would ever close, and pinned the zone that receives handler
+  /// errors to whoever asked first.
+  bool get isClosed => _pipelineOrNull?.isClosed ?? false;
+
+  /// Completes when the queue has been fully drained.
+  ///
+  /// Drain semantics: the returned future also waits for logs published
+  /// after this call, until the buffer becomes empty. Completes immediately
+  /// when the publisher is idle.
+  ///
+  /// While a [close] is draining this returns that same future rather than an
+  /// already-completed one — reporting "the queue is empty" while logs are
+  /// still in flight would be a false all-clear at exactly the wrong moment.
+  Future<void> flush() => _pipelineOrNull?.flush() ?? Future<void>.value();
+
+  /// Closes the publisher after draining the queue: every entry accepted
+  /// before closing is processed, including entries published while a batch
+  /// was in flight. Entries returned to the retry buffer after closing are
+  /// dropped and handed to [onDropped].
+  ///
+  /// A retry that was waiting out [retryDelay] is not waited for: the pending
+  /// timer is cancelled and one prompt final attempt is made instead, so
+  /// shutdown latency does not scale with [retryDelay].
+  ///
+  /// After closing, publishing throws a [StateError] and [flush] hands back
+  /// this same future. Repeated calls return it too.
+  ///
+  /// Do not await this (or [flush]) from inside [handle]: closing waits for
+  /// the running batch to complete, so it would deadlock.
+  Future<void> close() => _pipeline.close();
+}
 
 /// A base class for asynchronous publishers that buffer log events before
 /// processing them together as a batch list.
@@ -44,96 +191,15 @@ import 'internal/buffered_pipeline.dart';
 /// }
 /// ```
 abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
+    extends _BufferedFacade<Log>
     implements CustomLogPublisher<Log>, Flushable, Closable {
-  /// Whether the underlying stream controller delivers events synchronously.
-  final bool sync;
-
-  /// Called when [handle] throws.
-  ///
-  /// When `null`, the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. In either case whatever [handle] placed in
-  /// the retry buffer is returned to the queue and processing continues —
-  /// but only that. Logs the throwing [handle] did not hand back are gone;
-  /// reporting the error does not preserve them.
-  ///
-  /// Note: in a plain Dart program without an error zone, an uncaught
-  /// asynchronous error terminates the isolate by default — and then nothing
-  /// keeps processing. Provide [onError] or wrap the app in
-  /// [runZonedGuarded].
-  final void Function(Object error, StackTrace stackTrace)? onError;
-
-  /// How long to wait before retrying a batch that was handed back through
-  /// the retry buffer.
-  ///
-  /// Applies only after a batch returned entries, so a handler that keeps
-  /// up pays nothing. Retries always go through the event loop, never the
-  /// microtask queue, so a permanently unavailable sink can no longer starve
-  /// timers, I/O or the application's own [close] call — but with the
-  /// default [Duration.zero] the queue still retries as fast as the event
-  /// loop allows. Set a non-zero value when the sink can be down for a
-  /// while.
-  final Duration retryDelay;
-
-  /// Called with the logs dropped when [close] is reached while a batch
-  /// still wants to be retried.
-  ///
-  /// Two things reach it. A batch that spends its [maxRetries] budget, and
-  /// logs handed back to the retry buffer *after* [close] was called, which
-  /// can never be processed. Without this callback both are gone without
-  /// a trace — no error, no counter. Use it to persist them somewhere
-  /// durable, or at least to count them.
-  ///
-  /// A throwing handler does not derail the shutdown: its own error goes to
-  /// the current zone.
-  final void Function(List<Log> logs)? onDropped;
-
-  /// How many times a batch handed back through the retry buffer is
-  /// retried before it is dropped.
-  ///
-  /// Counts a run of failures, not the lifetime of the publisher: a batch
-  /// that gets through resets the budget, so a sink that comes back gets
-  /// the full allowance again. When the budget is spent the batch goes to
-  /// [onDropped] and the queue moves on.
-  ///
-  /// There is no unbounded setting, and that is the point. Retrying for
-  /// ever is not "never lose a log": a deterministically failing batch — a
-  /// `toString` that throws, a value that cannot be serialised — is never
-  /// delivered and never dropped either, it just holds the queue and burns
-  /// a core. Measured before this existed: 242 820 handler calls and as
-  /// many [onError] calls in half a second, from one log.
-  ///
-  /// Zero means a batch that is handed back is dropped at once.
-  ///
-  /// Together with [retryDelay] this also bounds how long a publisher
-  /// nobody closes keeps the isolate alive: a pending retry timer is
-  /// a live root for the event loop, so before the budget existed a
-  /// worker with a dead sink returned from `main` and never exited.
-  /// [close] does not wait any of it out — it cancels the pending
-  /// timer and makes one prompt final attempt.
-  final int maxRetries;
-
-  final Zone _zone = Zone.current;
-
-  BufferedPipeline<Log>? _pipelineOrNull;
-
-  BufferedPipeline<Log> get _pipeline =>
-      _pipelineOrNull ??= BufferedPipeline<Log>(
-        handle: handle,
-        sync: sync,
-        onError: onError,
-        onDropped: onDropped,
-        retryDelay: retryDelay,
-        maxRetries: maxRetries,
-        zone: _zone,
-      );
-
   /// Creates the publisher and its buffered processing queue.
   AsyncPublisherWithBufferBase({
-    this.sync = false,
-    this.onError,
-    this.onDropped,
-    this.retryDelay = Duration.zero,
-    this.maxRetries = 100,
+    super.sync,
+    super.onError,
+    super.onDropped,
+    super.retryDelay,
+    super.maxRetries,
   });
 
   /// Processes a batch of buffered [logs].
@@ -147,47 +213,11 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// > error is routed to [onError] or the current zone, and every log not
   /// > already handed back is dropped. Wrap the failing work in a
   /// > `try`/`catch` and `retryBuffer.addAll(logs)` there.
+  @override
   FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer);
-
-  /// Whether [close] has been called.
-  ///
-  /// Reading this does not create the queue: asking whether a publisher is
-  /// closed used to materialise a `StreamController` with a live subscription
-  /// nobody would ever close, and pinned the zone that receives handler
-  /// errors to whoever asked first.
-  bool get isClosed => _pipelineOrNull?.isClosed ?? false;
 
   @override
   void publish(Log log) => _pipeline.add(log);
-
-  /// Completes when the queue has been fully drained.
-  ///
-  /// Drain semantics: the returned future also waits for logs published
-  /// after this call, until the buffer becomes empty. Completes immediately
-  /// when the publisher is idle.
-  ///
-  /// While a [close] is draining this returns that same future rather than an
-  /// already-completed one — reporting "the queue is empty" while logs are
-  /// still in flight would be a false all-clear at exactly the wrong moment.
-  @override
-  Future<void> flush() => _pipelineOrNull?.flush() ?? Future<void>.value();
-
-  /// Closes the publisher after draining the queue: every log accepted
-  /// before closing is processed, including logs published while a batch
-  /// was in flight. Logs returned to the retry buffer after closing are
-  /// dropped and handed to [onDropped].
-  ///
-  /// A retry that was waiting out [retryDelay] is not waited for: the pending
-  /// timer is cancelled and one prompt final attempt is made instead, so
-  /// shutdown latency does not scale with [retryDelay].
-  ///
-  /// After closing, [publish] throws a [StateError] and [flush] hands back
-  /// this same future. Repeated calls return it too.
-  ///
-  /// Do not await this (or [flush]) from inside [handle]: closing waits for
-  /// the running batch to complete, so it would deadlock.
-  @override
-  Future<void> close() => _pipeline.close();
 }
 
 /// An asynchronous publisher that buffers log events and processes them in
