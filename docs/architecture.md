@@ -51,9 +51,10 @@ lib/src/
     custom_log.dart              CustomLog, LogTransformer
     custom_log_publisher.dart    CustomLogPublisher, CustomLogFormatter
   async_publishers/              асинхронная доставка
-    async_publisher.dart                       Flushable, Closable, AsyncPublisherBase,
-                                               AsyncPublisher, AsyncFormatter
-    async_publisher_with_param.dart            + параметр на публикацию
+    async_publisher.dart                       Flushable, Closable, _AsyncFacade,
+                                               AsyncPublisherBase, AsyncPublisher,
+                                               AsyncFormatter (+ part файла ниже)
+    async_publisher_with_param.dart            + параметр на публикацию (part)
     async_publisher_with_buffer.dart           + батчи; _BufferedFacade
                                                (+ part файла ниже)
     async_publisher_with_buffer_and_param.dart + то и другое (part)
@@ -312,6 +313,17 @@ Param-варианты не реализуют `CustomLogPublisher` сами: о
 `internal/` было нельзя: из другой библиотеки очередь достижима только
 через публичный член, а он появился бы на страницах pub.dev у классов,
 которые пользователь наследует.
+
+Небуферизованная пара устроена так же: `sync`, `onError`, очередь,
+`isClosed`, `flush`, `close` — в приватной базе `_AsyncFacade<E>`, а
+`async_publisher_with_param.dart` — `part` файла `async_publisher.dart`.
+Разница одна. У буферных фасадов `handle` совпадает по сигнатуре
+(`List<E>`), и база объявляет его сама; здесь сигнатуры разные —
+`handle(Log)` против `handle(Param, Log)`, — поэтому база просит у
+наследника не метод, а функцию: геттер `_entryHandler`, которую она
+отдаёт очереди. Лог-фасад возвращает оттуда свой `handle` напрямую, так
+что путь лога остаётся ровно тем же, что до сведения, а
+параметрический — `_handleEntry`, распаковывающий пару.
 
 `MultiPublisher` рассылает лог по списку паблишеров (список копируется
 при создании), `flush`/`close` — каскадно по тем, кто реализует
