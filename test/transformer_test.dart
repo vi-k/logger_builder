@@ -4,6 +4,7 @@ import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
+import 'utils/variable_logger.dart';
 
 void main() {
   group('CustomLogger.transformer', () {
@@ -665,6 +666,40 @@ void main() {
 
       expect(calls, 1, reason: 'the handler must not be re-entered');
       expect(zoneErrors, hasLength(1));
+    });
+
+    // Regression: H1 (project review 2026-08-19[2]) — `publishLog` read the
+    // handler first thing on every log, and resolution walks the parent
+    // chain. Measured in AOT: an enabled log went from 9.4 ns at depth 0 to
+    // 57.7 ns at depth 20, while the same chain with a handler on the leaf
+    // stayed flat. The handler is only ever used on the error branches.
+    test('a successful log does not resolve onError at all', () {
+      final root = CountingLogger([Levels.info])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher<VarLog>((_) {});
+      var leaf = root;
+      for (var i = 0; i < 5; i++) {
+        leaf = CountingLogger.sub(leaf, [Levels.info]);
+      }
+      final reads = [root, leaf].map((l) => l.onErrorReads).toList();
+
+      leaf[Levels.info].log('hello');
+
+      expect(leaf.onErrorReads - reads[1], 0);
+      expect(root.onErrorReads - reads[0], 0, reason: 'no walk up the chain');
+    });
+
+    test('a failing log still resolves onError', () {
+      final leaf = CountingLogger([Levels.info])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher<VarLog>((_) {
+          throw StateError('sink down');
+        });
+      final before = leaf.onErrorReads;
+
+      expect(() => leaf[Levels.info].log('hello'), throwsStateError);
+
+      expect(leaf.onErrorReads - before, greaterThan(0));
     });
 
     // Regression: C3 — the guard must be released again, or the logger

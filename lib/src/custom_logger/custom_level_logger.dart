@@ -276,15 +276,19 @@ abstract base class CustomLevelLogger<
     // Captured once: re-reading `logger` would let a level logger that got
     // re-attached mid-transform clear the guard on the wrong owner and leave
     // the original latched forever.
+    //
+    // `onError` is deliberately *not* captured here. It is the one setting
+    // resolved through the parent chain instead of copied down, so reading
+    // it costs a walk, and the happy path never needs the answer. Hoisting
+    // it made an enabled log cost more the deeper the sublogger sat:
+    // measured in AOT, 9.4 ns at depth 0 against 57.7 ns at depth 20.
     final owner = logger;
-    final onError = owner.onError;
     var published = log;
 
     if (owner._transformer case final transformer?) {
       if (owner._transforming) {
         _reportGuardViolation(
           owner,
-          onError,
           'A log transformer must not log through its own logger; '
           'the nested log was dropped',
         );
@@ -297,7 +301,7 @@ abstract base class CustomLevelLogger<
       try {
         transformed = transformer(log);
       } on Object catch (error, stackTrace) {
-        _report(owner, onError, error, stackTrace);
+        _report(owner, error, stackTrace);
 
         return;
       } finally {
@@ -316,7 +320,6 @@ abstract base class CustomLevelLogger<
     if (_publishing) {
       _reportGuardViolation(
         owner,
-        onError,
         'A publisher must not log through the level it publishes for; '
         'the nested log was dropped',
       );
@@ -330,6 +333,7 @@ abstract base class CustomLevelLogger<
     } on Object catch (error, stackTrace) {
       // Without a handler the error keeps propagating out of the logging
       // call, as it always has; with one, logging cannot break its caller.
+      final onError = owner.onError;
       if (onError == null) {
         rethrow;
       }
@@ -339,21 +343,16 @@ abstract base class CustomLevelLogger<
     }
   }
 
-  void _reportGuardViolation(
-    Logger owner,
-    void Function(Object error, StackTrace stackTrace)? onError,
-    String message,
-  ) =>
-      _report(owner, onError, StateError(message), StackTrace.current);
+  void _reportGuardViolation(Logger owner, String message) =>
+      _report(owner, StateError(message), StackTrace.current);
 
-  // Through the owner, not straight to the handler: the owner holds the
-  // flag that keeps a logging handler from re-entering itself.
-  void _report(
-    Logger owner,
-    void Function(Object error, StackTrace stackTrace)? onError,
-    Object error,
-    StackTrace stackTrace,
-  ) {
+  // Resolves the handler here, on the error branch, rather than taking it
+  // from the caller: see the note in [publishLog] on why the happy path
+  // must not pay for the walk. Reported through the owner, not straight to
+  // the handler, because the owner holds the flag that keeps a logging
+  // handler from re-entering itself.
+  void _report(Logger owner, Object error, StackTrace stackTrace) {
+    final onError = owner.onError;
     if (onError == null) {
       Zone.current.handleUncaughtError(error, stackTrace);
 

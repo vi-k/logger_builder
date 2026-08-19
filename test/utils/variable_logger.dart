@@ -53,6 +53,27 @@ base class VarLogger
   void attach(VarLogger sublogger) => registerSublogger(sublogger);
 }
 
+/// A [VarLogger] that counts how often its `onError` getter is consulted.
+///
+/// The happy path of `publishLog` must not consult it at all: the handler
+/// is resolved by walking the parent chain, so one read per log makes an
+/// enabled log cost more the deeper the sublogger sits.
+base class CountingLogger extends VarLogger {
+  int onErrorReads = 0;
+
+  CountingLogger(super.levelValues);
+
+  CountingLogger.sub(CountingLogger super.parent, super.levelValues)
+      : super.sub();
+
+  @override
+  void Function(Object error, StackTrace stackTrace)? get onError {
+    onErrorReads++;
+
+    return super.onError;
+  }
+}
+
 /// Registers a level logger handed in from outside, so a test can try to
 /// register the same instance in two loggers.
 ///
