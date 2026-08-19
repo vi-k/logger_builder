@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'dropped_reporter.dart';
 import 'report.dart';
 
 /// Internal engine shared by the buffered async publishers: a tick-driven
@@ -32,6 +33,9 @@ final class BufferedPipeline<E> {
 
   final StreamController<void> _controller;
   StreamSubscription<void>? _subscription;
+  // Built on the first loss and only when the user left `onDropped` unset:
+  // in a publisher that never drops anything it does not exist.
+  DroppedReporter? _reporter;
   // Accepted and not yet finished: what waits in `_entries` plus the batch
   // in flight, which is out of the list but still in memory.
   int _pending = 0;
@@ -75,7 +79,7 @@ final class BufferedPipeline<E> {
     }
 
     if (maxQueueSize case final limit? when _pending >= limit) {
-      _reportDropped([entry]);
+      _reportDropped([entry], DropCause.queueFull);
 
       return;
     }
@@ -129,6 +133,8 @@ final class BufferedPipeline<E> {
     await _controller.close();
     await _subscription?.cancel();
     _completeFlush();
+    // After the drain: entries dropped during it still belong to the count.
+    _reporter?.flush();
   }
 
   Future<void> _drain() {
@@ -189,7 +195,7 @@ final class BufferedPipeline<E> {
       // Entries retried after close() would never be processed. Report them
       // rather than losing them without a trace.
       if (retryBuffer.isNotEmpty) {
-        _reportDropped(List<E>.of(retryBuffer));
+        _reportDropped(List<E>.of(retryBuffer), DropCause.closed);
       }
       _pending -= entries.length;
     } else if (retryBuffer.isEmpty) {
@@ -202,7 +208,7 @@ final class BufferedPipeline<E> {
       // holds the queue, burns a core and keeps the isolate alive.
       _retryAttempts = 0;
       _batchWasRetried = false;
-      _reportDropped(List<E>.of(retryBuffer));
+      _reportDropped(List<E>.of(retryBuffer), DropCause.retriesSpent);
       _pending -= entries.length;
     } else {
       _retryAttempts++;
@@ -321,11 +327,16 @@ final class BufferedPipeline<E> {
     _flushCompleter = null;
   }
 
-  void _reportDropped(List<E> dropped) {
+  void _reportDropped(List<E> dropped, DropCause cause) {
     if (onDropped case final onDropped?) {
       // A throwing handler must not derail the shutdown.
       guarded(() => onDropped(dropped));
+
+      return;
     }
+
+    // Nobody asked to see losses, which is not a reason to hide them.
+    (_reporter ??= DroppedReporter()).record(dropped.length, cause);
   }
 
   void _reportError(Object error, StackTrace stackTrace) =>

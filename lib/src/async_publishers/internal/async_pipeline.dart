@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'dropped_reporter.dart';
 import 'report.dart';
 
 /// Internal engine shared by the two unbuffered asynchronous publishers:
@@ -26,6 +27,9 @@ final class AsyncPipeline<E> {
 
   StreamController<E> _controller;
   StreamSubscription<void>? _subscription;
+  // Built on the first loss and only when the user left `onDropped` unset:
+  // in a publisher that never drops anything it does not exist.
+  DroppedReporter? _reporter;
   // Accepted and not yet handled, including the entry a paused `asyncMap`
   // is holding. Counted rather than measured: the entries sit inside the
   // StreamController, which shows neither its contents nor their number.
@@ -105,6 +109,8 @@ final class AsyncPipeline<E> {
   Future<void> _close() async {
     await _controller.close();
     await _subscription?.cancel();
+    // After the drain: a loss during it still belongs to the count.
+    _reporter?.flush();
   }
 
   void _listen() {
@@ -141,7 +147,12 @@ final class AsyncPipeline<E> {
     if (onDropped case final onDropped?) {
       // A throwing handler must not derail publishing.
       guarded(() => onDropped(entry));
+
+      return;
     }
+
+    // Nobody asked to see losses, which is not a reason to hide them.
+    (_reporter ??= DroppedReporter()).record(1, DropCause.queueFull);
   }
 
   void _reportError(Object error, StackTrace stackTrace) =>

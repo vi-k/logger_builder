@@ -454,4 +454,120 @@ void main() {
       expect(publisher.isClosed, isTrue);
     });
   });
+  group('the default onDropped', () {
+    /// Captures what the package prints: `print` goes through the current
+    /// zone, so a test can hold it without touching the package.
+    Future<List<String>> printedDuring(Future<void> Function() body) async {
+      final printed = <String>[];
+      await runZoned(
+        body,
+        zoneSpecification: ZoneSpecification(
+          print: (self, parent, zone, line) => printed.add(line),
+        ),
+      );
+
+      return printed;
+    }
+
+    test('an unset onDropped still says logs are being lost', () async {
+      final printed = await printedDuring(() async {
+        final gate = Completer<void>();
+        final publisher = AsyncPublisher<Log>(
+          (log) => gate.future,
+          maxQueueSize: 1,
+        );
+        makeLogger(publisher)
+          ..i('one')
+          ..i('two');
+
+        gate.complete();
+        await publisher.close();
+      });
+
+      expect(printed, hasLength(1));
+      expect(printed.single, contains('logger_builder'));
+      expect(printed.single, contains('queue full'));
+      expect(printed.single, contains('onDropped'));
+    });
+
+    test('an onDropped that was set keeps the package quiet', () async {
+      final dropped = <String?>[];
+      final printed = await printedDuring(() async {
+        final gate = Completer<void>();
+        final publisher = AsyncPublisher<Log>(
+          (log) => gate.future,
+          maxQueueSize: 1,
+          onDropped: (log) => dropped.add(log.message),
+        );
+        makeLogger(publisher)
+          ..i('one')
+          ..i('two');
+
+        gate.complete();
+        await publisher.close();
+      });
+
+      expect(dropped, ['two']);
+      expect(printed, isEmpty);
+    });
+
+    test('close counts the losses the window swallowed', () async {
+      final printed = await printedDuring(() async {
+        final gate = Completer<void>();
+        final publisher = AsyncPublisher<Log>(
+          (log) => gate.future,
+          maxQueueSize: 1,
+        );
+        final log = makeLogger(publisher);
+        for (var i = 0; i < 20; i++) {
+          log.i('$i');
+        }
+
+        gate.complete();
+        await publisher.close();
+      });
+
+      expect(printed, hasLength(2), reason: 'the opening line and the count');
+      expect(printed.last, contains('18 log events'));
+    });
+
+    test('a buffered close counts what its window swallowed', () async {
+      final printed = await printedDuring(() async {
+        final gate = Completer<void>();
+        final publisher = AsyncPublisherWithBuffer<Log>(
+          (logs, retryBuffer) => gate.future,
+          maxQueueSize: 1,
+        );
+        final log = makeLogger(publisher);
+        for (var i = 0; i < 20; i++) {
+          log.i('$i');
+        }
+
+        gate.complete();
+        await publisher.close();
+      });
+
+      expect(printed, hasLength(2), reason: 'the opening line and the count');
+      expect(printed.last, contains('18 log events'));
+    });
+
+    test('a buffered publisher speaks for its own losses too', () async {
+      final printed = await printedDuring(() async {
+        final gate = Completer<void>();
+        final publisher = AsyncPublisherWithBuffer<Log>(
+          (logs, retryBuffer) => gate.future,
+          maxQueueSize: 1,
+        );
+        makeLogger(publisher)
+          ..i('one')
+          ..i('two');
+
+        gate.complete();
+        await publisher.close();
+      });
+
+      expect(printed, hasLength(1));
+      expect(printed.single, contains('queue full'));
+    });
+  });
 }
