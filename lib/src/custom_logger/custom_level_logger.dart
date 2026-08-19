@@ -59,12 +59,15 @@ abstract base class CustomLevelLogger<
   /// Current publisher.
   CustomLogPublisher<Log> _publisher;
 
-  /// Whether [_publisher] is a real publisher rather than the no-op default.
+  /// Whether this level was ever given a publisher, rather than being left
+  /// on the no-op default it starts with.
   ///
-  /// Kept as a flag because the no-op publisher is private and generic, so
-  /// there is no supported way to recognise it from the outside — which used
-  /// to make an enabled-but-unconfigured level indistinguishable from a
-  /// working one.
+  /// A flag rather than a type test. `CustomLogPublisher.noOp()` is public,
+  /// so recognising the no-op *is* possible from the outside — the earlier
+  /// note here claiming otherwise was simply wrong — but a flag answers the
+  /// question that matters: was this level configured, or is it still on the
+  /// value every level starts with? Assigning `noOp()` on purpose is
+  /// configuring it, and reads as `true`.
   bool _hasPublisher;
 
   /// Whether this level holds a publisher of its own.
@@ -186,9 +189,12 @@ abstract base class CustomLevelLogger<
   ///
   /// `false` means the level still sits on the no-op publisher every level
   /// starts on: [isEnabled] can be `true` and the log function can return
-  /// normally while nothing is ever written. That combination is otherwise
-  /// undetectable from the outside, because the no-op publisher is private,
-  /// so this is the check to assert on when a level looks silent.
+  /// normally while nothing is ever written. That is the check to assert on
+  /// when a level looks silent.
+  ///
+  /// The question is "was it configured", not "does the publisher do
+  /// anything": assigning `CustomLogPublisher.noOp()` yourself makes this
+  /// `true`, because you chose it.
   bool get hasPublisher => _hasPublisher;
 
   /// Whether this level holds a publisher of its own rather than one taken

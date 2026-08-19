@@ -75,6 +75,27 @@ section became 0.7.0 instead.
 
 **Fixes**
 
+* A partial retry no longer reorders the batch. Both halves of a buffered
+  formatter receive the retry buffer, so what came back was "what `format`
+  handed back" followed by "what `output` handed back" — `three, one, two,
+  four` for a batch published as `one, two, three, four` — and the queue
+  used it in that order.
+* `output` is no longer called when `format` handed the whole batch back.
+  It used to run with an empty list of logs and whatever payload `format`
+  had built, which for a network or file sink is an empty request on every
+  retry.
+* A buffered publisher now reports handler errors into the zone that
+  *built* it. The queue is created lazily, on the first `publish`, and it
+  used to capture the zone there — so every later error went to whichever
+  scope happened to log first, usually a request rather than the top level
+  where the logger was made. The unbuffered family already worked this way.
+* `TypedLazy.value` memoizes a throwing `convert`, as `Lazy.resolved`
+  already did for a throwing factory. `LazyString.convert` is a
+  `toString()`, and one with a side effect used to run again on every
+  access.
+* Registering a sublogger from inside `processLog` no longer throws
+  `ConcurrentModificationError`. The propagation walks now iterate a
+  snapshot; `processLog` is the one documented hook that runs inside them.
 * A `CustomLogger.onError` handler that logs no longer recurses until the
   stack is gone. Both reentrancy guards are latched while the handler
   runs and reported the violation through that same handler; measured,
