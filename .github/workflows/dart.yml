@@ -64,7 +64,10 @@ jobs:
       - name: Check the dartdoc
         run: |
           set -e
-          dart doc --output=/tmp/api | tee /tmp/doc.log
+          # 2>&1 is load-bearing: dartdoc prints the summary to stderr,
+          # so without it the log is empty and the grep fails on a clean
+          # run — which is exactly how this step failed the first time.
+          dart doc --output=/tmp/api 2>&1 | tee /tmp/doc.log
           grep -q 'Found 0 warnings and 0 errors' /tmp/doc.log
 
       # .pubignore is load-bearing here — the published example includes the
