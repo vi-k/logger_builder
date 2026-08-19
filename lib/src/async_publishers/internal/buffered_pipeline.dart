@@ -17,6 +17,7 @@ final class BufferedPipeline<E> {
   final FutureOr<void> Function(List<E> entries, List<E> retryBuffer) handle;
   final Duration retryDelay;
   final int maxRetries;
+  final int? maxQueueSize;
 
   /// The zone the *publisher* was built in, handed down rather than taken
   /// from `Zone.current` here.
@@ -31,6 +32,9 @@ final class BufferedPipeline<E> {
 
   final StreamController<void> _controller;
   StreamSubscription<void>? _subscription;
+  // Accepted and not yet finished: what waits in `_entries` plus the batch
+  // in flight, which is out of the list but still in memory.
+  int _pending = 0;
   List<E> _entries = [];
   Completer<void>? _flushCompleter;
   Timer? _retryTimer;
@@ -54,6 +58,7 @@ final class BufferedPipeline<E> {
     required this.zone,
     this.retryDelay = Duration.zero,
     this.maxRetries = 100,
+    this.maxQueueSize,
   }) : _controller = StreamController<void>(sync: sync) {
     zone.run(() {
       _subscription = _controller.stream
@@ -69,6 +74,13 @@ final class BufferedPipeline<E> {
       throw StateError('The publisher is closed');
     }
 
+    if (maxQueueSize case final limit? when _pending >= limit) {
+      _reportDropped([entry]);
+
+      return;
+    }
+
+    _pending++;
     final wasEmpty = _entries.isEmpty;
     _entries.add(entry);
     if (wasEmpty && !_isProcessing) {
@@ -179,9 +191,11 @@ final class BufferedPipeline<E> {
       if (retryBuffer.isNotEmpty) {
         _reportDropped(List<E>.of(retryBuffer));
       }
+      _pending -= entries.length;
     } else if (retryBuffer.isEmpty) {
       _retryAttempts = 0;
       _batchWasRetried = false;
+      _pending -= entries.length;
     } else if (_retryAttempts >= maxRetries) {
       // Out of budget. Dropping is the lesser evil: a batch that fails
       // deterministically is never delivered by retrying either, it just
@@ -189,10 +203,18 @@ final class BufferedPipeline<E> {
       _retryAttempts = 0;
       _batchWasRetried = false;
       _reportDropped(List<E>.of(retryBuffer));
+      _pending -= entries.length;
     } else {
       _retryAttempts++;
       _batchWasRetried = true;
-      _entries.insertAll(0, _inPublishOrder(entries, retryBuffer));
+      final requeued = _inPublishOrder(entries, retryBuffer);
+      _entries.insertAll(0, requeued);
+      // The batch leaves the count except for what went back into the queue
+      // — and a handler may hand back entries that never came from this
+      // batch, which were never counted on the way in. Subtracting the
+      // difference keeps the count on what is held rather than on what was
+      // once accepted.
+      _pending -= entries.length - requeued.length;
     }
   }
 

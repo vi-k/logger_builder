@@ -100,6 +100,24 @@ abstract base class _BufferedFacade<E extends Object?> {
   /// timer and makes one prompt final attempt.
   final int maxRetries;
 
+  /// The most entries the queue accepts before it starts refusing them.
+  ///
+  /// Counts what has been accepted and not yet finished: the entries waiting
+  /// in the queue plus the batch being handled right now. At the limit it is
+  /// the *incoming* entry that is refused — it goes to [onDropped] and never
+  /// enters the queue. Everything already accepted is still delivered, so
+  /// [flush] and [close] promise exactly what they promised before, and a
+  /// batch handed back through the retry buffer is never cut: it was
+  /// accepted long ago.
+  ///
+  /// The default is 10 000 entries. At a thousand logs a second that is ten
+  /// seconds of a sink that is not draining — an outage rather than a burst.
+  ///
+  /// `null` gives the bound up on purpose: the queue then grows until the
+  /// process runs out of memory. That is the right trade only when the input
+  /// is bounded elsewhere and losing a log is worse than dying.
+  final int? maxQueueSize;
+
   final Zone _zone = Zone.current;
 
   BufferedPipeline<E>? _pipelineOrNull;
@@ -111,6 +129,7 @@ abstract base class _BufferedFacade<E extends Object?> {
         onDropped: onDropped,
         retryDelay: retryDelay,
         maxRetries: maxRetries,
+        maxQueueSize: maxQueueSize,
         zone: _zone,
       );
 
@@ -120,7 +139,12 @@ abstract base class _BufferedFacade<E extends Object?> {
     this.onDropped,
     this.retryDelay = Duration.zero,
     this.maxRetries = 100,
-  });
+    this.maxQueueSize = 10000,
+  }) : assert(
+          maxQueueSize == null || maxQueueSize > 0,
+          'maxQueueSize must be null or positive: a queue of zero would '
+          'refuse every log',
+        );
 
   /// Processes a batch of buffered [entries].
   ///
@@ -210,6 +234,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   /// Processes a batch of buffered [logs].
@@ -264,6 +289,7 @@ final class AsyncPublisherWithBuffer<Log extends CustomLog>
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   @override
@@ -331,6 +357,7 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   @override

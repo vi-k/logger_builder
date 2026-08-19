@@ -51,6 +51,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   /// Processes a batch of buffered parameter-log [entries].
@@ -120,6 +121,7 @@ final class AsyncPublisherWithBufferAndParam<Param extends Object?,
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   @override
@@ -195,6 +197,7 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
     super.onDropped,
     super.retryDelay,
     super.maxRetries,
+    super.maxQueueSize,
   });
 
   @override
