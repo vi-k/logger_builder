@@ -307,5 +307,45 @@ void main() {
 
       await publisher.close().timeout(const Duration(seconds: 2));
     });
+
+    // Regression: M16 (project review 2026-08-19[2]) — `EqLog` has been
+    // defined in this file all along and used by nothing: the twin's
+    // identity test was never mirrored here, and the mutation that swaps
+    // `identical(a.$2, b.$2)` for `==` in the entry key survived the whole
+    // suite. The comment in the code describes the defect that keying
+    // guards against, so it is a regression guard with nothing behind it.
+    test('retrying one of two equal but distinct logs keeps both', () async {
+      final levelLogger = Logger('test')[Levels.info];
+      final a = EqLog(levelLogger, 'dup');
+      final b = EqLog(levelLogger, 'dup');
+      expect(a == b, isTrue, reason: 'the fixture must have value equality');
+      expect(identical(a, b), isFalse);
+
+      final delivered = <EqLog>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBufferAndParam<String, EqLog, String>(
+        format: (entries, retry) {
+          if (first) {
+            first = false;
+            retry.add(entries[1]);
+          }
+
+          return 'batch';
+        },
+        output: (out, remaining, retry) =>
+            delivered.addAll(remaining.map((entry) => entry.$2)),
+      );
+      publisher.withParam('ctx')
+        ..publish(a)
+        ..publish(b);
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(
+        delivered.map((log) => identical(log, a) ? 'a' : 'b').toList(),
+        ['a', 'b'],
+        reason: 'each distinct log must reach output exactly once',
+      );
+    });
   });
 }
