@@ -948,7 +948,7 @@ final asyncFormatter = AsyncFormatter<Log, Map<String, Object?>>(
 );
 ```
 
-All eight take the same three optional arguments:
+All eight take the same four optional arguments:
 
 - **`onError`** — called when the handler throws. Without it the error goes
   to the current zone, and in a plain Dart program without an error zone an
@@ -956,17 +956,33 @@ All eight take the same three optional arguments:
   keeps processing your logs. Set it, or wrap the app in `runZonedGuarded`;
 - **`sync`** — whether the internal `StreamController` delivers
   synchronously. Leave it alone unless you know you need it;
-- **`retryDelay`** — buffered variants only: how long to wait before
-  retrying a batch that was handed back through `retryBuffer`. The default
-  `Duration.zero` still goes through the event loop, so a dead sink cannot
-  starve timers or your own `close()`, but it retries as fast as the loop
-  allows. Set a real delay when the destination can be down for a while; it
-  doubles with each attempt, capped at 32 times the base. `close()` does not
-  wait any of it out — it cancels the pending timer and makes one prompt
-  final attempt instead.
+- **`maxQueueSize`** — the most entries the queue accepts before it starts
+  refusing them, counting what has been accepted and not yet handled: the
+  entries waiting plus the one (or the batch) being handled right now.
+  Default 10 000. At the limit it is the **incoming** log that is refused —
+  it goes to `onDropped` and never enters the queue, so everything already
+  accepted is still delivered and `flush()` and `close()` mean exactly what
+  they meant before. `null` gives the bound up on purpose: the queue then
+  grows until the process runs out of memory, which is the right trade only
+  when the input is bounded elsewhere and losing a log is worse than dying;
+- **`onDropped`** — called with what was dropped. In all eight that means a
+  log the full queue refused; in the buffered four it also means a batch
+  that spent its `maxRetries` budget and entries handed back to
+  `retryBuffer` after `close()` was called, which can never be processed.
+  Without this callback the loss leaves no trace. The unbuffered four hand
+  you one log at a time (with its `param`, where there is one), the
+  buffered four a list.
 
 The four buffered ones take two more:
 
+- **`retryDelay`** — how long to wait before retrying a batch that was
+  handed back through `retryBuffer`. The default `Duration.zero` still goes
+  through the event loop, so a dead sink cannot starve timers or your own
+  `close()`, but it retries as fast as the loop allows. Set a real delay
+  when the destination can be down for a while; it doubles with each
+  attempt, capped at 32 times the base. `close()` does not wait any of it
+  out — it cancels the pending timer and makes one prompt final attempt
+  instead;
 - **`maxRetries`** — how many times a batch handed back through
   `retryBuffer` is retried before it is dropped. Default 100. It counts a
   *run* of failures, so a batch that gets through pays the whole budget back
@@ -975,11 +991,7 @@ The four buffered ones take two more:
   retrying for ever never delivers a batch that fails deterministically — a
   `toString` that throws, a value that will not serialise — and never drops
   it either, so it pins a core, drowns `onError`, and keeps a pending timer
-  alive, which on its own is enough to stop a worker from ever exiting;
-- **`onDropped`** — called with what was dropped, which happens two ways: a
-  batch that spent its `maxRetries` budget, and entries handed back to
-  `retryBuffer` after `close()` was called, which can never be processed.
-  Without this callback both are gone without a trace.
+  alive, which on its own is enough to stop a worker from ever exiting.
 
 The `Base` classes (`AsyncPublisherBase` and friends) are for when you want a
 named class with its own state instead of a callback; `isClosed` tells you
@@ -992,11 +1004,13 @@ still draining hands you that close rather than an already-completed future
 awaits a flush cannot be told the queue is empty while it is not.
 
 > [!IMPORTANT]
-> All of these queues are **unbounded**. If the destination cannot keep up,
-> pending logs accumulate until the process runs out of memory. There is no
-> overflow policy and nothing counts what overflow costs you — bound the
-> input yourself if the sink can stall. (`onDropped` is not that counter: it
-> reports the retry budget and the close, not pressure.)
+> All of these queues are **bounded**: `maxQueueSize` defaults to 10 000
+> entries accepted and not yet handled. Past that the incoming log is
+> refused and handed to `onDropped` — set it, or the pressure costs you
+> logs without a trace. Nothing already accepted is lost, so `flush()` and
+> `close()` keep their meaning. `maxQueueSize: null` gives the bound up and
+> lets pending logs accumulate until the process runs out of memory; that is
+> the right trade only when you bound the input yourself.
 >
 > In the buffered variants `retryBuffer` is also the only thing that keeps a
 > log across a failure: a throwing handler drops everything it did not hand
@@ -1332,10 +1346,11 @@ final log = Logger()
   ..publisher = filePublisher;
 ```
 
-The queue in front of the file is unbounded: if the disk stalls, pending
-batches pile up in memory until the process dies. That is the trade-off for
-never dropping a log silently — see
-[the full set](#the-full-set) for `retryDelay` and the rest.
+The queue in front of the file holds 10 000 entries by default: if the disk
+stalls for longer than that, the newest logs are refused rather than kept,
+and `onDropped` is where you see them. Pass `maxQueueSize: null` to let the
+queue grow instead until the process dies — see
+[the full set](#the-full-set) for that, `retryDelay` and the rest.
 
 Drain the queue before the program exits, or the last batch never reaches
 the disk:

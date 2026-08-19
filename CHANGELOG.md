@@ -60,6 +60,14 @@ section became 0.7.0 instead.
 * `TransformPublisher` routes a throw from the wrapped publisher to its
   own `onError` when one is set, as `MultiPublisher` does. Without a
   handler the error still reaches the logging call site, unchanged.
+* The queues of all eight asynchronous publishers are bounded:
+  `maxQueueSize` defaults to 10 000 entries accepted and not yet handled.
+  Past that the *incoming* log is refused — it goes to `onDropped` and
+  never enters the queue, so nothing already accepted is lost and
+  `flush()` and `close()` keep their meaning. Before this an unreachable
+  sink grew the queue until the process ran out of memory, with no limit,
+  no policy and nothing counting the cost. `maxQueueSize: null` restores
+  the old unbounded behaviour for the code that wants it.
 
 **New**
 
@@ -72,6 +80,12 @@ section became 0.7.0 instead.
   logger never assigned one, under the no-op publisher.
 * `maxRetries` on all four buffered publishers. Zero drops a handed-back
   batch at once; there is no unbounded setting, on purpose.
+* `maxQueueSize` on all eight, `null` for a queue that is not bounded.
+* `onDropped` on the four unbuffered publishers, which had no way to see
+  a loss at all. It reports the log the full queue refused, one at a time
+  and with its `param` where there is one; on the buffered four the same
+  callback now also reports overflow alongside the retry budget and the
+  close.
 
 **Fixes**
 
