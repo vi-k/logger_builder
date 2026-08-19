@@ -112,6 +112,80 @@ void main() {
       expect(published, ['extra level']);
     });
 
+    // Regression: H2 (project review 2026-08-19[2]) — `relink` took only
+    // what the parent *had*: its common publisher, if it ever assigned one,
+    // and its per-level publishers. A parent configured purely per level
+    // has neither for a level it never configured, so the child kept the
+    // publisher it had been detached with while `publisherLinked` went back
+    // up: the logger claimed to follow its parent and went on writing into
+    // the sink it had been unlinked from.
+    test('relink resets a level the chain has nothing for', () {
+      final detached = <String?>[];
+      final fromParent = <String?>[];
+      final parent = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+      // Configured per level only: no common publisher anywhere above, and
+      // nothing at all for Levels.error.
+      parent[Levels.info].publisher =
+          CustomLogPublisher((log) => fromParent.add(log.message));
+
+      final child = VarLogger.sub(parent, [Levels.info, Levels.error])
+        ..publisher = CustomLogPublisher((log) => detached.add(log.message));
+
+      expect(child.relink(), isTrue);
+
+      expect(child[Levels.error].hasPublisher, isFalse);
+      child
+        ..logAt(Levels.error)('nowhere')
+        ..logAt(Levels.info)('to the parent');
+
+      expect(detached, isEmpty, reason: 'the detached sink is let go');
+      expect(fromParent, ['to the parent']);
+    });
+
+    // Regression: H2 — the stale value also survived in `_defaultPublisher`
+    // and was handed to any level registered after the relink.
+    test('a level registered after a relink does not get the stale publisher',
+        () {
+      final detached = <String?>[];
+      final parent = VarLogger([Levels.info])..level = Levels.all;
+      parent[Levels.info].publisher = const CustomLogPublisher.noOp();
+
+      final child = VarLogger.sub(parent, [Levels.info])
+        ..publisher = CustomLogPublisher((log) => detached.add(log.message));
+      expect(child.relink(), isTrue);
+
+      child
+        ..addLevel(Levels.error)
+        ..logAt(Levels.error)('new level');
+
+      expect(child[Levels.error].hasPublisher, isFalse);
+      expect(detached, isEmpty);
+    });
+
+    // Regression: H2 — `_inheritPublisher` can only answer for the levels
+    // the relinking logger itself has. A level the parent has and this one
+    // does not still has to reach the subloggers that do have it, which is
+    // what the extra descent in `_relink` is for.
+    test('relink hands a parent-only level down to a sublogger that has it',
+        () {
+      final fromRoot = <String?>[];
+      final detached = <String?>[];
+      final root = VarLogger([Levels.info, Levels.error])..level = Levels.all;
+      root[Levels.error].publisher =
+          CustomLogPublisher((log) => fromRoot.add(log.message));
+
+      // The middle logger never registers Levels.error at all.
+      final middle = VarLogger.sub(root, [Levels.info]);
+      final leaf = VarLogger.sub(middle, [Levels.info, Levels.error]);
+      middle.publisher = CustomLogPublisher((log) => detached.add(log.message));
+      expect(middle.relink(), isTrue);
+
+      leaf.logAt(Levels.error)('through the middle');
+
+      expect(fromRoot, ['through the middle']);
+      expect(detached, isEmpty);
+    });
+
     // Regression: B6
     test('still reaches subloggers that do have the level', () {
       final published = <String?>[];
@@ -545,6 +619,28 @@ void main() {
       b.logAt(Levels.info)('through the cycle');
 
       expect(published, ['through the cycle']);
+    });
+
+    // Regression: H2 — `_relink` lowers its own link flag around the walk,
+    // like every other propagation entry. Without it the walk comes back
+    // into the relinking logger through the cycle, and it then takes its
+    // values from the node it arrived through — including that node's pins.
+    test('relink does not pick up a pin from a cycle back into itself', () {
+      final fromRoot = <String?>[];
+      final pinned = <String?>[];
+      final root = VarLogger([Levels.info])
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => fromRoot.add(log.message));
+      final a = VarLogger.sub(root, [Levels.info]);
+      final b = VarLogger.sub(a, [Levels.info])..attach(a);
+      b[Levels.info].publisher =
+          CustomLogPublisher((log) => pinned.add(log.message));
+
+      expect(a.relink(), isTrue);
+      a.logAt(Levels.info)('from a');
+
+      expect(pinned, isEmpty, reason: "a must not take b's pin");
+      expect(fromRoot, ['from a']);
     });
 
     test('transformer propagation terminates on a cycle', () {

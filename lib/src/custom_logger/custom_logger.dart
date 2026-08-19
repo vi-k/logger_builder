@@ -186,22 +186,30 @@ abstract base class CustomLogger<
     // runs from the `sub` constructor, before a subclass body has executed.
     _setLevel(parent.level);
     _setTransformer(parent._transformer);
-    // Levels this logger has and the parent does not would otherwise keep
-    // whatever publisher they were left with.
-    if (parent._defaultPublisher case final publisher?) {
-      _setPublisher(publisher);
-    }
+
+    // One rule, not a list of cases: every level takes what the chain gives
+    // it, and "nothing above at all" is an answer like any other. Copying
+    // only what the parent *had* — its common publisher if it ever assigned
+    // one, its per-level publishers otherwise — left a level the parent
+    // never configured sitting on whatever this logger had been detached
+    // with, while the link flag went back up. The flag is lowered around
+    // the walk, as in the setters: without that a cycle comes back into
+    // this logger and it takes its values from the node the walk arrived
+    // through, pins and all.
+    _publisherLinked = false;
+    _inheritPublisher(parent, parent._defaultPublisher);
+    // `_inheritPublisher` can only speak for the levels it can see. A level
+    // the parent has and this logger does not still has to reach the
+    // subloggers that do have it.
     for (final parentLevelLogger in parent._levelLoggers.values) {
-      // Only real publishers: copying the parent's no-op default down would
-      // make this logger's level report `hasPublisher` for a publisher that
-      // goes nowhere, which is exactly the state that getter exists to
-      // expose.
-      if (parentLevelLogger.hasPublisher) {
-        _inheritLevelPublisher(
-          parentLevelLogger.level,
-          parentLevelLogger._publisher,
-        );
+      if (_levelLoggers.containsKey(parentLevelLogger.level) ||
+          !parentLevelLogger.hasPublisher) {
+        continue;
       }
+      _propagateLevelPublisher(
+        parentLevelLogger.level,
+        parentLevelLogger._publisher,
+      );
     }
 
     _levelLinked = true;
@@ -367,22 +375,32 @@ abstract base class CustomLogger<
   /// that level*, which is [publisher] only where the parent holds no pin
   /// of its own. Handing [publisher] to every level would overwrite what a
   /// pinned level of the parent still publishes into.
-  void _inheritPublisher(Logger parent, CustomLogPublisher<Log> publisher) {
+  ///
+  /// A `null` [publisher] is the "there is nothing above at all" case of
+  /// [_relink], and it is an answer, not a refusal: an unpinned level goes
+  /// back to the no-op publisher instead of keeping what it used to
+  /// inherit. Leaving it in place would break the rule that an unpinned
+  /// level always equals what the chain gives.
+  void _inheritPublisher(Logger parent, CustomLogPublisher<Log>? publisher) {
     _defaultPublisher = publisher;
 
     for (final levelLogger in _levelLoggers.values) {
       if (levelLogger._hasOwnPublisher) {
         continue;
       }
-      levelLogger._setPublisher(
-        parent._assignedPublisherFor(levelLogger.level) ?? publisher,
-      );
+      final inherited =
+          parent._assignedPublisherFor(levelLogger.level) ?? publisher;
+      if (inherited != null) {
+        levelLogger._setPublisher(inherited);
+      } else {
+        levelLogger._resetPublisher();
+      }
     }
 
     _propagatePublisher(publisher);
   }
 
-  void _propagatePublisher(CustomLogPublisher<Log> publisher) {
+  void _propagatePublisher(CustomLogPublisher<Log>? publisher) {
     pruneSubloggers();
     for (final sublogger in _subloggers) {
       if (sublogger.target case final sublogger?
