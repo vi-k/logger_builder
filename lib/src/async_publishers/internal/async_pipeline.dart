@@ -20,10 +20,16 @@ import 'report.dart';
 final class AsyncPipeline<E> {
   final bool sync;
   final void Function(Object error, StackTrace stackTrace)? onError;
+  final void Function(E entry)? onDropped;
+  final int? maxQueueSize;
   final FutureOr<void> Function(E entry) handle;
 
   StreamController<E> _controller;
   StreamSubscription<void>? _subscription;
+  // Accepted and not yet handled, including the entry a paused `asyncMap`
+  // is holding. Counted rather than measured: the entries sit inside the
+  // StreamController, which shows neither its contents nor their number.
+  int _pending = 0;
   Future<void>? _flushFuture;
   Future<void>? _closeFuture;
   // Captured at construction, not at first use. `_listen` also runs from
@@ -35,6 +41,8 @@ final class AsyncPipeline<E> {
     required this.handle,
     this.sync = false,
     this.onError,
+    this.onDropped,
+    this.maxQueueSize,
   }) : _controller = StreamController<E>(sync: sync) {
     _listen();
   }
@@ -46,6 +54,13 @@ final class AsyncPipeline<E> {
       throw StateError('The publisher is closed');
     }
 
+    if (maxQueueSize case final limit? when _pending >= limit) {
+      _reportDropped(entry);
+
+      return;
+    }
+
+    _pending++;
     _controller.add(entry);
   }
 
@@ -110,10 +125,22 @@ final class AsyncPipeline<E> {
     try {
       final result = handle(entry);
       if (result is Future<void>) {
-        return result.onError<Object>(_reportError);
+        return result.onError<Object>(_reportError).whenComplete(_finished);
       }
     } on Object catch (error, stackTrace) {
       _reportError(error, stackTrace);
+    }
+
+    _finished();
+  }
+
+  /// One entry left the queue: handled, or handled by throwing.
+  void _finished() => _pending--;
+
+  void _reportDropped(E entry) {
+    if (onDropped case final onDropped?) {
+      // A throwing handler must not derail publishing.
+      guarded(() => onDropped(entry));
     }
   }
 

@@ -57,9 +57,33 @@ abstract base class _AsyncFacade<E extends Object?> {
   /// [runZonedGuarded].
   final void Function(Object error, StackTrace stackTrace)? onError;
 
+  /// The most log events the queue accepts before it starts refusing them.
+  ///
+  /// Counts what has been accepted and not yet handled: the events waiting
+  /// in the queue plus the one being handled right now. At the limit it is
+  /// the *incoming* event that is refused — it goes to `onDropped` and never
+  /// enters the queue. Everything already accepted is still delivered, so
+  /// [flush] and [close] promise exactly what they promised before.
+  ///
+  /// The default is 10 000 events. At a thousand logs a second that is ten
+  /// seconds of a sink that is not draining — an outage rather than a burst.
+  ///
+  /// `null` gives the bound up on purpose: the queue then grows until the
+  /// process runs out of memory. That is the right trade only when the input
+  /// is bounded elsewhere and losing a log is worse than dying.
+  final int? maxQueueSize;
+
   late final AsyncPipeline<E> _pipeline;
 
-  _AsyncFacade({this.sync = false, this.onError}) {
+  _AsyncFacade({
+    this.sync = false,
+    this.onError,
+    this.maxQueueSize = 10000,
+  }) : assert(
+          maxQueueSize == null || maxQueueSize > 0,
+          'maxQueueSize must be null or positive: a queue of zero would '
+          'refuse every log',
+        ) {
     // In the constructor body rather than an initializer, for two reasons
     // that both matter: [_entryHandler] reaches a subclass member and cannot
     // be torn off in an initializer list, and the pipeline captures
@@ -69,6 +93,8 @@ abstract base class _AsyncFacade<E extends Object?> {
       handle: _entryHandler,
       sync: sync,
       onError: onError,
+      onDropped: _droppedHandler,
+      maxQueueSize: maxQueueSize,
     );
   }
 
@@ -80,6 +106,13 @@ abstract base class _AsyncFacade<E extends Object?> {
   /// reaches the user's code through the same single call as before this
   /// class existed. The parameterised one unpacks the record first.
   FutureOr<void> Function(E entry) get _entryHandler;
+
+  /// What the queue calls for an entry it refused because it was full.
+  ///
+  /// A function the subclass hands over rather than a method it overrides,
+  /// for the same reason as [_entryHandler]: the two facades disagree about
+  /// the shape of the callback the user writes.
+  void Function(E entry)? get _droppedHandler;
 
   /// Whether [close] has been called.
   bool get isClosed => _pipeline.isClosed;
@@ -143,8 +176,24 @@ abstract base class _AsyncFacade<E extends Object?> {
 abstract base class AsyncPublisherBase<Log extends CustomLog>
     extends _AsyncFacade<Log>
     implements CustomLogPublisher<Log>, Flushable, Closable {
+  /// Called with a log the queue refused because it was full.
+  ///
+  /// The log is not published and never will be: [maxQueueSize] was reached
+  /// when it arrived. Without this callback the loss leaves no trace — no
+  /// error, no counter. Use it to persist the log somewhere durable, or at
+  /// least to count what the pressure costs.
+  ///
+  /// A throwing handler does not derail publishing: its own error goes to
+  /// the current zone.
+  final void Function(Log log)? onDropped;
+
   /// Creates the publisher and starts its processing queue.
-  AsyncPublisherBase({super.sync, super.onError});
+  AsyncPublisherBase({
+    super.sync,
+    super.onError,
+    this.onDropped,
+    super.maxQueueSize,
+  });
 
   /// Processes a single log event.
   ///
@@ -154,6 +203,9 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
 
   @override
   FutureOr<void> Function(Log log) get _entryHandler => handle;
+
+  @override
+  void Function(Log log)? get _droppedHandler => onDropped;
 
   @override
   void publish(Log log) => _pipeline.add(log);
@@ -181,7 +233,13 @@ final class AsyncPublisher<Log extends CustomLog>
   final FutureOr<void> Function(Log log) handler;
 
   /// Creates a publisher backed by [handler].
-  AsyncPublisher(this.handler, {super.sync, super.onError});
+  AsyncPublisher(
+    this.handler, {
+    super.sync,
+    super.onError,
+    super.onDropped,
+    super.maxQueueSize,
+  });
 
   @override
   FutureOr<void> handle(Log log) => handler(log);
@@ -223,6 +281,8 @@ final class AsyncFormatter<Log extends CustomLog, Out extends Object?>
     required this.output,
     super.sync,
     super.onError,
+    super.onDropped,
+    super.maxQueueSize,
   });
 
   @override

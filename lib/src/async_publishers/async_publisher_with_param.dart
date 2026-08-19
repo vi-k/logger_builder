@@ -29,11 +29,36 @@ part of 'async_publisher.dart';
 abstract base class AsyncPublisherWithParamBase<Param extends Object?,
         Log extends CustomLog> extends _AsyncFacade<(Param, Log)>
     implements Flushable, Closable {
+  /// Called with an entry the queue refused because it was full.
+  ///
+  /// The log is not published and never will be: [maxQueueSize] was reached
+  /// when it arrived. Without this callback the loss leaves no trace — no
+  /// error, no counter. The parameter comes with it, so one adapter's losses
+  /// are told apart from its neighbours'.
+  ///
+  /// A throwing handler does not derail publishing: its own error goes to
+  /// the current zone.
+  final void Function(Param param, Log log)? onDropped;
+
   /// Creates the publisher and starts its processing queue.
-  AsyncPublisherWithParamBase({super.sync, super.onError});
+  AsyncPublisherWithParamBase({
+    super.sync,
+    super.onError,
+    this.onDropped,
+    super.maxQueueSize,
+  });
 
   @override
   FutureOr<void> Function((Param, Log) entry) get _entryHandler => _handleEntry;
+
+  @override
+  void Function((Param, Log) entry)? get _droppedHandler {
+    if (onDropped case final onDropped?) {
+      return (entry) => onDropped(entry.$1, entry.$2);
+    }
+
+    return null;
+  }
 
   // A named method rather than an inline arrow: the 3.6.0 analyzer reads
   // `(entry) => handle(...)` as discarding a future, because it infers the
@@ -82,7 +107,13 @@ final class AsyncPublisherWithParam<Param extends Object?,
   final FutureOr<void> Function(Param param, Log log) handler;
 
   /// Creates a publisher backed by [handler].
-  AsyncPublisherWithParam(this.handler, {super.sync, super.onError});
+  AsyncPublisherWithParam(
+    this.handler, {
+    super.sync,
+    super.onError,
+    super.onDropped,
+    super.maxQueueSize,
+  });
 
   @override
   FutureOr<void> handle(Param param, Log log) => handler(param, log);
@@ -127,6 +158,8 @@ final class AsyncFormatterWithParam<
     required this.output,
     super.sync,
     super.onError,
+    super.onDropped,
+    super.maxQueueSize,
   });
 
   @override
