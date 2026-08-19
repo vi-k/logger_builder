@@ -102,6 +102,37 @@ double _median(List<int> sorted) {
       : (sorted[n ~/ 2 - 1] + sorted[n ~/ 2]) / 2;
 }
 
+/// The asynchronous counterpart of [runTest], for work that only finishes
+/// when a queue drains.
+///
+/// A separate function rather than a flag, because the two measure
+/// genuinely different things: [runTest] times a synchronous loop, this one
+/// times "hand n logs over and wait until they are all through". The
+/// per-call figure therefore includes the drain, which is the number anyone
+/// asking about an asynchronous publisher actually wants.
+Future<void> runAsyncTest(
+  Future<void> Function(int count) test, {
+  int count = 20000,
+  int repeats = 5,
+  Highlight highlight = Highlight.normal,
+}) async {
+  await test(count);
+
+  final samples = <int>[];
+  final sw = Stopwatch();
+  for (var i = 0; i < repeats; i++) {
+    sw
+      ..reset()
+      ..start();
+    await test(count);
+    sw.stop();
+    samples.add(sw.elapsedMicroseconds);
+  }
+  samples.sort();
+
+  _report(samples, count, 1, repeats, highlight);
+}
+
 /// Runs [test] [repeats] times and reports the distribution.
 ///
 /// The headline number is the **median**, not the mean of the best half the
@@ -116,7 +147,16 @@ void runTest(
   int k = 1,
   Highlight highlight = Highlight.normal,
 }) {
-  final samples = _sample(test, count, repeats);
+  _report(_sample(test, count, repeats), count, k, repeats, highlight);
+}
+
+void _report(
+  List<int> samples,
+  int count,
+  int k,
+  int repeats,
+  Highlight highlight,
+) {
   final perCall = samples.map((us) => us / count / k * 1000).toList();
   final med = _median(samples) / count / k * 1000;
   final mean = perCall.reduce((a, b) => a + b) / perCall.length;

@@ -635,6 +635,94 @@ Future<void> main() async {
   }
 
   //
+  // The asynchronous publishers, which had no number anywhere. The dartdoc
+  // of `flush` even claimed that flushing after every log is "measurably
+  // more expensive" — a claim with no measurement behind it until now.
+  //
+  // Each figure is "hand n logs over and wait until the queue is empty", so
+  // it includes the drain, which is what anyone asking about an asynchronous
+  // publisher wants to know.
+  title('Asynchronous publishers, per log including the drain:');
+
+  subtitle('AsyncPublisher, one log at a time:');
+  await runAsyncTest((count) async {
+    final publisher = AsyncPublisher<Log>((log) => sink = log.message);
+    final log = Logger('async')
+      ..level = Levels.all
+      ..publisher = publisher;
+    for (var i = 0; i < count; i++) {
+      log.i('Info message');
+    }
+    await publisher.flush();
+    await publisher.close();
+  });
+
+  subtitle('AsyncPublisher with sync: true:');
+  await runAsyncTest((count) async {
+    final publisher =
+        AsyncPublisher<Log>((log) => sink = log.message, sync: true);
+    final log = Logger('async')
+      ..level = Levels.all
+      ..publisher = publisher;
+    for (var i = 0; i < count; i++) {
+      log.i('Info message');
+    }
+    await publisher.flush();
+    await publisher.close();
+  });
+
+  subtitle('AsyncPublisherWithBuffer, batched:');
+  await runAsyncTest((count) async {
+    final publisher = AsyncPublisherWithBuffer<Log>(
+      (logs, retry) => sink = logs.length,
+    );
+    final log = Logger('buffered')
+      ..level = Levels.all
+      ..publisher = publisher;
+    for (var i = 0; i < count; i++) {
+      log.i('Info message');
+    }
+    await publisher.flush();
+    await publisher.close();
+  });
+
+  subtitle('AsyncPublisherWithBuffer, flushed after every log:');
+  await runAsyncTest(
+    count: 2000,
+    highlight: Highlight.bad,
+    (count) async {
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) => sink = logs.length,
+      );
+      final log = Logger('buffered')
+        ..level = Levels.all
+        ..publisher = publisher;
+      for (var i = 0; i < count; i++) {
+        log.i('Info message');
+        await publisher.flush();
+      }
+      await publisher.close();
+    },
+  );
+
+  subtitle('AsyncPublisher, flushed after every log:');
+  await runAsyncTest(
+    count: 2000,
+    highlight: Highlight.bad,
+    (count) async {
+      final publisher = AsyncPublisher<Log>((log) => sink = log.message);
+      final log = Logger('async')
+        ..level = Levels.all
+        ..publisher = publisher;
+      for (var i = 0; i < count; i++) {
+        log.i('Info message');
+        await publisher.flush();
+      }
+      await publisher.close();
+    },
+  );
+
+  //
   title('processLog: closure vs method (logging [on]enabled[/on]):');
 
   final closureLog = ClosureLogger()
