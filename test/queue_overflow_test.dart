@@ -10,6 +10,158 @@ Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..level = Levels.all
   ..publisher = publisher;
 
+/// One publisher under test, reduced to what the bound needs: somewhere to
+/// publish, what closes it, the gate that keeps its handler busy, and what
+/// its `onDropped` has seen.
+///
+/// The eight asynchronous classes are near-copies of each other, and this
+/// project has already watched a contract hold in two of them and not in the
+/// other six. Naming the contract once and running it over every class is
+/// the cheaper half of not repeating that.
+typedef _Case = ({
+  CustomLogPublisher<Log> sink,
+  Closable closable,
+  Completer<void> gate,
+  List<String?> dropped,
+});
+
+final Map<String, _Case Function()> _bounded = {
+  'AsyncPublisher': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncPublisher<Log>(
+      (log) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (log) => dropped.add(log.message),
+    );
+
+    return (
+      sink: publisher,
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncFormatter': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncFormatter<Log, String?>(
+      format: (log) => log.message,
+      output: (out) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (log) => dropped.add(log.message),
+    );
+
+    return (
+      sink: publisher,
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncPublisherWithParam': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncPublisherWithParam<String, Log>(
+      (param, log) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (param, log) => dropped.add(log.message),
+    );
+
+    return (
+      sink: publisher.withParam('p'),
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncFormatterWithParam': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncFormatterWithParam<String, Log, String?>(
+      format: (param, log) => log.message,
+      output: (param, out) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (param, log) => dropped.add(log.message),
+    );
+
+    return (
+      sink: publisher.withParam('p'),
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncPublisherWithBuffer': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncPublisherWithBuffer<Log>(
+      (logs, retryBuffer) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (logs) => dropped.addAll(logs.map((log) => log.message)),
+    );
+
+    return (
+      sink: publisher,
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncFormatterWithBuffer': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncFormatterWithBuffer<Log, int>(
+      format: (logs, retryBuffer) => logs.length,
+      output: (out, logs, retryBuffer) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (logs) => dropped.addAll(logs.map((log) => log.message)),
+    );
+
+    return (
+      sink: publisher,
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncPublisherWithBufferAndParam': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
+      (entries, retryBuffer) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (entries) =>
+          dropped.addAll(entries.map((entry) => entry.$2.message)),
+    );
+
+    return (
+      sink: publisher.withParam('p'),
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+  'AsyncFormatterWithBufferAndParam': () {
+    final gate = Completer<void>();
+    final dropped = <String?>[];
+    final publisher = AsyncFormatterWithBufferAndParam<String, Log, int>(
+      format: (entries, retryBuffer) => entries.length,
+      output: (out, entries, retryBuffer) => gate.future,
+      maxQueueSize: 1,
+      onDropped: (entries) =>
+          dropped.addAll(entries.map((entry) => entry.$2.message)),
+    );
+
+    return (
+      sink: publisher.withParam('p'),
+      closable: publisher,
+      gate: gate,
+      dropped: dropped,
+    );
+  },
+};
+
 void main() {
   group('AsyncPublisher', () {
     test('a full queue refuses the incoming log', () async {
@@ -218,6 +370,88 @@ void main() {
 
       gate.complete();
       await publisher.close();
+    });
+  });
+  group('every publisher refuses when full', () {
+    for (final entry in _bounded.entries) {
+      test(entry.key, () async {
+        final subject = entry.value();
+        makeLogger(subject.sink)
+          ..i('one')
+          ..i('two');
+
+        expect(subject.dropped, ['two'], reason: entry.key);
+
+        subject.gate.complete();
+        await subject.closable.close();
+      });
+    }
+
+    test('a throwing onDropped does not reach the logging call', () async {
+      final gate = Completer<void>();
+      final errors = <Object>[];
+      late final AsyncPublisher<Log> publisher;
+      runZonedGuarded(
+        () {
+          publisher = AsyncPublisher<Log>(
+            (log) => gate.future,
+            maxQueueSize: 1,
+            onDropped: (log) => throw StateError('boom'),
+          );
+          makeLogger(publisher)
+            ..i('one')
+            ..i('two');
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(errors, hasLength(1));
+
+      gate.complete();
+      await publisher.close();
+    });
+
+    test('a handler that keeps up never trips the limit', () {
+      final handled = <String?>[];
+      final dropped = <String?>[];
+      final publisher = AsyncPublisher<Log>(
+        (log) => handled.add(log.message),
+        sync: true,
+        maxQueueSize: 1,
+        onDropped: (log) => dropped.add(log.message),
+      );
+      final log = makeLogger(publisher);
+      for (var i = 0; i < 100; i++) {
+        log.i('$i');
+      }
+
+      expect(handled, hasLength(100));
+      expect(dropped, isEmpty);
+    });
+
+    test('flush and close still complete while logs are dropped', () async {
+      final handled = <String?>[];
+      final dropped = <String?>[];
+      final publisher = AsyncPublisher<Log>(
+        (log) async {
+          await Future<void>.delayed(Duration.zero);
+          handled.add(log.message);
+        },
+        maxQueueSize: 3,
+        onDropped: (log) => dropped.add(log.message),
+      );
+      final log = makeLogger(publisher);
+      for (var i = 0; i < 20; i++) {
+        log.i('$i');
+      }
+
+      expect(dropped, isNotEmpty);
+
+      await publisher.flush();
+      await publisher.close();
+
+      expect(handled.length + dropped.length, 20);
+      expect(publisher.isClosed, isTrue);
     });
   });
 }
