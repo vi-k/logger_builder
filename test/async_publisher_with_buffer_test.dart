@@ -494,6 +494,49 @@ void main() {
       });
     }
 
+    // Regression: M9 (project review 2026-08-19[2]) — `format` and `output`
+    // both receive the retry buffer, so what comes back is "what format
+    // handed back" followed by "what output handed back". When they hand
+    // back different parts of the batch, that is not publish order, and the
+    // queue put it into the next batch exactly as it found it. Order is a
+    // promise this publisher makes, and it was broken on the recovery path,
+    // where it is least likely to be noticed.
+    test('a partial retry keeps the batch in publish order', () async {
+      final batches = <List<String?>>[];
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) {
+          batches.add(messagesOf(logs));
+          if (batches.length == 1) {
+            // The third log fails to format; the rest goes on to output.
+            retry.add(logs[2]);
+          }
+
+          return 'out';
+        },
+        output: (out, logs, retry) {
+          if (batches.length == 1) {
+            // ...where the sink then rejects everything it was given.
+            retry.addAll(logs);
+          }
+        },
+      );
+      makeLogger(publisher)
+        ..i('one')
+        ..i('two')
+        ..i('three')
+        ..i('four');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(batches, hasLength(2));
+      expect(
+        batches[1],
+        orderedEquals(['one', 'two', 'three', 'four']),
+        reason: 'the retry must not reorder the batch',
+      );
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
     // Regression: B9
     test('publish after close throws StateError', () async {
       final publisher = AsyncPublisherWithBuffer<Log>(

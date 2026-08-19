@@ -2,6 +2,7 @@
 // ignore_for_file: public_member_api_docs
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'report.dart';
 
@@ -128,22 +129,23 @@ final class BufferedPipeline<E> {
       result = handle(entries, retryBuffer);
     } on Object catch (error, stackTrace) {
       // Finish the batch BEFORE reporting, so nothing can skip the cleanup.
-      _finishBatch(retryBuffer);
+      _finishBatch(entries, retryBuffer);
       _reportError(error, stackTrace);
       return null;
     }
 
     if (result is Future<void>) {
       return result.onError<Object>(_reportError).whenComplete(() {
-        _finishBatch(retryBuffer);
+        _finishBatch(entries, retryBuffer);
       });
     }
 
-    _finishBatch(retryBuffer);
+    _finishBatch(entries, retryBuffer);
+
     return null;
   }
 
-  void _finishBatch(List<E> retryBuffer) {
+  void _finishBatch(List<E> entries, List<E> retryBuffer) {
     if (isClosed) {
       // Entries retried after close() would never be processed. Report them
       // rather than losing them without a trace.
@@ -163,9 +165,55 @@ final class BufferedPipeline<E> {
     } else {
       _retryAttempts++;
       _batchWasRetried = true;
-      _entries.insertAll(0, retryBuffer);
+      _entries.insertAll(0, _inPublishOrder(entries, retryBuffer));
     }
     _isProcessing = false;
+  }
+
+  /// [retryBuffer] rearranged to follow the order the entries were
+  /// published in.
+  ///
+  /// Both halves of a formatter receive the buffer, so what comes back is
+  /// "what `format` handed back" followed by "what `output` handed back".
+  /// When they hand back different parts of the batch that is not publish
+  /// order, and it went into the next batch exactly as it was found. Order
+  /// is a promise this queue makes, and the recovery path is where breaking
+  /// it is least likely to be noticed.
+  List<E> _inPublishOrder(List<E> entries, List<E> retryBuffer) {
+    if (retryBuffer.length < 2) {
+      return retryBuffer;
+    }
+
+    // Counted and identity-keyed, like `_remainingLogs`: a batch may hold
+    // the same entry twice, and a user `Log` may define value equality.
+    final counts = HashMap<E, int>.identity();
+    for (final entry in retryBuffer) {
+      counts[entry] = (counts[entry] ?? 0) + 1;
+    }
+
+    final ordered = <E>[];
+    for (final entry in entries) {
+      final count = counts[entry] ?? 0;
+      if (count > 0) {
+        counts[entry] = count - 1;
+        ordered.add(entry);
+      }
+    }
+
+    if (ordered.length != retryBuffer.length) {
+      // Anything the handler put in that did not come from this batch keeps
+      // its own order, after the rest. Dropping it would be worse than
+      // leaving it out of sequence.
+      for (final entry in retryBuffer) {
+        final count = counts[entry] ?? 0;
+        if (count > 0) {
+          counts[entry] = count - 1;
+          ordered.add(entry);
+        }
+      }
+    }
+
+    return ordered;
   }
 
   void _next(void _) {
