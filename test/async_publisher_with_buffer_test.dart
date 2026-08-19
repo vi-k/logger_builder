@@ -537,6 +537,68 @@ void main() {
       await publisher.close().timeout(const Duration(seconds: 2));
     });
 
+    // Regression: L8 (project review 2026-08-19[2]) — `output` was called
+    // even when `format` had handed the whole batch back, with an empty list
+    // of logs and whatever payload `format` had built. For a network or file
+    // sink that is an empty request on every retry.
+    test('output is skipped when format hands the whole batch back', () async {
+      var outputs = 0;
+      var formats = 0;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) {
+          formats++;
+          if (formats <= 2) {
+            retry.addAll(logs);
+          }
+
+          return 'payload';
+        },
+        output: (out, logs, retry) => outputs++,
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(formats, 3, reason: 'two refusals, then it went through');
+      expect(outputs, 1, reason: 'only the attempt that kept something');
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: L9 (project review 2026-08-19[2]) — the queue is built
+    // lazily, on the first `publish`, and it captured `Zone.current` there.
+    // A logger is usually built at the top level while the first log happens
+    // inside some request scope, so every later handler error was reported
+    // into whichever scope happened to log first. The unbuffered family
+    // pins its zone at construction and says so in a comment; this one did
+    // the opposite by accident.
+    test('handler errors go to the zone that built the publisher', () async {
+      final built = <Object>[];
+      final published = <Object>[];
+      late final AsyncPublisherWithBuffer<Log> publisher;
+
+      runZonedGuarded(
+        () => publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
+          throw StateError('sink down');
+        }),
+        (error, stackTrace) => built.add(error),
+      );
+
+      Future<void>? closing;
+      runZonedGuarded(
+        () {
+          makeLogger(publisher).i('first ever log');
+          closing = publisher.close();
+        },
+        (error, stackTrace) => published.add(error),
+      );
+      await closing?.timeout(const Duration(seconds: 2));
+
+      expect(built, hasLength(1));
+      expect(published, isEmpty, reason: 'the first publisher does not own it');
+    });
+
     // Regression: B9
     test('publish after close throws StateError', () async {
       final publisher = AsyncPublisherWithBuffer<Log>(

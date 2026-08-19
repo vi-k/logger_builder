@@ -143,4 +143,41 @@ void main() {
       expect(calls, 1);
     });
   });
+
+  // Regression: L2 (project review 2026-08-19[2]) — `Lazy.resolved`
+  // deliberately memoizes a throwing factory, and its dartdoc explains why:
+  // a factory with a side effect otherwise runs again on every access,
+  // three times over a `MultiPublisher` of three formatters. `value` did
+  // not do the same for a throwing `convert`, one step lower down, where
+  // `LazyString.convert` is a `toString()` that may well throw.
+  group('TypedLazy.value', () {
+    test('memoizes a throwing convert', () {
+      var factoryCalls = 0;
+      final lazy = _ThrowingConvert(() {
+        factoryCalls++;
+
+        return 1;
+      });
+
+      for (var i = 0; i < 3; i++) {
+        expect(() => lazy.value, throwsStateError);
+      }
+
+      expect(factoryCalls, 1, reason: 'the factory was already memoized');
+      expect(lazy.conversions, 1, reason: 'and now the conversion is too');
+    });
+  });
+}
+
+final class _ThrowingConvert extends TypedLazy<String> {
+  int conversions = 0;
+
+  _ThrowingConvert(super.unresolved);
+
+  @override
+  String convert(Object? resolved) {
+    conversions++;
+
+    throw StateError('cannot convert');
+  }
 }

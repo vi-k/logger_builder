@@ -64,12 +64,17 @@ base class Lazy {
   /// is replaced by the result, so a passed closure is released. Subsequent
   /// accesses return the memoized result.
   ///
-  /// A throwing factory is memoized too, like `late final`: the error is
-  /// stored, the closure is released, and every later access rethrows the
-  /// same error with the original stack trace. Otherwise a factory with a
-  /// side effect ran again on each access — three times over a
-  /// `MultiPublisher` of three formatters — while the class promised the
-  /// source had been replaced by the result.
+  /// A throwing factory is memoized: the error is stored, the closure is
+  /// released, and every later access rethrows the same error with the
+  /// original stack trace. Otherwise a factory with a side effect ran again
+  /// on each access — three times over a `MultiPublisher` of three
+  /// formatters — while the class promised the source had been replaced by
+  /// the result.
+  ///
+  /// Note that this is the *opposite* of `late final`, which leaves the
+  /// variable unassigned and runs the initializer again on the next read.
+  /// Measured, not assumed: three reads of a `late final` whose initializer
+  /// throws call it three times.
   Object? get resolved {
     if (!_isResolved) {
       try {
@@ -132,11 +137,28 @@ abstract base class TypedLazy<T extends Object?> extends Lazy {
   ///
   /// The conversion happens once; the original resolved object is released
   /// afterwards, and [resolved] returns the converted value from then on.
+  ///
+  /// A throwing [convert] is memoized, for the same reason [resolved]
+  /// memoizes a throwing factory: otherwise a conversion with a side effect
+  /// runs again on every access — three times over a `MultiPublisher` of
+  /// three formatters — while the class says the source has been replaced by
+  /// the result. [LazyString.convert] is a `toString()`, which is user code
+  /// like any other.
   T get value {
     if (!_isConverted) {
       final resolved = this.resolved;
-      _slot = resolved is T ? resolved : convert(resolved);
+      try {
+        _slot = resolved is T ? resolved : convert(resolved);
+      } on Object catch (error, stackTrace) {
+        _slot = _FailedResolution(error, stackTrace);
+        _isConverted = true;
+        rethrow;
+      }
       _isConverted = true;
+    }
+
+    if (_slot case final _FailedResolution failure) {
+      Error.throwWithStackTrace(failure.error, failure.stackTrace);
     }
 
     return _slot as T;

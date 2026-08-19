@@ -239,6 +239,37 @@ void main() {
       );
     });
 
+    // Regression: L8 (project review 2026-08-19[2]) — the twin of the same
+    // fix in `async_publisher_with_buffer_test.dart`. Two copies, so two
+    // tests: that is the state M16 describes, and until the formatters are
+    // merged a fix here has to be a fix there as well.
+    test('output is skipped when format hands the whole batch back', () async {
+      var outputs = 0;
+      var formats = 0;
+      final publisher = AsyncFormatterWithBufferAndParam<String, Log, String>(
+        format: (entries, retry) {
+          formats++;
+          if (formats <= 2) {
+            retry.addAll(entries);
+          }
+
+          return 'payload';
+        },
+        output: (out, entries, retry) => outputs++,
+      );
+      Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher.withParam('ctx')
+        ..i('undeliverable');
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      expect(formats, 3, reason: 'two refusals, then it went through');
+      expect(outputs, 1, reason: 'only the attempt that kept something');
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
     // Regression: coverage audit for the 2026-08-19[2] review — the three
     // lifecycle parameters of this class were plumbed into the pipeline and
     // nothing checked that they arrived. Mutations that quietly dropped

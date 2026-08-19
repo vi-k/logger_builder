@@ -586,6 +586,70 @@ void main() {
     });
   });
 
+  group('registerSublogger', () {
+    // Regression: M5 (project review 2026-08-19[2]) — the three link flags
+    // start `false` and only `_relink()` raises them, and `_relink()` returns
+    // at once without a parent. A logger attached this way therefore never
+    // receives anything, and nothing said so: `subLoggersCount` counted it,
+    // `relink()` answered `false` for ever, and the dartdoc called the method
+    // a way to subscribe to updates.
+    //
+    // Validating the parent here was the other way to close it, and it was
+    // rejected: it would make a cyclic sublogger graph impossible to build,
+    // and with it the group below — the package protects against those cycles
+    // deliberately and at length. Whether the hatch should exist at all is a
+    // design decision, not a defect fix. So the dartdoc says what happens and
+    // this test holds it to that.
+    test('a logger built without .sub is registered and stays deaf', () {
+      final root = VarLogger([Levels.info]);
+      final orphan = VarLogger([Levels.info]);
+      final published = <String?>[];
+
+      root
+        ..attach(orphan)
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher((log) => published.add(log.message));
+
+      expect(root.subLoggersCount, 1, reason: 'it is registered');
+      expect(orphan.level, Levels.off, reason: 'and it received nothing');
+      expect(orphan[Levels.info].hasPublisher, isFalse);
+      expect(
+        orphan.relink(),
+        isFalse,
+        reason: 'and it can never be linked: relink needs a parent',
+      );
+      expect(published, isEmpty);
+    });
+  });
+
+  group('a sublogger registered during a traversal', () {
+    // Regression: L5 (project review 2026-08-19[2]) — the four propagation
+    // loops walked the live list while `_toggle` called `processLog`, the one
+    // documented user hook that runs inside them. Registering a sublogger
+    // from there grew the list mid-iteration. The `levels` getter was already
+    // hardened against exactly this in an earlier wave; the internal walks
+    // were not.
+    test('does not derail a level propagation', () {
+      // Everything starts disabled, so raising the level really toggles the
+      // child's levels and `processLog` is read. Re-toggling into the state a
+      // level is already in returns early and never reads it.
+      final root = VarLogger([Levels.info])..level = Levels.off;
+      final child = VarLogger.sub(root, [Levels.info]);
+      final nursery = NurseryLevelLogger(
+        level: Levels.error,
+        name: 'E',
+        nursery: root,
+      );
+      child.addLevelLogger(nursery);
+      nursery.armed = true;
+
+      expect(() => root.level = Levels.all, returnsNormally);
+
+      expect(nursery.born, hasLength(1), reason: 'the hook really fired');
+      expect(root.subLoggersCount, 2);
+    });
+  });
+
   group('cycles in the sublogger graph', () {
     // registerSublogger is @protected, so a subclass can build a cycle. What
     // stops propagation from recursing until the stack is exhausted is not an

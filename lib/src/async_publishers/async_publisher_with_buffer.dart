@@ -111,6 +111,8 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// timer and makes one prompt final attempt.
   final int maxRetries;
 
+  final Zone _zone = Zone.current;
+
   BufferedPipeline<Log>? _pipelineOrNull;
 
   BufferedPipeline<Log> get _pipeline =>
@@ -121,6 +123,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
         onDropped: onDropped,
         retryDelay: retryDelay,
         maxRetries: maxRetries,
+        zone: _zone,
       );
 
   /// Creates the publisher and its buffered processing queue.
@@ -303,7 +306,7 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
 
     if (formatted is Future<Out>) {
       return formatted.then(
-        (out) => output(out, _remainingLogs(logs, retryBuffer), retryBuffer),
+        (out) => _output(out, logs, retryBuffer),
         onError: (Object error, StackTrace stackTrace) {
           _retryWholeBatch(logs, retryBuffer);
           Error.throwWithStackTrace(error, stackTrace);
@@ -311,7 +314,18 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
       );
     }
 
-    return output(formatted, _remainingLogs(logs, retryBuffer), retryBuffer);
+    return _output(formatted, logs, retryBuffer);
+  }
+
+  /// Hands [out] to [output], unless [format] kept the whole batch.
+  ///
+  /// It used to be called regardless, with an empty list of logs and
+  /// whatever payload [format] had built — an empty request on every retry,
+  /// for a sink that had already been told nothing got through.
+  FutureOr<void> _output(Out out, List<Log> logs, List<Log> retryBuffer) {
+    final remaining = _remainingLogs(logs, retryBuffer);
+
+    return remaining.isEmpty ? null : output(out, remaining, retryBuffer);
   }
 
   /// The retry buffer can only ever hold logs from this batch, so restoring

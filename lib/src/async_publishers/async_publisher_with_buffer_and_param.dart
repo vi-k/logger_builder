@@ -117,6 +117,8 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// timer and makes one prompt final attempt.
   final int maxRetries;
 
+  final Zone _zone = Zone.current;
+
   BufferedPipeline<(Param, Log)>? _pipelineOrNull;
 
   BufferedPipeline<(Param, Log)> get _pipeline =>
@@ -127,6 +129,7 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
         onDropped: onDropped,
         retryDelay: retryDelay,
         maxRetries: maxRetries,
+        zone: _zone,
       );
 
   /// Creates the publisher and its buffered processing queue.
@@ -331,11 +334,7 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
 
     if (formatted is Future<Out>) {
       return formatted.then(
-        (out) => output(
-          out,
-          _remainingEntries(entries, retryBuffer),
-          retryBuffer,
-        ),
+        (out) => _output(out, entries, retryBuffer),
         onError: (Object error, StackTrace stackTrace) {
           _retryWholeBatch(entries, retryBuffer);
           Error.throwWithStackTrace(error, stackTrace);
@@ -343,11 +342,22 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
       );
     }
 
-    return output(
-      formatted,
-      _remainingEntries(entries, retryBuffer),
-      retryBuffer,
-    );
+    return _output(formatted, entries, retryBuffer);
+  }
+
+  /// Hands [out] to [output], unless [format] kept the whole batch.
+  ///
+  /// It used to be called regardless, with an empty list of entries and
+  /// whatever payload [format] had built — an empty request on every retry,
+  /// to a sink that had already been told nothing got through.
+  FutureOr<void> _output(
+    Out out,
+    List<(Param, Log)> entries,
+    List<(Param, Log)> retryBuffer,
+  ) {
+    final remaining = _remainingEntries(entries, retryBuffer);
+
+    return remaining.isEmpty ? null : output(out, remaining, retryBuffer);
   }
 
   /// The retry buffer can only ever hold entries from this batch, so

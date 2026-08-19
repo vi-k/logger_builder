@@ -18,6 +18,17 @@ final class BufferedPipeline<E> {
   final Duration retryDelay;
   final int maxRetries;
 
+  /// The zone the *publisher* was built in, handed down rather than taken
+  /// from `Zone.current` here.
+  ///
+  /// The queue is created lazily, on the first `publish`, so reading the
+  /// current zone at this point would pin error reporting to whichever scope
+  /// happened to log first — and a logger is built at the top level while
+  /// the first log usually happens inside some request. The unbuffered
+  /// engine pins its zone at construction and says so; this one used to do
+  /// the opposite by accident.
+  final Zone zone;
+
   final StreamController<void> _controller;
   StreamSubscription<void>? _subscription;
   List<E> _entries = [];
@@ -40,12 +51,15 @@ final class BufferedPipeline<E> {
     this.sync = false,
     this.onError,
     this.onDropped,
+    required this.zone,
     this.retryDelay = Duration.zero,
     this.maxRetries = 100,
   }) : _controller = StreamController<void>(sync: sync) {
-    _subscription = _controller.stream
-        .asyncMap(_handleData)
-        .listen(_next, onError: _lastResortError);
+    zone.run(() {
+      _subscription = _controller.stream
+          .asyncMap(_handleData)
+          .listen(_next, onError: _lastResortError);
+    });
   }
 
   bool get isClosed => _closing;
@@ -146,6 +160,19 @@ final class BufferedPipeline<E> {
   }
 
   void _finishBatch(List<E> entries, List<E> retryBuffer) {
+    // `_isProcessing` is cleared in a `finally`, not at the end of the body.
+    // No path here throws today — `_reportDropped` guards the callback and
+    // the maps are identity-keyed, so a user `hashCode` never runs — but if
+    // one ever did, the flag would stay up and every later `flush` and
+    // `close` would wait on a completer nothing completes.
+    try {
+      _finish(entries, retryBuffer);
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  void _finish(List<E> entries, List<E> retryBuffer) {
     if (isClosed) {
       // Entries retried after close() would never be processed. Report them
       // rather than losing them without a trace.
@@ -167,7 +194,6 @@ final class BufferedPipeline<E> {
       _batchWasRetried = true;
       _entries.insertAll(0, _inPublishOrder(entries, retryBuffer));
     }
-    _isProcessing = false;
   }
 
   /// [retryBuffer] rearranged to follow the order the entries were

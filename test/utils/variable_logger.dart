@@ -13,7 +13,7 @@ final class VarLog extends CustomLog {
   String? get message => _lazyMessage.value;
 }
 
-final class VarLevelLogger
+base class VarLevelLogger
     extends CustomLevelLogger<VarLogger, VarLevelLogger, VarLogFn, VarLog> {
   VarLevelLogger({required super.level, required super.name, super.shortName})
       : super(noLog: (_) => true);
@@ -47,6 +47,9 @@ base class VarLogger
   void addLevel(int level) =>
       registerLevel(VarLevelLogger(level: level, name: 'L$level'));
 
+  /// Same, for a level logger the test prepared itself.
+  void addLevelLogger(VarLevelLogger levelLogger) => registerLevel(levelLogger);
+
   /// Exposes the protected [registerSublogger] so a test can build a cyclic
   /// sublogger graph, which is what the `*Linked` flags quietly protect
   /// against.
@@ -71,6 +74,34 @@ base class CountingLogger extends VarLogger {
     onErrorReads++;
 
     return super.onError;
+  }
+}
+
+/// A [VarLogger] whose `processLog` registers a sublogger under [nursery].
+///
+/// `_toggle` reads `processLog`, and `_toggle` runs inside the loop that
+/// walks the subloggers, so this is the one documented user hook that
+/// executes in the middle of a live traversal.
+final class NurseryLevelLogger extends VarLevelLogger {
+  final VarLogger nursery;
+  final born = <VarLogger>[];
+  bool armed = false;
+
+  NurseryLevelLogger({
+    required super.level,
+    required super.name,
+    required this.nursery,
+  });
+
+  @override
+  VarLogFn get processLog {
+    if (armed) {
+      armed = false;
+      // Kept, or the collector may take it before the test can look.
+      born.add(VarLogger.sub(nursery, [level]));
+    }
+
+    return super.processLog;
   }
 }
 

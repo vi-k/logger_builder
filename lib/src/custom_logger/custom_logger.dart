@@ -42,8 +42,10 @@ abstract base class CustomLogger<
   Logger? _parent;
   bool _levelLinked = false;
   bool _publisherLinked = false;
-  // The last publisher assigned through `publisher =`, kept so that levels
-  // registered later do not silently stay on the no-op publisher.
+  // The common publisher this logger currently follows: whatever `publisher
+  // =` last assigned, or whatever arrived from the parent — `_inheritPublisher`
+  // writes it too. Kept so that levels registered later do not silently stay
+  // on the no-op publisher.
   CustomLogPublisher<Log>? _defaultPublisher;
   LogTransformer<Log>? _transformer;
   bool _transformerLinked = false;
@@ -80,7 +82,11 @@ abstract base class CustomLogger<
 
   /// Returns the number of directly attached subloggers.
   ///
-  /// For tests only; not intended for production use.
+  /// For tests only; not intended for production use. Note that there is no
+  /// operation to detach one: a sublogger leaves when it is collected, and
+  /// [pruneSubloggers] or the next traversal drops the dead reference. That
+  /// is not a leak — the references are weak — but it does mean a sublogger
+  /// cannot be released early on purpose.
   @visibleForTesting
   int get subLoggersCount => _subloggers.length;
 
@@ -95,6 +101,27 @@ abstract base class CustomLogger<
   void pruneSubloggers() {
     _subloggers.removeWhere((sublogger) => sublogger.target == null);
     _prunedAt = _subloggers.length;
+  }
+
+  /// The live subloggers, pruned and taken as a snapshot.
+  ///
+  /// A snapshot rather than the list itself, and that is not caution:
+  /// `_toggle` reads `processLog`, which is user code, and `_toggle` runs
+  /// inside these walks. Registering a sublogger from there grew the list
+  /// mid-iteration and threw [ConcurrentModificationError]. The [levels]
+  /// getter was hardened against exactly this earlier; the internal walks
+  /// were not. One list per propagation is a fair price for an operation
+  /// that is configuration, not logging.
+  ///
+  /// It also collapses four copies of the same "prune, walk, unwrap the weak
+  /// reference" preamble into one.
+  List<Logger> _liveSubloggers() {
+    pruneSubloggers();
+
+    return [
+      for (final sublogger in _subloggers)
+        if (sublogger.target case final sublogger?) sublogger,
+    ];
   }
 
   /// Prunes only once the list has doubled since the last prune.
@@ -292,6 +319,14 @@ abstract base class CustomLogger<
 
   /// Sets the log [level] threshold.
   ///
+  /// Any `int` is accepted, unlike [CustomLevelLogger.level], which rejects
+  /// anything outside `(Levels.all, Levels.off)`. The asymmetry is
+  /// deliberate: this is a threshold, not a level. Below [Levels.all] it
+  /// behaves like [Levels.all] and above [Levels.off] like [Levels.off],
+  /// which is exactly what a threshold should do at its edges, while a
+  /// *level* sitting on either would silently defeat
+  /// `logger.level = Levels.off`.
+  ///
   /// Enables all level loggers with a level equal to or exceeding [value],
   /// and disables the others. Propagates the level change down to linked
   /// subloggers. Detaches this logger's level link if it is a sublogger
@@ -315,9 +350,8 @@ abstract base class CustomLogger<
       levelLogger._toggle(value <= levelLogger.level);
     }
 
-    pruneSubloggers();
-    for (final sublogger in _subloggers) {
-      if (sublogger.target case final sublogger? when sublogger._levelLinked) {
+    for (final sublogger in _liveSubloggers()) {
+      if (sublogger._levelLinked) {
         sublogger
           .._setLevel(value)
           .._levelLinked = true;
@@ -401,10 +435,8 @@ abstract base class CustomLogger<
   }
 
   void _propagatePublisher(CustomLogPublisher<Log>? publisher) {
-    pruneSubloggers();
-    for (final sublogger in _subloggers) {
-      if (sublogger.target case final sublogger?
-          when sublogger._publisherLinked) {
+    for (final sublogger in _liveSubloggers()) {
+      if (sublogger._publisherLinked) {
         sublogger
           .._publisherLinked = false
           .._inheritPublisher(this as Logger, publisher)
@@ -467,10 +499,8 @@ abstract base class CustomLogger<
     _transformer = value;
     _transformerLinked = false;
 
-    pruneSubloggers();
-    for (final sublogger in _subloggers) {
-      if (sublogger.target case final sublogger?
-          when sublogger._transformerLinked) {
+    for (final sublogger in _liveSubloggers()) {
+      if (sublogger._transformerLinked) {
         sublogger
           .._setTransformer(value)
           .._transformerLinked = true;
@@ -596,10 +626,8 @@ abstract base class CustomLogger<
     int level,
     CustomLogPublisher<Log>? publisher,
   ) {
-    pruneSubloggers();
-    for (final sublogger in _subloggers) {
-      if (sublogger.target case final sublogger?
-          when sublogger._publisherLinked) {
+    for (final sublogger in _liveSubloggers()) {
+      if (sublogger._publisherLinked) {
         sublogger
           .._publisherLinked = false
           .._inheritLevelPublisher(level, publisher)
@@ -616,6 +644,14 @@ abstract base class CustomLogger<
 
     levelLogger._hasOwnPublisher = false;
     final inherited = _publisherFor(level);
+    // Lowered around the walk like every other entry, and *restored*, not
+    // raised: this logger may well be detached, and relinking one of its
+    // levels must not quietly relink the logger. The snapshot in
+    // `_liveSubloggers` is what actually removed the hazard here — a second
+    // `pruneSubloggers` inside a live iteration — but leaving one entry out
+    // of the convention is how the next reader concludes it is optional.
+    final wasLinked = _publisherLinked;
+    _publisherLinked = false;
     if (inherited != null) {
       levelLogger._setPublisher(inherited);
     } else {
@@ -627,12 +663,27 @@ abstract base class CustomLogger<
     // would leave every linked sublogger reporting `hasPublisher == true`
     // for a level that publishes nowhere. `null` propagates the reset.
     _propagateLevelPublisher(level, inherited);
+    _publisherLinked = wasLinked;
   }
 
-  /// Subscribes a [sublogger] to level and publisher updates dynamically.
+  /// Registers a [sublogger] built by [CustomLogger.sub] with this logger as
+  /// its parent. Called by that constructor; there is no other supported
+  /// caller.
   ///
   /// Subloggers are held using weak references to prevent memory leaks if
   /// they are discarded elsewhere in the application.
+  ///
+  /// It is **not** a way to subscribe an arbitrary logger to updates, and it
+  /// never was. Propagation only reaches a sublogger whose link flag is up,
+  /// the flags start down, and only [relink] raises them — and [relink]
+  /// returns `false` at once for a logger with no parent. A logger
+  /// registered here without having been built by [CustomLogger.sub] is
+  /// therefore counted by [subLoggersCount], receives nothing, and can never
+  /// be made to: it is deaf for the rest of its life, silently.
+  ///
+  /// It stays open rather than validating its argument because the tests
+  /// need it to build a cyclic sublogger graph, which is the thing the
+  /// `*Linked` flags quietly protect against.
   @protected
   void registerSublogger(Logger sublogger) {
     _pruneSubloggersIfGrown();
