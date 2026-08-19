@@ -68,6 +68,13 @@ abstract base class _AsyncFacade<E extends Object?> {
   /// The default is 10 000 events. At a thousand logs a second that is ten
   /// seconds of a sink that is not draining — an outage rather than a burst.
   ///
+  /// The queue drains only when the event loop turns, so a synchronous loop
+  /// that publishes more than this without awaiting anything loses the rest
+  /// however healthy the sink is — nothing has had a chance to run it yet.
+  /// Measured on this package's own benchmark, which publishes 20 000 logs
+  /// in exactly such a loop: at the default it delivers ten thousand of
+  /// them and refuses the rest.
+  ///
   /// `null` gives the bound up on purpose: the queue then grows until the
   /// process runs out of memory. That is the right trade only when the input
   /// is bounded elsewhere and losing a log is worse than dying.

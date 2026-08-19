@@ -962,7 +962,11 @@ All eight take the same four optional arguments:
   Default 10 000. At the limit it is the **incoming** log that is refused —
   it goes to `onDropped` and never enters the queue, so everything already
   accepted is still delivered and `flush()` and `close()` mean exactly what
-  they meant before. `null` gives the bound up on purpose: the queue then
+  they meant before. The queue drains only when the event loop turns, so a
+  tight loop that publishes more than the bound without awaiting anything
+  loses the rest however healthy the sink is — this package's own benchmark,
+  which publishes 20 000 logs in exactly such a loop, was the first to
+  notice. `null` gives the bound up on purpose: the queue then
   grows until the process runs out of memory, which is the right trade only
   when the input is bounded elsewhere and losing a log is worse than dying;
 - **`onDropped`** — called with what was dropped. In all eight that means a
