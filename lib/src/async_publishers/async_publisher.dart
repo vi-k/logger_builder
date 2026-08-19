@@ -99,6 +99,11 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// Completes when every log event queued before this call has been
   /// processed.
   ///
+  /// While a [close] is draining this returns that same future rather than
+  /// an already-completed one — reporting "the queue is empty" while logs
+  /// are still in flight would be a false all-clear at exactly the wrong
+  /// moment.
+  ///
   /// Concurrent calls are serialized: a later flush first waits for the
   /// earlier one and then drains the events queued in between. The internal
   /// queue listener is re-created, but always in the zone this publisher was
@@ -110,8 +115,8 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// expensive than letting the queue drain on its own.
   @override
   Future<void> flush() {
-    if (isClosed) {
-      return Future<void>.value();
+    if (_closeFuture case final closing?) {
+      return closing;
     }
 
     final previous = _flushFuture;
@@ -125,7 +130,11 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
       } on Object {
         // The previous flush already reported its failure to its caller.
       }
-      if (isClosed) {
+      // A close that started while this flush was queued is doing the
+      // draining now, and waiting it out is what this flush promised.
+      if (_closeFuture case final closing?) {
+        await closing;
+
         return;
       }
     }
@@ -140,8 +149,8 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
 
   /// Closes the publisher after processing the already queued log events.
   ///
-  /// After closing, [publish] throws a [StateError] and [flush] completes
-  /// immediately. Repeated calls return the same future.
+  /// After closing, [publish] throws a [StateError] and [flush] hands back
+  /// this same future. Repeated calls return it too.
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running handler to complete, so it would deadlock.

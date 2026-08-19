@@ -149,8 +149,8 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// timer is cancelled and one prompt final attempt is made instead, so
   /// shutdown latency does not scale with [retryDelay].
   ///
-  /// After closing, [publish] throws a [StateError] and [flush] completes
-  /// immediately. Repeated calls return the same future.
+  /// After closing, [publish] throws a [StateError] and [flush] hands back
+  /// this same future. Repeated calls return it too.
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running batch to complete, so it would deadlock.

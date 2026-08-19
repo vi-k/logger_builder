@@ -140,16 +140,23 @@ final class TransformPublisher<Log extends CustomLog>
     }
   }
 
+  /// Delegated to the wrapped publisher, or completed at once when it is
+  /// not [Flushable].
+  ///
+  /// While a [close] is draining this returns that same future rather than
+  /// an already-completed one, as every publisher does: the close is what
+  /// is still emptying the wrapped queue.
   @override
-  Future<void> flush() => switch (_inner) {
-        // After close() this completes without touching the wrapped
-        // publisher, like every sibling: close() is terminal here even when
-        // the wrapped publisher is not Closable, and flushing through a
-        // publisher this one has already disowned is not a thing to do.
-        _ when isClosed => Future.value(),
-        final Flushable flushable => flushable.flush(),
-        _ => Future.value(),
-      };
+  Future<void> flush() {
+    if (_closeFuture case final closing?) {
+      return closing;
+    }
+
+    return switch (_inner) {
+      final Flushable flushable => flushable.flush(),
+      _ => Future.value(),
+    };
+  }
 
   @override
   Future<void> close() => _closeFuture ??= switch (_inner) {

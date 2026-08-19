@@ -161,8 +161,8 @@ abstract base class AsyncPublisherWithBufferAndParamBase<Param extends Object?,
   /// was in flight. Entries returned to the retry buffer after closing are
   /// dropped.
   ///
-  /// After closing, publishing throws a [StateError] and [flush] completes
-  /// immediately. Repeated calls return the same future.
+  /// After closing, publishing throws a [StateError] and [flush] hands back
+  /// this same future. Repeated calls return it too.
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
   /// the running batch to complete, so it would deadlock.
