@@ -134,6 +134,41 @@ void main() {
       expect(published.single.message, 'fine');
     });
 
+    // Regression: M4 (project review 2026-08-19[2]) — `_inner.publish` sat
+    // outside the try, so a throwing sink behind a TransformPublisher took
+    // the route of an unhandled publisher error even when this publisher
+    // had a handler of its own. `MultiPublisher` catches the same throw and
+    // routes it to its `onError`; the two wrappers disagreed.
+    test('a throwing inner publisher reports to onError', () {
+      final errors = <Object>[];
+      setUpLogger(
+        TransformPublisher(
+          CustomLogPublisher<Log>((log) => throw StateError('sink down')),
+          transformer: (log) => log,
+          onError: (error, stackTrace) => errors.add(error),
+        ),
+      );
+
+      expect(() => logger.i('hello'), returnsNormally);
+      expect(errors.single, isA<StateError>());
+    });
+
+    // Regression: M4 — the default is deliberately left alone. Without a
+    // handler a throwing publisher reaches the logging call site, and that
+    // is the package-wide rule (`CustomLevelLogger.publishLog`); this
+    // publisher is not special enough to opt out of it.
+    test('without onError a throwing inner publisher reaches the call site',
+        () {
+      setUpLogger(
+        TransformPublisher(
+          CustomLogPublisher<Log>((log) => throw StateError('sink down')),
+          transformer: (log) => log,
+        ),
+      );
+
+      expect(() => logger.i('hello'), throwsStateError);
+    });
+
     test('a reentrant transformer drops the nested log', () {
       final errors = <Object>[];
       runZonedGuarded(

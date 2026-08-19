@@ -23,6 +23,11 @@ import 'async_publisher.dart';
 /// published) and reports the error to [onError]; without [onError] the
 /// error goes to the current zone via [Zone.handleUncaughtError].
 ///
+/// A throwing wrapped publisher goes to [onError] too. Without one it
+/// keeps travelling to the logging call site, unchanged from an
+/// unwrapped publisher — this class does not quietly swallow what it
+/// wraps.
+///
 /// [flush] and [close] are delegated to the wrapped publisher when it
 /// implements [Flushable]/[Closable], and complete immediately otherwise.
 /// [close] is terminal and idempotent regardless of what the wrapped
@@ -48,11 +53,15 @@ final class TransformPublisher<Log extends CustomLog>
   /// Transforms a log before publishing; `null` drops the log.
   final LogTransformer<Log> transformer;
 
-  /// Called when [transformer] throws.
+  /// Called when [transformer] throws, and when the wrapped publisher
+  /// throws from its `publish`.
   ///
-  /// When `null`, the error is reported to the current zone via
-  /// [Zone.handleUncaughtError]. A throwing [onError] does not interrupt
-  /// delivery: its own error is reported to the current zone.
+  /// The two cases differ in what happens without a handler. A throwing
+  /// [transformer] is reported to the current zone via
+  /// [Zone.handleUncaughtError]; a throwing wrapped publisher keeps
+  /// travelling to the logging call site, which is where an unhandled
+  /// publisher error has always surfaced. A throwing [onError] does not
+  /// interrupt delivery: its own error is reported to the current zone.
   final void Function(Object error, StackTrace stackTrace)? onError;
 
   bool _transforming = false;
@@ -102,7 +111,19 @@ final class TransformPublisher<Log extends CustomLog>
     }
 
     if (transformed != null) {
-      _inner.publish(transformed);
+      try {
+        _inner.publish(transformed);
+      } on Object catch (error, stackTrace) {
+        // The same rule as `CustomLevelLogger.publishLog`: with a handler
+        // the error is reported, without one it keeps travelling to the
+        // logging call site. Outside the `try` altogether, as it used to
+        // be, a handler set on this publisher was simply ignored for the
+        // half of the work that is most likely to fail.
+        if (onError == null) {
+          rethrow;
+        }
+        _reportError(error, stackTrace);
+      }
     }
   }
 
