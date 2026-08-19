@@ -49,6 +49,7 @@ abstract base class CustomLogger<
   bool _transformerLinked = false;
   bool _transforming = false;
   void Function(Object error, StackTrace stackTrace)? _onError;
+  bool _reporting = false;
   int _prunedAt = 0;
 
   /// Creates a new [CustomLogger] instance and registers its levels.
@@ -497,6 +498,37 @@ abstract base class CustomLogger<
 
   set onError(void Function(Object error, StackTrace stackTrace)? value) =>
       _onError = value;
+
+  /// Runs [onError], guarding against the handler re-entering itself.
+  ///
+  /// Load-bearing: both guards are still latched when a violation is
+  /// reported, and the report goes through this very handler. A handler
+  /// that logs would therefore come straight back here and recurse until
+  /// the stack was gone — which is what the handler exists to prevent.
+  /// While the handler runs, a second error on this logger goes to the zone
+  /// instead. The flag is per logger, so reporting into an *unrelated*
+  /// logger stays a supported pattern.
+  void _invokeHandler(
+    void Function(Object error, StackTrace stackTrace) onError,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (_reporting) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+
+      return;
+    }
+
+    _reporting = true;
+    try {
+      onError(error, stackTrace);
+    } on Object catch (handlerError, handlerStackTrace) {
+      // A throwing error handler must not wedge logging.
+      Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
+    } finally {
+      _reporting = false;
+    }
+  }
 
   // A direct per-level assignment pins the level and leaves this logger's
   // link to its parent alone: pinning one level must not stop the others

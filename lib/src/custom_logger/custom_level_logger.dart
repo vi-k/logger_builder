@@ -283,6 +283,7 @@ abstract base class CustomLevelLogger<
     if (owner._transformer case final transformer?) {
       if (owner._transforming) {
         _reportGuardViolation(
+          owner,
           onError,
           'A log transformer must not log through its own logger; '
           'the nested log was dropped',
@@ -296,7 +297,7 @@ abstract base class CustomLevelLogger<
       try {
         transformed = transformer(log);
       } on Object catch (error, stackTrace) {
-        _report(onError, error, stackTrace);
+        _report(owner, onError, error, stackTrace);
 
         return;
       } finally {
@@ -314,6 +315,7 @@ abstract base class CustomLevelLogger<
 
     if (_publishing) {
       _reportGuardViolation(
+        owner,
         onError,
         'A publisher must not log through the level it publishes for; '
         'the nested log was dropped',
@@ -331,19 +333,23 @@ abstract base class CustomLevelLogger<
       if (onError == null) {
         rethrow;
       }
-      _invokeHandler(onError, error, stackTrace);
+      owner._invokeHandler(onError, error, stackTrace);
     } finally {
       _publishing = false;
     }
   }
 
-  static void _reportGuardViolation(
+  void _reportGuardViolation(
+    Logger owner,
     void Function(Object error, StackTrace stackTrace)? onError,
     String message,
   ) =>
-      _report(onError, StateError(message), StackTrace.current);
+      _report(owner, onError, StateError(message), StackTrace.current);
 
-  static void _report(
+  // Through the owner, not straight to the handler: the owner holds the
+  // flag that keeps a logging handler from re-entering itself.
+  void _report(
+    Logger owner,
     void Function(Object error, StackTrace stackTrace)? onError,
     Object error,
     StackTrace stackTrace,
@@ -354,20 +360,7 @@ abstract base class CustomLevelLogger<
       return;
     }
 
-    _invokeHandler(onError, error, stackTrace);
-  }
-
-  static void _invokeHandler(
-    void Function(Object error, StackTrace stackTrace) onError,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    try {
-      onError(error, stackTrace);
-    } on Object catch (handlerError, handlerStackTrace) {
-      // A throwing error handler must not wedge logging.
-      Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
-    }
+    owner._invokeHandler(onError, error, stackTrace);
   }
 
   void _attach(Logger logger) {

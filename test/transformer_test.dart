@@ -604,5 +604,107 @@ void main() {
 
       expect(child.onError, isNotNull, reason: 'the parent handler is back');
     });
+
+    // Regression: C3 (project review 2026-08-19[2]) — the guard is latched
+    // while the handler runs, and the violation was reported through that
+    // same handler, so a handler that logs recursed until the stack was
+    // gone. The nesting is bounded here on purpose: an unbounded one takes
+    // the isolate down with a Stack Overflow, which `dart test` cannot
+    // report (see docs/conventions.md section 4).
+    test('a handler that logs through its own logger is not re-entered', () {
+      var calls = 0;
+      var depth = 0;
+      final zoneErrors = <Object>[];
+
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = ((error, stackTrace) {
+              calls++;
+              if (depth++ < 20) {
+                logger.i('from the handler');
+              }
+            })
+            ..transformer = ((log) => throw StateError('masking bug'))
+            ..i('secret');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(calls, 1, reason: 'the handler must not be re-entered');
+      expect(zoneErrors, hasLength(1));
+      expect(published, isEmpty);
+    });
+
+    // Regression: C3 — the publisher half of the same trap. The guard is
+    // per level logger, so the handler is re-entered only when it logs into
+    // the very level whose publisher threw.
+    test(
+        'a handler that logs into the level whose publisher threw is not '
+        're-entered', () {
+      var calls = 0;
+      var depth = 0;
+      final zoneErrors = <Object>[];
+
+      runZonedGuarded(
+        () {
+          logger
+            ..onError = ((error, stackTrace) {
+              calls++;
+              if (depth++ < 20) {
+                logger.i('from the handler');
+              }
+            })
+            ..publisher = CustomLogPublisher<Log>((log) {
+              throw StateError('sink down');
+            })
+            ..i('hello');
+        },
+        (error, stackTrace) => zoneErrors.add(error),
+      );
+
+      expect(calls, 1, reason: 'the handler must not be re-entered');
+      expect(zoneErrors, hasLength(1));
+    });
+
+    // Regression: C3 — the guard must be released again, or the logger
+    // would report the first error of its life and stay silent afterwards.
+    test('the handler is called again for a later, separate failure', () {
+      final handled = <Object>[];
+      var fail = true;
+
+      logger
+        ..onError = ((error, stackTrace) => handled.add(error))
+        ..publisher = CustomLogPublisher<Log>((log) {
+          if (fail) {
+            throw StateError('sink down');
+          }
+          published.add(log);
+        })
+        ..i('first');
+      logger.i('second');
+      fail = false;
+      logger.i('third');
+
+      expect(handled, hasLength(2));
+      expect(published.single.message, 'third');
+    });
+
+    // Regression: C3 — the guard is per logger, so an unrelated logger stays
+    // a legitimate destination for the handler. Without this the fix would
+    // have silenced the documented "report errors elsewhere" pattern.
+    test('a handler may log into an unrelated logger', () {
+      final diagnostics = <Log>[];
+      final other = Logger('diagnostics')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher(diagnostics.add);
+
+      logger
+        ..onError = ((error, stackTrace) => other.i('logging failed'))
+        ..transformer = ((log) => throw StateError('masking bug'))
+        ..i('secret');
+
+      expect(diagnostics.single.message, 'logging failed');
+    });
   });
 }
