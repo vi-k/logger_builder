@@ -54,13 +54,17 @@ lib/src/
     async_publisher.dart                       Flushable, Closable, AsyncPublisherBase,
                                                AsyncPublisher, AsyncFormatter
     async_publisher_with_param.dart            + параметр на публикацию
-    async_publisher_with_buffer.dart           + батчи
-    async_publisher_with_buffer_and_param.dart + то и другое
+    async_publisher_with_buffer.dart           + батчи; _BufferedFacade
+                                               (+ part файла ниже)
+    async_publisher_with_buffer_and_param.dart + то и другое (part)
     multi_publisher.dart                       веер по нескольким паблишерам
     transform_publisher.dart                   трансформация на одно назначение
     internal/                    НЕ экспортируется barrel'ом
       async_param_publisher.dart адаптер «паблишер с привязанным параметром»
+      async_pipeline.dart        общий движок очереди по одному логу
       buffered_pipeline.dart     общий движок батчей
+      batch_format.dart          общая половина «формат + вывод» для батчей
+      report.dart                общая маршрутизация ошибок в onError/зону
   utils/
     levels.dart                  константы Levels
     lazy.dart                    Lazy, TypedLazy, LazyString, LazyStringOrNull
@@ -297,6 +301,17 @@ Param-варианты не реализуют `CustomLogPublisher` сами: о
 Буферные варианты используют общий движок `BufferedPipeline`: очередь
 тиков, батч логов, `retryBuffer` для возврата необработанного в начало
 следующего батча.
+
+Обвязку вокруг этого движка — пять настроек (`sync`, `onError`,
+`retryDelay`, `onDropped`, `maxRetries`), ленивое создание очереди,
+`isClosed`, `flush`, `close` — оба буферных фасада берут из приватной
+базы `_BufferedFacade<E>`, где `E` — то, что лежит в очереди: сам лог
+или пара `(Param, Log)`. Ради неё param-файл объявлен через `part` —
+тем же приёмом, что `custom_level_logger.dart`, и по той же причине:
+базе нужен доступ к `_pipeline` из обоих файлов. Вынести её в
+`internal/` было нельзя: из другой библиотеки очередь достижима только
+через публичный член, а он появился бы на страницах pub.dev у классов,
+которые пользователь наследует.
 
 `MultiPublisher` рассылает лог по списку паблишеров (список копируется
 при создании), `flush`/`close` — каскадно по тем, кто реализует
