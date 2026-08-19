@@ -347,12 +347,11 @@ abstract base class CustomLogger<
   // accident. `_parent` is written in exactly one place, one line before
   // the only call to `registerSublogger`, so a cycle is reachable through
   // that hatch and nowhere else; validating the argument there would make
-  // cycles impossible and this ordering irrelevant. Measured, with the
-  // hatch closed: moving the assignment to the end of the method breaks
-  // nothing. The hatch stays anyway, by the owner's decision of
-  // 2026-08-19 — closing it would also make the seven tests that prove
-  // this ordering works unwritable. See `docs/handoff.md`, "Решения,
-  // которые стоит знать", item 5.
+  // cycles impossible and this ordering irrelevant — measured, with the
+  // hatch closed, moving the assignment to the end of the method breaks
+  // nothing. The hatch is kept deliberately: closing it would also make
+  // the seven tests that prove this ordering works unwritable, since a
+  // cycle could no longer be built to walk.
   void _setLevel(int value) {
     _level = value;
     _levelLinked = false;
