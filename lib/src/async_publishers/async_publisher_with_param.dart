@@ -58,11 +58,17 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
     // built — which must be the zone that built the publisher, not whichever
     // one happens to publish first.
     _pipeline = AsyncPipeline<(Param, Log)>(
-      handle: (entry) => handle(entry.$1, entry.$2),
+      handle: _handleEntry,
       sync: sync,
       onError: onError,
     );
   }
+
+  // A named method rather than an inline arrow: the 3.6.0 analyzer reads
+  // `(entry) => handle(...)` as discarding a future, because it infers the
+  // closure's return type before it knows the parameter's. An explicit
+  // `FutureOr<void>` tells it what the arrow always meant.
+  FutureOr<void> _handleEntry((Param, Log) entry) => handle(entry.$1, entry.$2);
 
   /// Processes a single log event with its bound parameter.
   ///
