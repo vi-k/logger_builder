@@ -4,6 +4,7 @@ import 'dart:collection';
 import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
+import 'internal/batch_format.dart';
 import 'internal/buffered_pipeline.dart';
 
 /// A base class for asynchronous publishers that buffer log events before
@@ -293,71 +294,13 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
   });
 
   @override
-  FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer) {
-    final FutureOr<Out> formatted;
-    try {
-      formatted = format(logs, retryBuffer);
-    } on Object {
-      // A throwing format leaves the caller no point at which it could hand
-      // the batch back, so retry it wholesale rather than dropping it.
-      _retryWholeBatch(logs, retryBuffer);
-      rethrow;
-    }
-
-    if (formatted is Future<Out>) {
-      return formatted.then(
-        (out) => _output(out, logs, retryBuffer),
-        onError: (Object error, StackTrace stackTrace) {
-          _retryWholeBatch(logs, retryBuffer);
-          Error.throwWithStackTrace(error, stackTrace);
-        },
+  FutureOr<void> handle(List<Log> logs, List<Log> retryBuffer) => handleBatch(
+        entries: logs,
+        retryBuffer: retryBuffer,
+        format: format,
+        output: output,
+        // Identity: a user's `Log` may define value equality, and two
+        // distinct logs that compare equal must not be interchangeable here.
+        counter: HashMap<Log, int>.identity,
       );
-    }
-
-    return _output(formatted, logs, retryBuffer);
-  }
-
-  /// Hands [out] to [output], unless [format] kept the whole batch.
-  ///
-  /// It used to be called regardless, with an empty list of logs and
-  /// whatever payload [format] had built — an empty request on every retry,
-  /// for a sink that had already been told nothing got through.
-  FutureOr<void> _output(Out out, List<Log> logs, List<Log> retryBuffer) {
-    final remaining = _remainingLogs(logs, retryBuffer);
-
-    return remaining.isEmpty ? null : output(out, remaining, retryBuffer);
-  }
-
-  /// The retry buffer can only ever hold logs from this batch, so restoring
-  /// the whole batch means replacing whatever [format] managed to add.
-  void _retryWholeBatch(List<Log> logs, List<Log> retryBuffer) {
-    retryBuffer
-      ..clear()
-      ..addAll(logs);
-  }
-
-  List<Log> _remainingLogs(List<Log> logs, List<Log> retryBuffer) {
-    if (retryBuffer.isEmpty) {
-      return logs;
-    }
-
-    // Counted, not a set: a batch may legitimately hold the same log twice,
-    // and handing one copy back must not withdraw the other from [output].
-    final retried = HashMap<Log, int>.identity();
-    for (final log in retryBuffer) {
-      retried[log] = (retried[log] ?? 0) + 1;
-    }
-
-    final remaining = <Log>[];
-    for (final log in logs) {
-      final count = retried[log] ?? 0;
-      if (count > 0) {
-        retried[log] = count - 1;
-      } else {
-        remaining.add(log);
-      }
-    }
-
-    return remaining;
-  }
 }

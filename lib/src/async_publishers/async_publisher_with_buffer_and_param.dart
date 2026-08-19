@@ -5,6 +5,7 @@ import '../custom_logger/custom_log.dart';
 import '../custom_logger/custom_log_publisher.dart';
 import 'async_publisher.dart';
 import 'internal/async_param_publisher.dart';
+import 'internal/batch_format.dart';
 import 'internal/buffered_pipeline.dart';
 
 /// A base class for asynchronous publishers that buffer logs alongside
@@ -321,88 +322,21 @@ final class AsyncFormatterWithBufferAndParam<Param extends Object?,
   FutureOr<void> handle(
     List<(Param, Log)> entries,
     List<(Param, Log)> retryBuffer,
-  ) {
-    final FutureOr<Out> formatted;
-    try {
-      formatted = format(entries, retryBuffer);
-    } on Object {
-      // A throwing format leaves the caller no point at which it could hand
-      // the batch back, so retry it wholesale rather than dropping it.
-      _retryWholeBatch(entries, retryBuffer);
-      rethrow;
-    }
-
-    if (formatted is Future<Out>) {
-      return formatted.then(
-        (out) => _output(out, entries, retryBuffer),
-        onError: (Object error, StackTrace stackTrace) {
-          _retryWholeBatch(entries, retryBuffer);
-          Error.throwWithStackTrace(error, stackTrace);
-        },
+  ) =>
+      handleBatch(
+        entries: entries,
+        retryBuffer: retryBuffer,
+        format: format,
+        output: output,
+        // The log half is matched by identity, like the buffer-only
+        // formatter: a plain record map compares logs with `==`, so a user's
+        // `Log` with value equality made two distinct logs interchangeable —
+        // the retried one was passed to `output` *and* re-queued while the
+        // other vanished.
+        counter: () => HashMap<(Param, Log), int>(
+          equals: (a, b) => a.$1 == b.$1 && identical(a.$2, b.$2),
+          hashCode: (entry) =>
+              Object.hash(entry.$1, identityHashCode(entry.$2)),
+        ),
       );
-    }
-
-    return _output(formatted, entries, retryBuffer);
-  }
-
-  /// Hands [out] to [output], unless [format] kept the whole batch.
-  ///
-  /// It used to be called regardless, with an empty list of entries and
-  /// whatever payload [format] had built — an empty request on every retry,
-  /// to a sink that had already been told nothing got through.
-  FutureOr<void> _output(
-    Out out,
-    List<(Param, Log)> entries,
-    List<(Param, Log)> retryBuffer,
-  ) {
-    final remaining = _remainingEntries(entries, retryBuffer);
-
-    return remaining.isEmpty ? null : output(out, remaining, retryBuffer);
-  }
-
-  /// The retry buffer can only ever hold entries from this batch, so
-  /// restoring the whole batch means replacing whatever [format] added.
-  void _retryWholeBatch(
-    List<(Param, Log)> entries,
-    List<(Param, Log)> retryBuffer,
-  ) {
-    retryBuffer
-      ..clear()
-      ..addAll(entries);
-  }
-
-  List<(Param, Log)> _remainingEntries(
-    List<(Param, Log)> entries,
-    List<(Param, Log)> retryBuffer,
-  ) {
-    if (retryBuffer.isEmpty) {
-      return entries;
-    }
-
-    // The log half is matched by identity, like the buffer-only formatter
-    // does: a plain record map compares logs with `==`, so a user's Log with
-    // value equality made two distinct logs interchangeable — the retried one
-    // was passed to [output] *and* re-queued while the other vanished.
-    // Counted, not a set: a batch may hold the same entry twice, and handing
-    // one copy back must not withdraw the other from [output].
-    final retried = HashMap<(Param, Log), int>(
-      equals: (a, b) => a.$1 == b.$1 && identical(a.$2, b.$2),
-      hashCode: (entry) => Object.hash(entry.$1, identityHashCode(entry.$2)),
-    );
-    for (final entry in retryBuffer) {
-      retried[entry] = (retried[entry] ?? 0) + 1;
-    }
-
-    final remaining = <(Param, Log)>[];
-    for (final entry in entries) {
-      final count = retried[entry] ?? 0;
-      if (count > 0) {
-        retried[entry] = count - 1;
-      } else {
-        remaining.add(entry);
-      }
-    }
-
-    return remaining;
-  }
 }
