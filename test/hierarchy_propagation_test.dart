@@ -570,6 +570,22 @@ void main() {
       );
     });
 
+    // The relink path propagates too, and its "nothing above" branch
+    // sends a reset rather than a value — a second traversal to keep
+    // terminating. Regression: 2026-08-19[1] §3.
+    test('a per-level relink terminates on a cycle', () {
+      final root = VarLogger([Levels.info])..level = Levels.all;
+      final a = VarLogger.sub(root, [Levels.info]);
+      VarLogger.sub(a, [Levels.info]).attach(a);
+
+      // Nothing above holds a common publisher, so the relink below takes
+      // the reset branch.
+      a[Levels.info].publisher = const CustomLogPublisher.noOp();
+
+      expect(() => a[Levels.info].relink(), returnsNormally);
+      expect(a[Levels.info].hasPublisher, isFalse);
+    });
+
     // The pin cannot be the in-progress marker: `a` and `b` do not
     // register the level being propagated, so neither has a pin to raise.
     test('per-level propagation terminates on a cycle without the level', () {
