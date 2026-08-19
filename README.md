@@ -304,6 +304,18 @@ The only important thing here is that when you disable assertions or your
 constant, the logging code will be removed by the compiler. This is not just
 `if (false)`. This is a full reset.
 
+**Depth is free.** A sublogger costs the same as the root, and that is the
+point of holding the inherited settings as copied-down values rather than
+resolving them per call. Measured at depths 0, 1, 5 and 20, AOT: 83.2, 83.2,
+83.6, 83.5 ns with the level enabled, and 1.66, 1.78, 1.72, 1.77 ns with it
+disabled. Flat, within the sd of each figure.
+
+The exception is anything your own publisher resolves per log. The
+`Logger` in the example carries a lazily built `path`, and a publisher that
+reads it pays for the walk: the same four depths become 101.7, 103.5, 112.6
+and 152.0 ns — roughly 2.5 ns per level. That cost is yours, not the
+package's, and it only arrives if a publisher asks for the path.
+
 Benchmarks can be seen here: [benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart).
 
 
@@ -595,9 +607,10 @@ on assigns its result to the field that `log` dispatches through, so the
 closure is created when the level is enabled, not when a log is written.
 Measured over 1M calls per form
 ([benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart)),
-the two land within 2 ns of each other and which one is ahead depends on the
-compiler: AOT gave 10.4 ns for the closure against 11.9 ns for the method,
-the JIT gave 11.9 against 11.7. Use whichever reads better.
+the two land within about 1 ns of each other. AOT: 10.25 ns for the closure
+against 11.12 ns for the method, sd 0.05 and 0.07 — a real gap, and a
+negligible one. The JIT: 11.75 against 11.99, sd 0.25 and 0.28 — no gap at
+all. Use whichever reads better.
 
 Inside `processLog`, you need to do three things:
 
@@ -676,16 +689,19 @@ log.info(() => jsonEncode(hugeObject));
 I recommend using closures in all cases when you pass something other than
 ready-made values, even if it's a simple string with minor interpolations or
 something like `i++`. The asymmetry is what makes it pay: with the level
-enabled the closure adds about 3 ns to a call that costs ~135 ns anyway,
-and with the level disabled it turns 41 ns into 4 ns. A rounding error when
-you lose, an order of magnitude when you win.
+enabled the three forms are indistinguishable — 128.9, 126.8 and 128.4 ns
+with sd up to 2 — while with the level disabled the closure turns 36 ns into
+3.6 ns. Nothing measurable when you lose, an order of magnitude when you
+win.
 
 A tear-off of an existing function is cheaper still: `log.d(buildMessage)`
-allocates nothing per call and comes to 1.9 ns on a disabled level, against
-3.7 ns for `log.d(() => ...)`, which allocates one closure on every call
-whether the level is on or off. Both are far below the 41 ns of building the
-string eagerly. (Measured over 1M calls per form, AOT; the JIT numbers differ
-in scale, not in shape.)
+allocates nothing per call and comes to 1.89 ns on a disabled level, against
+3.57 ns for `log.d(() => ...)`, which allocates one closure on every call
+whether the level is on or off. Both are far below the 36 ns of building the
+string eagerly. (Median of ten runs of 1M calls, AOT, on one machine; the
+JIT numbers differ in scale, not in shape. The benchmark prints min, max,
+mean and sd next to every result — do not trust a gap smaller than the sd
+beside it, including the ones quoted here.)
 
 The main class for lazy computations is `Lazy`:
 
