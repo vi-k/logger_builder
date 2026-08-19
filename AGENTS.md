@@ -226,10 +226,16 @@ Code и для Codex; `CLAUDE.md` содержит только ссылку с�
 Перед тем как назвать работу законченной, прогони и приведи вывод:
 
 ```sh
-dart analyze
+dart analyze --fatal-infos
 dart test
 dart format --output=none --set-exit-if-changed .
 ```
+
+`--fatal-infos` не украшение. Каждое правило `analysis_options.yaml`
+приходит как info, поэтому голый `dart analyze` печатает замечания
+и выходит с нулём — а CI гоняет флаг и падает. Проверено: функция
+с `var s = "x"` даёт `2 issues found` и `EXIT=0` без флага против
+`EXIT=1` с ним.
 
 `dart analyze` из корня захватывает и `example/` — предупреждения там
 роняют CI так же, как в `lib/`.

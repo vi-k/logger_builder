@@ -21,7 +21,7 @@ dependencies:
   # the package unresolvable there — pub failed with a version-solving error
   # naming meta, on a Flutter whose Dart satisfied our floor. ^1.15.0 is the
   # lowest pin any Flutter within `sdk: ^3.6.0` carries. Nothing here needs a
-  # newer meta: only @protected, @visibleForTesting and @immutable are used.
+  # newer meta: only @protected and @visibleForTesting are used.
   meta: ^1.15.0
 
 dev_dependencies:

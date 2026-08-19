@@ -39,7 +39,7 @@ linter:
     #
 
     # always_use_package_imports: true # DO avoid relative imports for files in lib/.
-    # avoid_dynamic_calls: true
+    avoid_dynamic_calls: true
     # avoid_empty_else: true # [core]
     # avoid_print: true # [flutter]
     # avoid_relative_lib_imports: true # [core]

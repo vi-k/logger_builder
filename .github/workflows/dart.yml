@@ -20,10 +20,13 @@ on:
 permissions:
   contents: read
 
-# A newer push supersedes an in-flight run for the same ref.
+# A newer PR push supersedes an in-flight run for the same ref. Not on
+# `main`: we merge straight there without PRs, so cancelling would leave the
+# superseded commit without a finished run — and that is exactly the commit
+# `docs/handoff.md` ends up citing.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # The strict gate: latest stable, newest dependencies, every check.
@@ -55,6 +58,15 @@ jobs:
       - name: Run tests
         run: dart test
 
+      # Item 1 of the release checklist (docs/conventions.md section 7), and
+      # until now it lived only in that checklist. `dart doc` exits 0 on
+      # warnings, so the count is what gets asserted.
+      - name: Check the dartdoc
+        run: |
+          set -e
+          dart doc --output=/tmp/api | tee /tmp/doc.log
+          grep -q 'Found 0 warnings and 0 errors' /tmp/doc.log
+
       # .pubignore is load-bearing here — the published example includes the
       # root analysis_options.yaml through a relative path — and nothing but a
       # dry run notices when it stops being right.
@@ -65,25 +77,54 @@ jobs:
       # ever type-checked. A deadlock or a runaway retry loop passes analysis
       # and hangs here instead, which is what the job timeout is for.
       # benchmarks.dart is excluded: it is long by design.
+      # `find`, not two hand-written globs: a new subdirectory under bin/
+      # used to drop out of the run silently while still being analysed. The
+      # output is checked rather than discarded, because an example that
+      # stopped printing anything and exited 0 is broken in the only way
+      # that matters for something billed as documentation.
       - name: Run the examples
         working-directory: example/logger_builder_examples
         run: |
           set -e
-          for entry in bin/*.dart bin/async_publishers/*.dart; do
-            [ "$entry" = "bin/benchmarks.dart" ] && continue
-            echo "--- $entry"
-            dart run "$entry" > /dev/null
-          done
+          find bin -name '*.dart' ! -name 'benchmarks.dart' -print0 |
+            sort -z |
+            while IFS= read -r -d '' entry; do
+              echo "--- $entry"
+              out=$(dart run "$entry")
+              [ -n "$out" ] || { echo "no output from $entry"; exit 1; }
+            done
 
-      # pub.dev advertises platform:web, runtime:web and is:wasm-ready for
-      # this package. Nothing else would notice a dart:io import turning those
-      # badges into lies.
+      # That the example itself still builds for the web targets. This is
+      # NOT the badge check: `dart compile js` and `dart compile wasm` accept
+      # a `dart:io` import and fail only at runtime, and the file compiled
+      # here already imports it through console.dart. Measured on a tree with
+      # `import 'dart:io'` added to lib/src/utils/levels.dart: both compiles
+      # exited 0 and the whole job stayed green.
       - name: Smoke-test the web and wasm targets
         working-directory: example/logger_builder_examples
         run: |
           set -e
           dart compile js bin/simple_logger.dart -o /tmp/out.js
           dart compile wasm bin/simple_logger.dart -o /tmp/out.wasm
+
+      # The actual badge check. pub.dev advertises platform:web, runtime:web
+      # and is:wasm-ready, and pana is what decides those tags, so pana is
+      # what has to agree. On the same `dart:io` tree above it dropped all
+      # three — while still reporting 160/160, which is why the tags are
+      # asserted and the score is not.
+      - name: Verify the pub.dev platform tags
+        run: |
+          set -e
+          dart pub global activate pana
+          dart pub global run pana --no-warning --json . > /tmp/pana.json
+          python3 - <<'EOF'
+          import json, sys
+          tags = set(json.load(open('/tmp/pana.json')).get('tags', []))
+          missing = {'platform:web', 'runtime:web', 'is:wasm-ready'} - tags
+          if missing:
+              sys.exit(f'pub.dev tags lost: {sorted(missing)}')
+          print('platform tags intact')
+          EOF
 
   # The floor, and literally it: `environment.sdk` is ^3.6.0, so this job runs
   # the oldest SDK the package claims to support. 3.6.0 is also the oldest the
@@ -118,6 +159,58 @@ jobs:
       - name: Analyze project source
         # --fatal-infos here too: the 3.6.0 analyzer was measured against this
         # tree and reports nothing extra, so the weaker check bought nothing.
+        run: dart analyze --fatal-infos
+
+      - name: Run tests
+        run: dart test
+
+  # The declared floor of `meta`, which nothing checked. A full
+  # `dart pub downgrade` drags in file 6.0.0 — a dependency of the test
+  # runner that no longer compiles — so this job analyses and does not test.
+  # That is enough for the question it asks: does the package still compile
+  # against the oldest dependencies it claims to accept? Measured: the
+  # downgrade resolves `meta 1.15.0`, exactly the declared floor.
+  oldest-deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+
+      - name: Resolve the lowest allowed dependencies
+        run: dart pub downgrade
+
+      - name: Install example dependencies
+        run: dart pub get --directory=example/logger_builder_examples
+
+      - name: Analyze project source
+        run: dart analyze --fatal-infos
+
+  # Warning, not a gate: `environment.sdk` is `^3.6.0`, so the upper bound is
+  # `<4.0.0` and nothing exercised it except whatever `stable` happened to be
+  # that day. `continue-on-error` keeps someone else's regression in a beta
+  # SDK from turning this repository red.
+  beta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
+        with:
+          sdk: beta
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Install example dependencies
+        run: dart pub get --directory=example/logger_builder_examples
+
+      - name: Analyze project source
         run: dart analyze --fatal-infos
 
       - name: Run tests
