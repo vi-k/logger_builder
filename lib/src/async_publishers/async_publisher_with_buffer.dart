@@ -22,6 +22,15 @@ part 'async_publisher_with_buffer_and_param.dart';
 /// member of a base class shows up on the pub.dev page of the classes users
 /// extend. Here the members below are exactly the ones that were duplicated
 /// before, and nothing else becomes visible.
+///
+/// It also does not `implement` [Flushable] or [Closable], although it
+/// provides both methods and both facades declare both interfaces. Adding
+/// the clause here changes the published docs: dartdoc hides this class and
+/// hoists its interfaces into every class below, which gave the four
+/// concrete publishers an "Implemented types" section they never had and put
+/// four new rows in the implementer lists of [Flushable] and [Closable].
+/// Leaving it off costs nothing — the facades declare the interfaces, so the
+/// compiler still checks these two methods against them.
 abstract base class _BufferedFacade<E extends Object?> {
   /// Whether the underlying stream controller delivers events synchronously.
   final bool sync;
