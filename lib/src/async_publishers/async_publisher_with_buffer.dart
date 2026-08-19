@@ -76,14 +76,40 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
   /// Called with the logs dropped when [close] is reached while a batch
   /// still wants to be retried.
   ///
-  /// Closing drains what is queued, but logs handed back to the retry
-  /// buffer *after* [close] was called can never be processed. Without this
-  /// callback they are gone without a trace — no error, no counter. Use it
-  /// to persist them somewhere durable, or at least to count them.
+  /// Two things reach it. A batch that spends its [maxRetries] budget, and
+  /// logs handed back to the retry buffer *after* [close] was called, which
+  /// can never be processed. Without this callback both are gone without
+  /// a trace — no error, no counter. Use it to persist them somewhere
+  /// durable, or at least to count them.
   ///
   /// A throwing handler does not derail the shutdown: its own error goes to
   /// the current zone.
   final void Function(List<Log> logs)? onDropped;
+
+  /// How many times a batch handed back through the retry buffer is
+  /// retried before it is dropped.
+  ///
+  /// Counts a run of failures, not the lifetime of the publisher: a batch
+  /// that gets through resets the budget, so a sink that comes back gets
+  /// the full allowance again. When the budget is spent the batch goes to
+  /// [onDropped] and the queue moves on.
+  ///
+  /// There is no unbounded setting, and that is the point. Retrying for
+  /// ever is not "never lose a log": a deterministically failing batch — a
+  /// `toString` that throws, a value that cannot be serialised — is never
+  /// delivered and never dropped either, it just holds the queue and burns
+  /// a core. Measured before this existed: 242 820 handler calls and as
+  /// many [onError] calls in half a second, from one log.
+  ///
+  /// Zero means a batch that is handed back is dropped at once.
+  ///
+  /// Together with [retryDelay] this also bounds how long a publisher
+  /// nobody closes keeps the isolate alive: a pending retry timer is
+  /// a live root for the event loop, so before the budget existed a
+  /// worker with a dead sink returned from `main` and never exited.
+  /// [close] does not wait any of it out — it cancels the pending
+  /// timer and makes one prompt final attempt.
+  final int maxRetries;
 
   BufferedPipeline<Log>? _pipelineOrNull;
 
@@ -94,6 +120,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
         onError: onError,
         onDropped: onDropped,
         retryDelay: retryDelay,
+        maxRetries: maxRetries,
       );
 
   /// Creates the publisher and its buffered processing queue.
@@ -102,6 +129,7 @@ abstract base class AsyncPublisherWithBufferBase<Log extends CustomLog>
     this.onError,
     this.onDropped,
     this.retryDelay = Duration.zero,
+    this.maxRetries = 100,
   });
 
   /// Processes a batch of buffered [logs].
@@ -191,6 +219,7 @@ final class AsyncPublisherWithBuffer<Log extends CustomLog>
     super.onError,
     super.onDropped,
     super.retryDelay,
+    super.maxRetries,
   });
 
   @override
@@ -257,6 +286,7 @@ final class AsyncFormatterWithBuffer<Log extends CustomLog, Out extends Object?>
     super.onError,
     super.onDropped,
     super.retryDelay,
+    super.maxRetries,
   });
 
   @override

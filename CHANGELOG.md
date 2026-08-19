@@ -24,7 +24,30 @@ section became 0.7.0 instead.
   idiom left for detaching every publisher at once: assign a common
   publisher, or loop over `levels`.
 * `CustomLevelLogger` gains `hasOwnPublisher` and `relink()`. A subclass
-  that already declares a member of either name stops compiling.
+  that already declares a member of either name silently overrides it,
+  which for `relink()` means the per-level relink stops working. Only an
+  incompatible signature breaks the build, so grep for both names rather
+  than waiting for the compiler.
+* Buffered publishers no longer retry a handed-back batch for ever.
+  `maxRetries` bounds a *run* of failures — a batch that gets through
+  pays the whole budget back — and when it is spent the batch goes to
+  `onDropped`. The default is 100. Unbounded retrying never delivered a
+  deterministically failing batch and never dropped it either: measured,
+  one log with a throwing `format` produced 242 820 handler calls and as
+  many `onError` calls in half a second. A pending retry timer is also a
+  live root for the event loop, so a worker with a dead sink returned
+  from `main` and never exited.
+* `retryDelay` now doubles with each attempt, capped at 32 times the
+  base. A flat delay spent the whole budget in the first fraction of a
+  second, which is no use against the case the delay exists for.
+* `flush()` called while a `close()` is still draining now returns that
+  close instead of an already-completed future. `AsyncPublisherWithBuffer`
+  and `AsyncFormatterWithBuffer` already behaved this way; the other six
+  publishers reported an empty queue with logs still in flight, and
+  `MultiPublisher` demoted a correct wrapped publisher to that answer.
+* `TransformPublisher` routes a throw from the wrapped publisher to its
+  own `onError` when one is set, as `MultiPublisher` does. Without a
+  handler the error still reaches the logging call site, unchanged.
 
 **New**
 
@@ -33,7 +56,27 @@ section became 0.7.0 instead.
   real publisher from the no-op one.
 * `CustomLevelLogger.relink()` drops the pin and takes from the chain
   again. Unlike `CustomLogger.relink()`, it works on a root logger too:
-  the level returns under that logger's common publisher.
+  the level returns under that logger's common publisher — or, when that
+  logger never assigned one, under the no-op publisher.
+* `maxRetries` on all four buffered publishers. Zero drops a handed-back
+  batch at once; there is no unbounded setting, on purpose.
+
+**Fixes**
+
+* A `CustomLogger.onError` handler that logs no longer recurses until the
+  stack is gone. Both reentrancy guards are latched while the handler
+  runs and reported the violation through that same handler; measured,
+  `log.i(...)` returned normally after 1677 nested calls and then the
+  isolate died. Reporting into an *unrelated* logger is untouched.
+* `CustomLogger.relink()` no longer leaves a level on the publisher it
+  was detached with. It copied what the parent *had*, so a parent
+  configured purely per level left an unconfigured level stale while
+  `publisherLinked` went back up — and neither the per-level `relink()`
+  nor anything else could undo it.
+* `onError` is no longer resolved on the way to a successful publish. It
+  is the one setting resolved by walking the parent chain, and an enabled
+  log paid for the walk on every call: 9.4 ns at depth 0 against 57.7 ns
+  at depth 20 in AOT, now flat.
 
 ## 0.6.2 (unreleased, folded into 0.7.0)
 

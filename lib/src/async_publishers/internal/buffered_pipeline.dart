@@ -13,6 +13,7 @@ final class BufferedPipeline<E> {
   final void Function(List<E> entries)? onDropped;
   final FutureOr<void> Function(List<E> entries, List<E> retryBuffer) handle;
   final Duration retryDelay;
+  final int maxRetries;
 
   final StreamController<void> _controller;
   StreamSubscription<void>? _subscription;
@@ -21,6 +22,9 @@ final class BufferedPipeline<E> {
   Timer? _retryTimer;
   bool _isProcessing = false;
   bool _batchWasRetried = false;
+  // Counts a run of failures, not the lifetime of the pipeline: a batch
+  // that gets through pays the whole budget back.
+  int _retryAttempts = 0;
   // Raised before `close()` runs any code, so a batch finishing during the
   // shutdown already sees the pipeline as closed. Deriving `isClosed` from
   // `_closeFuture` instead left a synchronous window in which retried
@@ -34,6 +38,7 @@ final class BufferedPipeline<E> {
     this.onError,
     this.onDropped,
     this.retryDelay = Duration.zero,
+    this.maxRetries = 100,
   }) : _controller = StreamController<void>(sync: sync) {
     _subscription = _controller.stream
         .asyncMap(_handleData)
@@ -143,8 +148,19 @@ final class BufferedPipeline<E> {
       if (retryBuffer.isNotEmpty) {
         _reportDropped(List<E>.of(retryBuffer));
       }
+    } else if (retryBuffer.isEmpty) {
+      _retryAttempts = 0;
+      _batchWasRetried = false;
+    } else if (_retryAttempts >= maxRetries) {
+      // Out of budget. Dropping is the lesser evil: a batch that fails
+      // deterministically is never delivered by retrying either, it just
+      // holds the queue, burns a core and keeps the isolate alive.
+      _retryAttempts = 0;
+      _batchWasRetried = false;
+      _reportDropped(List<E>.of(retryBuffer));
     } else {
-      _batchWasRetried = retryBuffer.isNotEmpty;
+      _retryAttempts++;
+      _batchWasRetried = true;
       _entries.insertAll(0, retryBuffer);
     }
     _isProcessing = false;
@@ -166,12 +182,29 @@ final class BufferedPipeline<E> {
       // isolate responsive and lets close() stop the retries; retryDelay
       // additionally spaces the attempts out. The timer is kept so close()
       // can cancel it instead of waiting out the delay.
-      _retryTimer = Timer(retryDelay, _tick);
+      _retryTimer = Timer(_backoff(), _tick);
 
       return;
     }
 
     _controller.add(null);
+  }
+
+  /// [retryDelay], doubled once per attempt already made and capped at 32
+  /// times the base.
+  ///
+  /// A flat delay spends the whole budget in the first fraction of a second,
+  /// which is no use against the case the delay exists for — a sink that is
+  /// down for a while. Zero stays zero: there is nothing to space out, and
+  /// the attempt count is what bounds the loop.
+  Duration _backoff() {
+    if (retryDelay == Duration.zero) {
+      return Duration.zero;
+    }
+
+    final doublings = (_retryAttempts - 1).clamp(0, 5);
+
+    return retryDelay * (1 << doublings);
   }
 
   void _tick() {

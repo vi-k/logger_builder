@@ -316,6 +316,147 @@ void main() {
       await publisher.close().timeout(const Duration(seconds: 2));
     });
 
+    // Regression: C1 (project review 2026-08-19[2]) — a batch handed back
+    // was retried for ever. With the default `retryDelay` of zero that was
+    // 242 820 handler calls and as many `onError` calls in half a second,
+    // from one log whose formatting was deterministically broken. The log
+    // was never delivered and never dropped either.
+    test('a batch that never succeeds is dropped once the budget is spent',
+        () async {
+      var attempts = 0;
+      final dropped = <String?>[];
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          attempts++;
+          retry.addAll(logs);
+        },
+        maxRetries: 3,
+        onDropped: (logs) => dropped.addAll(messagesOf(logs)),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(attempts, 4, reason: 'the first attempt plus three retries');
+      expect(dropped, ['undeliverable']);
+
+      // And it really stops: nothing keeps ticking afterwards.
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(attempts, 4);
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: C1 (project review 2026-08-19[2]) — `_drain` waits for an
+    // empty queue, and a permanent retry never emptied it, so the documented
+    // `await flush(); await close();` shutdown hung on the first line
+    // exactly when the logs mattered most.
+    test('flush completes once the retry budget is spent', () async {
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) => retry.addAll(logs),
+        maxRetries: 2,
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: C1 (project review 2026-08-19[2]) — the budget counts a
+    // run of failures, not the lifetime of the publisher: a sink that comes
+    // back must get the full allowance again. Note the shape — the first
+    // batch must *recover*, not be dropped, or the reset on the drop path
+    // hides a missing reset on the success path.
+    test('the retry budget resets after a batch that succeeds', () async {
+      var failuresLeft = 2;
+      var attempts = 0;
+      final handled = <String?>[];
+      final dropped = <String?>[];
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          attempts++;
+          if (failuresLeft > 0) {
+            failuresLeft--;
+            retry.addAll(logs);
+          } else {
+            handled.addAll(messagesOf(logs));
+          }
+        },
+        maxRetries: 4,
+        onDropped: (logs) => dropped.addAll(messagesOf(logs)),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('recovers');
+      await publisher.flush().timeout(const Duration(seconds: 2));
+      expect(attempts, 3, reason: 'two failures, then it got through');
+      expect(handled, ['recovers']);
+
+      attempts = 0;
+      failuresLeft = 1000;
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      expect(attempts, 5, reason: 'the success paid the whole budget back');
+      expect(dropped, ['undeliverable']);
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: C1 (project review 2026-08-19[2])
+    test('maxRetries of zero drops a handed-back batch at once', () async {
+      var attempts = 0;
+      final dropped = <String?>[];
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          attempts++;
+          retry.addAll(logs);
+        },
+        maxRetries: 0,
+        onDropped: (logs) => dropped.addAll(messagesOf(logs)),
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(attempts, 1);
+      expect(dropped, ['undeliverable']);
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
+    // Regression: C1 (project review 2026-08-19[2]) — a flat delay spends
+    // the whole budget in the first fraction of a second, which is no use
+    // to a sink that is down for a while.
+    test('the retry delay grows with each attempt', () async {
+      final stamps = <int>[];
+      final elapsed = Stopwatch()..start();
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          stamps.add(elapsed.elapsedMilliseconds);
+          retry.addAll(logs);
+        },
+        retryDelay: const Duration(milliseconds: 20),
+        maxRetries: 3,
+      );
+      final log = makeLogger(publisher);
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      expect(stamps, hasLength(4));
+      // A flat 20 ms would put the last attempt near 60 ms; 20/40/80 puts
+      // it past 120. The margin is wide on purpose — this asserts growth,
+      // not a schedule.
+      expect(stamps.last, greaterThan(100));
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
+
     // Regression: B9
     test('publish after close throws StateError', () async {
       final publisher = AsyncPublisherWithBuffer<Log>(

@@ -237,5 +237,43 @@ void main() {
         reason: 'each distinct log must reach output exactly once',
       );
     });
+
+    // Regression: coverage audit for the 2026-08-19[2] review — the three
+    // lifecycle parameters of this class were plumbed into the pipeline and
+    // nothing checked that they arrived. Mutations that quietly dropped
+    // `onDropped:` and `retryDelay:` from the constructor call both
+    // survived, while the same mutation for `onError:` was caught. One test
+    // for all three: the budget bounds the attempts, the backoff spaces
+    // them out, and what is left over reaches `onDropped`.
+    test('maxRetries, retryDelay and onDropped all reach the pipeline',
+        () async {
+      final stamps = <int>[];
+      final dropped = <(String, String?)>[];
+      final elapsed = Stopwatch()..start();
+      final publisher = AsyncPublisherWithBufferAndParam<String, Log>(
+        (entries, retryBuffer) {
+          stamps.add(elapsed.elapsedMilliseconds);
+          retryBuffer.addAll(entries);
+        },
+        maxRetries: 2,
+        retryDelay: const Duration(milliseconds: 20),
+        onDropped: (entries) => dropped.addAll(entriesOf(entries)),
+      );
+      final log = Logger('test')
+        ..level = Levels.all
+        ..publisher = publisher.withParam('ctx');
+
+      log.i('undeliverable');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(stamps, hasLength(3), reason: 'the first attempt plus two');
+      expect(dropped, [('ctx', 'undeliverable')]);
+      // Stamped inside the handler, not after the wait: 20 ms then 40 ms
+      // puts the last attempt past 50, while a dropped `retryDelay` would
+      // put all three inside the first millisecond.
+      expect(stamps.last, greaterThan(50));
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+    });
   });
 }
