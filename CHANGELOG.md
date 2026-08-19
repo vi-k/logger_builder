@@ -19,10 +19,22 @@ section became 0.7.0 instead.
 * `publisherLinked` therefore reports `true` in cases where it used to
   report `false` — the getter itself is unchanged, the rule that clears
   it is.
-* The idiom for unlinking without changing a value is per level now
-  (`child[level].publisher = child[level].publisher`), and there is no
-  idiom left for detaching every publisher at once: assign a common
-  publisher, or loop over `levels`.
+* There is no idiom left for detaching every publisher at once without
+  changing a value. `child[level].publisher = child[level].publisher` is
+  not it: after this release that assignment **pins** the level and leaves
+  `publisherLinked` up, and so does looping it over `levels`. Assign a
+  common publisher if you want the link dropped.
+* `CustomLogger.relink()` now drops **every** per-level pin, not just the
+  logger's own links, so a relinked logger follows its parent whole.
+* A linked sublogger takes the parent's publisher *for that level* rather
+  than the parent's common one, so a parent with per-level exceptions
+  passes those exceptions down instead of flattening them.
+* A per-level `relink()` propagates to linked subloggers, including the
+  case where it has nothing to take: the reset travels down instead of
+  stopping at the logger it was called on.
+* `hasPublisher` can therefore return to `false` on a level that once had
+  a real publisher. Code that read it as "was ever configured" needs to
+  read it as "publishes somewhere right now", which is what it says.
 * `CustomLevelLogger` gains `hasOwnPublisher` and `relink()`. A subclass
   that already declares a member of either name silently overrides it,
   which for `relink()` means the per-level relink stops working. Only an

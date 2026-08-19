@@ -137,9 +137,14 @@ logoutLog.i('User logout');               // app | auth | logout | User logout
 
 `child` is not a package method — the package gives you the protected
 `CustomLogger.sub` constructor and you expose it under whatever name reads
-best. This snippet assumes the `Logger` built in
-[Hierarchical Loggers](#hierarchical-loggers), which is where `child` is
-defined.
+best. It is defined on the `Logger` built in
+[Hierarchical Loggers](#hierarchical-loggers).
+
+The `app | auth | login` shape in the comments is not automatic either.
+Nothing in the package knows a logger's name: it comes from the fuller
+logger in the example below, whose `Log` carries a `path` and joins it with
+` | `. The `Logger` in [Hierarchical Loggers](#hierarchical-loggers) joins
+with a dot and does not print the path at all.
 
 See example: [hierarchical_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart).
 
@@ -927,7 +932,7 @@ final asyncFormatter = AsyncFormatter<Log, Map<String, Object?>>(
 );
 ```
 
-Every one of the eight takes the same three optional arguments:
+All eight take the same three optional arguments:
 
 - **`onError`** — called when the handler throws. Without it the error goes
   to the current zone, and in a plain Dart program without an error zone an
@@ -939,20 +944,47 @@ Every one of the eight takes the same three optional arguments:
   retrying a batch that was handed back through `retryBuffer`. The default
   `Duration.zero` still goes through the event loop, so a dead sink cannot
   starve timers or your own `close()`, but it retries as fast as the loop
-  allows. Set a real delay when the destination can be down for a while —
-  and note that `close()` then waits for the pending retry.
+  allows. Set a real delay when the destination can be down for a while; it
+  doubles with each attempt, capped at 32 times the base. `close()` does not
+  wait any of it out — it cancels the pending timer and makes one prompt
+  final attempt instead.
+
+The four buffered ones take two more:
+
+- **`maxRetries`** — how many times a batch handed back through
+  `retryBuffer` is retried before it is dropped. Default 100. It counts a
+  *run* of failures, so a batch that gets through pays the whole budget back
+  and a sink that recovers gets the full allowance again. Zero drops a
+  handed-back batch at once, and there is deliberately no unbounded setting:
+  retrying for ever never delivers a batch that fails deterministically — a
+  `toString` that throws, a value that will not serialise — and never drops
+  it either, so it pins a core, drowns `onError`, and keeps a pending timer
+  alive, which on its own is enough to stop a worker from ever exiting;
+- **`onDropped`** — called with what was dropped, which happens two ways: a
+  batch that spent its `maxRetries` budget, and entries handed back to
+  `retryBuffer` after `close()` was called, which can never be processed.
+  Without this callback both are gone without a trace.
 
 The `Base` classes (`AsyncPublisherBase` and friends) are for when you want a
 named class with its own state instead of a callback; `isClosed` tells you
 whether `close()` has been called.
 
+`flush()` completes when everything accepted so far has been processed, and
+`close()` drains before it finishes. Calling `flush()` while a `close()` is
+still draining hands you that close rather than an already-completed future
+— the same answer from all eight and from both wrappers, so a shutdown that
+awaits a flush cannot be told the queue is empty while it is not.
+
 > [!IMPORTANT]
 > All of these queues are **unbounded**. If the destination cannot keep up,
 > pending logs accumulate until the process runs out of memory. There is no
-> overflow policy and no dropped-log counter — bound the input yourself if
-> the sink can stall. In the buffered variants, `retryBuffer` is also the
-> only thing that keeps a log across a failure: a throwing handler drops
-> everything it did not hand back.
+> overflow policy and nothing counts what overflow costs you — bound the
+> input yourself if the sink can stall. (`onDropped` is not that counter: it
+> reports the retry budget and the close, not pressure.)
+>
+> In the buffered variants `retryBuffer` is also the only thing that keeps a
+> log across a failure: a throwing handler drops everything it did not hand
+> back.
 
 
 ## Several Publishers
@@ -1034,8 +1066,9 @@ final db = root.child('db');       // inherits level and publisher
 final http = root.child('http');
 ```
 
-**What is inherited.** Three things: the `level`, the per-level publishers,
-and the `transformer`. Each has its own link, and the publishers carry one
+**What is inherited.** Three things by copy — the `level`, the per-level
+publishers and the `transformer` — and `onError` by lookup. Each of the
+three has its own link, and the publishers carry one
 knob more — a pin per level, on top of the logger's link. A change on the
 parent reaches every sublogger whose corresponding link is still up, and
 there every level that holds no pin of its own:
@@ -1043,6 +1076,13 @@ there every level that holds no pin of its own:
 ```dart
 root.level = Levels.debug; // db and http switch to debug too
 ```
+
+`onError` is the odd one out. It is resolved through the parent chain at the
+moment it is needed rather than copied down, so a sublogger with no handler
+of its own uses its parent's. There is no link flag for it, `relink()` does
+not affect it, and assigning `null` restores the inherited handler instead
+of detaching — see
+[Errors on the publish path](#errors-on-the-publish-path).
 
 **How a sublogger detaches.** Assigning the `level`, the common `publisher`
 or the `transformer` directly on the sublogger drops that link — from then
@@ -1083,6 +1123,12 @@ something above it, at worst its own logger:
 ```dart
 http[Levels.info].relink(); // only this level returns to the chain
 ```
+
+When there is nothing above to take — a logger configured only per level,
+with no common publisher anywhere up the chain — the level goes back to the
+no-op publisher and `hasPublisher` becomes `false`, rather than keeping what
+it happened to hold. `CustomLogger.relink()` applies the same rule to every
+level whose pin it drops.
 
 A parent keeps its subloggers through weak references, so subloggers never
 need disposing — an abandoned branch is collected whole. A sublogger, on the
@@ -1140,8 +1186,13 @@ log.publisher = MultiPublisher([
 ]);
 ```
 
-`TransformPublisher` takes its own `onError`; without it, errors go to the
-current zone. `flush` and `close` are delegated to the wrapped publisher.
+`TransformPublisher` takes its own `onError`, and it covers both halves of
+the job: a throwing `transformer` and a throwing wrapped publisher. Without
+a handler the two part ways — a transformer error goes to the current zone,
+while the wrapped publisher's error keeps travelling to the logging call
+site, exactly as it would without the wrapper. `flush` and `close` are
+delegated to the wrapped publisher when it supports them; `close` is
+terminal either way.
 
 > [!WARNING]
 > A transformer must not log through its own logger, and neither must a
@@ -1150,13 +1201,58 @@ current zone. `flush` and `close` are delegated to the wrapped publisher.
 > and a `StateError` is reported. Treat that as a guard against runaway
 > recursion, not as a way to log from a transformer.
 >
-> The guard is synchronous and per logger. It does not catch a cycle that
-> goes through a **sublogger** which inherited the same transformer (a
-> sublogger is a separate logger with its own guard), and it does not survive
-> an **asynchronous hop** — a transformer that defers the nested log with
-> `scheduleMicrotask` or a `Future` is outside the guard entirely, and an
-> unconditional one will loop forever.
+> The guard is synchronous, and it is really two guards with different
+> reaches. The transformer half is per logger: it catches any cycle coming
+> back while that logger's transformer is running, across several levels or
+> several loggers. The publish half is per **level** logger, so a publisher
+> that logs at a *different* level of the same logger is allowed — a cycle
+> still trips the moment it returns to a level whose publisher is running.
+>
+> Neither half catches a cycle through a **sublogger** which inherited the
+> same transformer (a sublogger is a separate logger with its own guard),
+> and neither survives an **asynchronous hop** — a transformer that defers
+> the nested log with `scheduleMicrotask` or a `Future` is outside the guard
+> entirely, and an unconditional one will loop forever. The same goes for an
+> asynchronous publisher, whose `handle` runs long after `publish`
+> returned.
 
+
+### Errors on the publish path
+
+`CustomLogger.onError` is the single place every error the logger catches on
+the way to a publisher ends up: a throwing `transformer`, a throwing
+publisher, and a reentrancy guard violation.
+
+```dart
+final log = Logger('app')
+  ..level = Levels.all
+  ..onError = ((error, stackTrace) => report(error, stackTrace))
+  ..publisher = const DefaultLogPublisher();
+```
+
+Wrap the arrow function in parentheses inside a cascade, as with
+`transformer`: without them the `..` of the next line is parsed as part of
+the arrow's body.
+
+Without a handler each case keeps its historical behaviour — the transformer
+error and the guard violation go to the current zone, a publisher error
+propagates out of the logging call. Note what the zone route means in a
+plain Dart program without an error zone: an uncaught asynchronous error
+terminates the isolate, so a bug in a masking transformer takes the process
+down. Setting this callback is how logging stops being able to break the
+application that logs.
+
+It is resolved through the parent chain rather than copied down, so a
+sublogger with no handler of its own uses its parent's.
+
+> [!WARNING]
+> The handler must not log through the logger it belongs to. Both guards
+> above are still latched while it runs, so a handler that logs comes
+> straight back into the guard that just fired, which would report through
+> the handler again. That is detected — the second error goes to the current
+> zone instead of back into the handler — but the nested log is dropped, not
+> published. Report into a *different* logger if you want the failure
+> logged; that is untouched.
 
 ## Common Scenarios
 
