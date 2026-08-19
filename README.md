@@ -1034,36 +1034,54 @@ final db = root.child('db');       // inherits level and publisher
 final http = root.child('http');
 ```
 
-**What is inherited.** Three things, each with its own link: the `level`, the
-per-level publishers, and the `transformer`. A change on the parent reaches
-every sublogger whose corresponding link is still up:
+**What is inherited.** Three things: the `level`, the per-level publishers,
+and the `transformer`. Each has its own link, and the publishers carry one
+knob more — a pin per level, on top of the logger's link. A change on the
+parent reaches every sublogger whose corresponding link is still up, and
+there every level that holds no pin of its own:
 
 ```dart
 root.level = Levels.debug; // db and http switch to debug too
 ```
 
-**How a sublogger detaches.** Assigning any of the three directly on the
-sublogger drops that link — from then on the sublogger keeps its own value
-and ignores the parent:
+**How a sublogger detaches.** Assigning the `level`, the common `publisher`
+or the `transformer` directly on the sublogger drops that link — from then
+on the sublogger keeps its own value and ignores the parent:
 
 ```dart
 http.level = Levels.all;   // http is now independent, db still follows root
 root.level = Levels.error; // db → error, http stays at all
 ```
 
+A publisher assigned to a single level is the exception: it does not drop
+the link, it pins that level. The other levels of that sublogger keep
+following the parent, `publisherLinked` stays `true`, and the pin is
+lifted per level — see **How to re-attach** below.
+
 Assigning the same value is the idiom for unlinking without changing
 anything: `child.level = child.level` and `child.transformer =
-child.transformer`. Publishers work per level instead: `child[Levels.info]
-.publisher = X` pins that one level — the others keep following the
-parent — and `child[Levels.info].relink()` puts it back under the chain.
-There is no idiom for detaching every publisher at once without changing
-values; assign a common publisher, or loop over `levels`.
+child.transformer`. For publishers that idiom is per level too
+(`child[Levels.info].publisher = child[Levels.info].publisher` pins
+without changing anything); there is no idiom for detaching every
+publisher at once without changing values, so assign a common publisher,
+or loop over `levels`.
 
 **How to re-attach.** `relink()` re-inherits all three from the parent and
-turns propagation back on. It returns `false` only for a root logger:
+turns propagation back on. It drops every per-level pin along the way, so
+the logger follows the parent whole again. It returns `false` only for a
+root logger:
 
 ```dart
-http.relink(); // follows root again
+http.relink(); // follows root again, pins included
+```
+
+`CustomLevelLogger.relink()` is the narrower one: called on a level, it
+lifts that level's pin alone and leaves the rest of the logger as it is.
+It returns nothing, unlike the logger's `relink()` — a level always has
+something above it, at worst its own logger:
+
+```dart
+http[Levels.info].relink(); // only this level returns to the chain
 ```
 
 A parent keeps its subloggers through weak references, so subloggers never
