@@ -11,12 +11,40 @@ import 'package:talker_logger/talker_logger.dart' as t;
 
 String builder(Log log) => '[${log.levelName}] ${log.message}';
 
+/// Where every measured value is parked so the compiler cannot drop the work
+/// that produced it.
+///
+/// Read once at the end of `main`. A store nothing ever reads is a store the
+/// compiler is free to remove, and then the section above it measures an
+/// empty loop. Dart 3.13 does not currently remove the discarded `builder`
+/// call — measured, 80.27 ns discarded against 81.20 ns parked — but that is
+/// a fact about today's compiler, not a property of the benchmark.
+Object? sink;
+
 final class BenchmarkLogFormatter implements CustomLogPublisher<Log> {
   const BenchmarkLogFormatter();
 
   @override
   void publish(Log log) {
-    builder(log);
+    sink = builder(log);
+  }
+}
+
+/// Like [BenchmarkLogFormatter], but it reads `log.path`.
+///
+/// The path of this example's `Log` is a `LazyString` built from a closure
+/// that walks up the parents, so nothing resolves it unless a publisher asks
+/// for it — and no section did, which left the lazy path of a sublogger
+/// unmeasured even in the sections that had subloggers.
+String pathBuilder(Log log) =>
+    '[${log.levelName}] ${log.path} | ${log.message}';
+
+final class BenchmarkPathFormatter implements CustomLogPublisher<Log> {
+  const BenchmarkPathFormatter();
+
+  @override
+  void publish(Log log) {
+    sink = pathBuilder(log);
   }
 }
 
@@ -37,8 +65,6 @@ final class BenchmarkLogPrinter implements CustomLogPublisher<Log> {
 // The payload is deliberately the cheapest possible — one field, no lazy
 // wrapper, a publisher that only parks the message — so that the dispatch
 // itself is what the numbers are about.
-
-Object? sink;
 
 final class MicroLog extends CustomLog {
   final Object? message;
@@ -121,6 +147,8 @@ Future<void> main() async {
   final log = Logger('root')..level = Levels.all;
 
   benchmarkTitle(file: 'benchmarks');
+
+  measureFloor();
 
   title('Sample:');
 
@@ -221,10 +249,17 @@ Future<void> main() async {
 
   subtitle('CustomLogger:');
   log.level = Levels.all;
+  // Wraps instead of climbing. Shared across the file and never reset, this
+  // counter reached nine digits by the late sections while the early ones
+  // interpolated one, and the sections are quoted against each other.
+  // Measured drift: 44.25 ns counting from zero against 45.46 ns counting
+  // from 250 000 000, +2.7 % — larger than several of the differences this
+  // file is cited for.
   var counter = 0;
+  int nextCount() => counter = counter >= 1000000 ? 1 : counter + 1;
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      log.i('Info message #${++counter}');
+      log.i('Info message #${nextCount()}');
     }
   });
 
@@ -232,14 +267,14 @@ Future<void> main() async {
   l.Logger.root.level = l.Level.ALL;
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      logLog.info('Info message #${++counter}');
+      logLog.info('Info message #${nextCount()}');
     }
   });
 
   subtitle('talker:');
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      talkLogOn.info('Info message #${++counter}');
+      talkLogOn.info('Info message #${nextCount()}');
     }
   });
 
@@ -248,24 +283,24 @@ Future<void> main() async {
 
   subtitle('CustomLogger:');
   log.level = Levels.off;
-  runTest(mode: BenchmarkMode.worst, (count) {
+  runTest(highlight: Highlight.bad, (count) {
     for (var i = 0; i < count; i++) {
-      log.i('Info message #${++counter}');
+      log.i('Info message #${nextCount()}');
     }
   });
 
   subtitle('logging:');
   l.Logger.root.level = l.Level.OFF;
-  runTest(mode: BenchmarkMode.worst, (count) {
+  runTest(highlight: Highlight.bad, (count) {
     for (var i = 0; i < count; i++) {
-      logLog.info('Info message #${++counter}');
+      logLog.info('Info message #${nextCount()}');
     }
   });
 
   subtitle('talker:');
-  runTest(mode: BenchmarkMode.worst, (count) {
+  runTest(highlight: Highlight.bad, (count) {
     for (var i = 0; i < count; i++) {
-      talkLogOff.info('Info message #${++counter}');
+      talkLogOff.info('Info message #${nextCount()}');
     }
   });
 
@@ -274,7 +309,7 @@ Future<void> main() async {
 
   subtitle('CustomLogger:');
   log.level = Levels.all;
-  String evaluateMessage() => 'Info message #${++counter}';
+  String evaluateMessage() => 'Info message #${nextCount()}';
   runTest((count) {
     for (var i = 0; i < count; i++) {
       log.i(evaluateMessage);
@@ -301,7 +336,7 @@ Future<void> main() async {
 
   subtitle('CustomLogger:');
   log.level = Levels.off;
-  runTest(mode: BenchmarkMode.best, (count) {
+  runTest(highlight: Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       log.i(evaluateMessage);
     }
@@ -334,7 +369,7 @@ Future<void> main() async {
   );
 
   subtitle('CustomLogger:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+  runTest(highlight: assertEnabled ? Highlight.normal : Highlight.good,
       (count) {
     for (var i = 0; i < count; i++) {
       assert(log.i(evaluateMessage));
@@ -342,7 +377,7 @@ Future<void> main() async {
   });
 
   subtitle('logging:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+  runTest(highlight: assertEnabled ? Highlight.normal : Highlight.good,
       (count) {
     for (var i = 0; i < count; i++) {
       assert(() {
@@ -353,7 +388,7 @@ Future<void> main() async {
   });
 
   subtitle('talker:');
-  runTest(mode: assertEnabled ? BenchmarkMode.normal : BenchmarkMode.best,
+  runTest(highlight: assertEnabled ? Highlight.normal : Highlight.good,
       (count) {
     for (var i = 0; i < count; i++) {
       assert(() {
@@ -372,21 +407,21 @@ Future<void> main() async {
   );
 
   subtitle('CustomLogger:');
-  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       logging && log.i(evaluateMessage);
     }
   });
 
   subtitle('logging:');
-  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       if (logging) logLog.info(evaluateMessage);
     }
   });
 
   subtitle('talker:');
-  runTest(mode: logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       if (logging) talkLogOn.info(evaluateMessage);
     }
@@ -400,7 +435,7 @@ Future<void> main() async {
 
   subtitle('CustomLogger:');
   // ignore: avoid_redundant_argument_values
-  runTest(mode: !logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: !logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       !logging && log.i(evaluateMessage);
     }
@@ -408,7 +443,7 @@ Future<void> main() async {
 
   subtitle('logging:');
   // ignore: avoid_redundant_argument_values
-  runTest(mode: !logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: !logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       if (!logging) logLog.info(evaluateMessage);
     }
@@ -416,7 +451,7 @@ Future<void> main() async {
 
   subtitle('talker:');
   // ignore: avoid_redundant_argument_values
-  runTest(mode: !logging ? BenchmarkMode.normal : BenchmarkMode.best, (count) {
+  runTest(highlight: !logging ? Highlight.normal : Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       if (!logging) talkLogOn.info(evaluateMessage);
     }
@@ -438,10 +473,10 @@ Future<void> main() async {
 
   log.level = Levels.all;
 
-  subtitle(r"eager: log.i('Info message #${++counter}'):");
+  subtitle(r"eager: log.i('Info message #${nextCount()}'):");
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      log.i('Info message #${++counter}');
+      log.i('Info message #${nextCount()}');
     }
   });
 
@@ -452,10 +487,10 @@ Future<void> main() async {
     }
   });
 
-  subtitle(r"closure literal: log.i(() => 'Info message #${++counter}'):");
+  subtitle(r"closure literal: log.i(() => 'Info message #${nextCount()}'):");
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      log.i(() => 'Info message #${++counter}');
+      log.i(() => 'Info message #${nextCount()}');
     }
   });
 
@@ -464,26 +499,140 @@ Future<void> main() async {
 
   log.level = Levels.off;
 
-  subtitle(r"eager: log.i('Info message #${++counter}'):");
-  runTest(mode: BenchmarkMode.worst, (count) {
+  subtitle(r"eager: log.i('Info message #${nextCount()}'):");
+  runTest(highlight: Highlight.bad, (count) {
     for (var i = 0; i < count; i++) {
-      log.i('Info message #${++counter}');
+      log.i('Info message #${nextCount()}');
     }
   });
 
   subtitle('tear-off: log.i(evaluateMessage):');
-  runTest(mode: BenchmarkMode.best, (count) {
+  runTest(highlight: Highlight.good, (count) {
     for (var i = 0; i < count; i++) {
       log.i(evaluateMessage);
     }
   });
 
-  subtitle(r"closure literal: log.i(() => 'Info message #${++counter}'):");
+  subtitle(r"closure literal: log.i(() => 'Info message #${nextCount()}'):");
   runTest((count) {
     for (var i = 0; i < count; i++) {
-      log.i(() => 'Info message #${++counter}');
+      log.i(() => 'Info message #${nextCount()}');
     }
   });
+
+  //
+  // Depth was measured nowhere at all, and it is the one thing in the package
+  // that can grow with it. Until `534f342` `onError` was resolved by walking
+  // the parent chain on every published log: 9.4 ns at depth 0 against
+  // 57.7 ns at depth 20 in AOT, while the disabled path stayed flat. A flat
+  // enabled curve here is the guard against that coming back.
+  Logger atDepth(int depth, CustomLogPublisher<Log> publisher) {
+    var node = Logger('root')
+      ..level = Levels.all
+      ..publisher = publisher;
+    for (var i = 0; i < depth; i++) {
+      node = node.child('n$i');
+    }
+
+    return node;
+  }
+
+  const depths = [0, 1, 5, 20];
+
+  title('Sublogger depth (logging [on]enabled[/on]):');
+
+  for (final depth in depths) {
+    final node = atDepth(depth, const BenchmarkLogFormatter());
+    subtitle('depth $depth:');
+    runTest((count) {
+      for (var i = 0; i < count; i++) {
+        node.i('Info message');
+      }
+    });
+  }
+
+  //
+  title('Sublogger depth (logging [off]disabled[/off]):');
+
+  for (final depth in depths) {
+    final node = atDepth(depth, const BenchmarkLogFormatter())
+      ..level = Levels.off;
+    subtitle('depth $depth:');
+    runTest(highlight: Highlight.good, (count) {
+      for (var i = 0; i < count; i++) {
+        node.i('Info message');
+      }
+    });
+  }
+
+  //
+  title('Sublogger depth, publisher reads the path '
+      '(logging [on]enabled[/on]):');
+
+  for (final depth in depths) {
+    final node = atDepth(depth, const BenchmarkPathFormatter());
+    subtitle('depth $depth:');
+    runTest((count) {
+      for (var i = 0; i < count; i++) {
+        node.i('Info message');
+      }
+    });
+  }
+
+  //
+  // The publishing layer, none of which was measured before: `MultiPublisher`,
+  // `TransformPublisher` and `CustomLogger.transformer` are public API, all
+  // three sit on the publish path of every log, and the repository had no
+  // number for any of them.
+  title('The publishing layer (logging [on]enabled[/on]):');
+
+  subtitle('publisher alone:');
+  final plainLog = Logger('plain')
+    ..level = Levels.all
+    ..publisher = const BenchmarkLogFormatter();
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      plainLog.i('Info message');
+    }
+  });
+
+  subtitle('+ CustomLogger.transformer (identity):');
+  final transformedLog = Logger('transformed')
+    ..level = Levels.all
+    ..publisher = const BenchmarkLogFormatter()
+    ..transformer = ((log) => log);
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      transformedLog.i('Info message');
+    }
+  });
+
+  subtitle('+ TransformPublisher (identity):');
+  final wrappedLog = Logger('wrapped')
+    ..level = Levels.all
+    ..publisher = TransformPublisher<Log>(
+      const BenchmarkLogFormatter(),
+      transformer: (log) => log,
+    );
+  runTest((count) {
+    for (var i = 0; i < count; i++) {
+      wrappedLog.i('Info message');
+    }
+  });
+
+  for (final fanOut in [1, 2, 4]) {
+    subtitle('MultiPublisher of $fanOut:');
+    final multiLog = Logger('multi$fanOut')
+      ..level = Levels.all
+      ..publisher = MultiPublisher<Log>([
+        for (var i = 0; i < fanOut; i++) const BenchmarkLogFormatter(),
+      ]);
+    runTest((count) {
+      for (var i = 0; i < count; i++) {
+        multiLog.i('Info message');
+      }
+    });
+  }
 
   //
   title('processLog: closure vs method (logging [on]enabled[/on]):');
@@ -510,8 +659,8 @@ Future<void> main() async {
   });
 
   // Touch the sink: a store nothing ever reads is a store the compiler is
-  // free to drop, and then the two variants above would be measured empty.
-  description('\nLast message parked by MicroPublisher: ${sink ?? '<none>'}');
+  // free to drop, and then everything above would be measured empty.
+  description('\nLast value parked: ${sink ?? '<none>'}');
 }
 
 class TalkerSimpleLoggerFormatter extends t.LoggerFormatter {
