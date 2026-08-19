@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 import 'utils/matchers.dart';
+import 'utils/wait.dart';
 
 List<(String, String?)> entriesOf(List<(String, Log)> entries) =>
     entries.map((entry) => (entry.$1, entry.$2.message)).toList();
@@ -296,7 +297,7 @@ void main() {
         ..publisher = publisher.withParam('ctx');
 
       log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await pumpUntil(() => dropped.isNotEmpty);
 
       expect(stamps, hasLength(3), reason: 'the first attempt plus two');
       expect(dropped, [('ctx', 'undeliverable')]);

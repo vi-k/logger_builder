@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 import 'utils/matchers.dart';
+import 'utils/wait.dart';
 
 Logger makeLogger(CustomLogPublisher<Log> publisher) => Logger('test')
   ..level = Levels.all
@@ -337,7 +338,7 @@ void main() {
       final log = makeLogger(publisher);
 
       log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpUntil(() => dropped.isNotEmpty);
 
       expect(attempts, 4, reason: 'the first attempt plus three retries');
       expect(dropped, ['undeliverable']);
@@ -399,7 +400,7 @@ void main() {
       attempts = 0;
       failuresLeft = 1000;
       log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await pumpUntil(() => dropped.isNotEmpty);
 
       expect(attempts, 5, reason: 'the success paid the whole budget back');
       expect(dropped, ['undeliverable']);
@@ -422,7 +423,7 @@ void main() {
       final log = makeLogger(publisher);
 
       log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await pumpUntil(() => dropped.isNotEmpty);
 
       expect(attempts, 1);
       expect(dropped, ['undeliverable']);
@@ -447,7 +448,10 @@ void main() {
       final log = makeLogger(publisher);
 
       log.i('undeliverable');
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // A lower bound is exactly what this one tests, so it waits out a
+      // window rather than polling — but the window is generous and the
+      // assertion below is on the stamps, not on the window.
+      await pumpUntil(() => stamps.length == 4);
 
       expect(stamps, hasLength(4));
       // A flat 20 ms would put the last attempt near 60 ms; 20/40/80 puts
@@ -483,7 +487,7 @@ void main() {
         final log = makeLogger(publisher);
 
         log.i('undeliverable');
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await pumpUntil(() => reported != null);
         await publisher.close().timeout(const Duration(seconds: 2));
 
         expect(reported, hasLength(1));
