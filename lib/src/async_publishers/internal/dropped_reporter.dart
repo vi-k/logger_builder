@@ -1,6 +1,8 @@
 // Not part of the public API: not exported by the package barrel.
 // ignore_for_file: public_member_api_docs
 
+import 'report.dart';
+
 /// Why an entry will never be delivered.
 enum DropCause {
   queueFull('queue full'),
@@ -70,7 +72,7 @@ final class DroppedReporter {
     final at = now();
     if (!_spoke) {
       _spoke = true;
-      sink(_opening());
+      _say(_opening());
       _reset(at);
 
       return;
@@ -81,7 +83,7 @@ final class DroppedReporter {
       return;
     }
 
-    sink(_summary(since));
+    _say(_summary(since));
     // A gap of more than two windows is a new storm, not a continuing one:
     // the doubling exists to quieten an outage, not to stay quiet after it.
     _current = since >= _current * 2 ? window : _grown();
@@ -96,9 +98,21 @@ final class DroppedReporter {
     }
 
     final at = now();
-    sink(_summary(at - _lastSpoke));
+    _say(_summary(at - _lastSpoke));
     _reset(at);
   }
+
+  /// Speaks, and survives a sink that does not want to listen.
+  ///
+  /// The default sink is `print`, and `print` belongs to the zone: an
+  /// application is free to redirect it into a file, a socket or a crash
+  /// reporter, and any of those can fail. A user's `onDropped` is already
+  /// guarded for exactly that reason — leaving the default path bare would
+  /// mean the loss of a log kills the application that never asked for
+  /// a reporter in the first place. The error goes to the zone, and the
+  /// window is reset either way: a sink that throws once tends to throw
+  /// again, and a window left unclosed would speak on every later loss.
+  void _say(String message) => guarded(() => sink(message));
 
   void _reset(Duration at) {
     _pending = 0;

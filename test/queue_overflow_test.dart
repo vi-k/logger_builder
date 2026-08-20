@@ -625,6 +625,62 @@ void main() {
       expect(printed.last, contains('18 log events'));
     });
 
+    // Regression: H2 (project review 2026-08-20[1]) — redirecting `print`
+    // into a file or a crash reporter is an everyday Dart and Flutter
+    // pattern, and such a sink can fail. The default reporter called it
+    // unguarded, so a dropped log became a throw at the logging call site
+    // and an error out of close(): the mechanism that exists to make a lost
+    // log audible was killing the application instead.
+    test('a throwing print derails neither publishing nor close', () async {
+      final zoneErrors = <Object>[];
+      final done = Completer<void>();
+      Object? publishError;
+      Object? closeError;
+
+      unawaited(
+        runZonedGuarded(
+          () async {
+            final gate = Completer<void>();
+            final publisher = AsyncPublisher<Log>(
+              (log) => gate.future,
+              maxQueueSize: 1,
+            );
+            final log = makeLogger(publisher);
+            try {
+              for (var i = 0; i < 20; i++) {
+                log.i('$i');
+              }
+            } on Object catch (error) {
+              publishError = error;
+            }
+
+            gate.complete();
+            try {
+              await publisher.close();
+            } on Object catch (error) {
+              closeError = error;
+            }
+            done.complete();
+          },
+          (error, stackTrace) => zoneErrors.add(error),
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) =>
+                throw StateError('print sink is closed'),
+          ),
+        ),
+      );
+
+      await done.future.timeout(const Duration(seconds: 5));
+
+      expect(publishError, isNull, reason: 'a lost log is not a broken call');
+      expect(closeError, isNull, reason: 'nor a broken shutdown');
+      expect(
+        zoneErrors,
+        hasLength(2),
+        reason: "the sink's own errors go to the zone: opening and count",
+      );
+    });
+
     test('a buffered publisher speaks for its own losses too', () async {
       final printed = await printedDuring(() async {
         final gate = Completer<void>();

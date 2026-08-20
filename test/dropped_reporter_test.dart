@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:logger_builder/src/async_publishers/internal/dropped_reporter.dart';
 import 'package:test/test.dart';
 
@@ -117,6 +119,47 @@ void main() {
     reporter.flush();
 
     expect(printed, hasLength(2), reason: 'nothing left to report');
+  });
+
+  // Regression: H2 (project review 2026-08-20[1]) — the sink was called
+  // bare while the user's onDropped went through `guarded`, so a zone whose
+  // `print` throws turned a lost log into a throw at the logging call site.
+  // Worse, the throw jumped over `_reset`, leaving the window open forever:
+  // every later loss spoke, and every later loss threw.
+  test('a throwing sink neither escapes nor freezes the window', () {
+    final zoneErrors = <Object>[];
+    final printed = <String>[];
+    final clock = _Clock();
+    final reporter = DroppedReporter(
+      sink: (message) {
+        printed.add(message);
+
+        throw StateError('print sink is closed');
+      },
+      now: clock.call,
+    );
+
+    runZonedGuarded(
+      () {
+        reporter.record(1, DropCause.queueFull);
+        clock.now = const Duration(seconds: 1);
+        reporter.record(1, DropCause.queueFull);
+        clock.now = const Duration(seconds: 6);
+        reporter.record(1, DropCause.queueFull);
+        clock.now = const Duration(seconds: 7);
+        reporter
+          ..record(1, DropCause.queueFull)
+          ..flush();
+      },
+      (error, stackTrace) => zoneErrors.add(error),
+    );
+
+    expect(
+      printed,
+      hasLength(3),
+      reason: 'the opening line, the closing window, and the flush',
+    );
+    expect(zoneErrors, hasLength(3), reason: "the sink's own errors go there");
   });
 
   test('a window that saw several causes names them all', () {
