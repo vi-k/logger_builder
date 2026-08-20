@@ -981,8 +981,11 @@ All eight take the same four optional arguments:
   to a minute while they keep coming, or by `close()`. There is no timer
   behind that, on purpose, and the consequence is worth knowing: a burst
   that ends without a later loss and without a `close()` is announced by
-  that first line and never counted. `onDropped: (_) {}` silences all of
-  it. The unbuffered four hand you
+  that first line and never counted. It says it with `print`, so it lands
+  in the application's stdout — worth a thought if your stdout carries a
+  protocol rather than a console. `onDropped: (_) {}` silences all of it,
+  and a `print` of your own redirects it: `print` goes through the current
+  zone. The unbuffered four hand you
   one log at a time (with its `param`, where there is one), the buffered
   four a list.
 

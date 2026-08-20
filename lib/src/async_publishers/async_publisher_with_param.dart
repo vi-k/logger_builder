@@ -52,6 +52,16 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// announced by that first line and never counted. Pass
   /// `onDropped: (_) {}` to silence all of it.
   ///
+  /// It says it with `print`, which means the application's stdout. For
+  /// most programs that is the console and the point; for a program whose
+  /// stdout carries a protocol — a CLI with `--json`, a server over stdio —
+  /// it is a line in the middle of the stream. Two ways out, and the
+  /// package deliberately takes neither by default: `onDropped: (_) {}`,
+  /// which drops the losses in silence again, or a `print` of your own —
+  /// `print` goes through the current [Zone], so an application that
+  /// redirects it redirects this too, and a redirect that throws is caught
+  /// rather than passed on to the logging call.
+  ///
   /// A throwing handler does not derail publishing: its own error goes to
   /// the current zone.
   final void Function(Param param, Log log)? onDropped;
