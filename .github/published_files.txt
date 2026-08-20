@@ -1,0 +1,56 @@
+├── CHANGELOG.md
+├── LICENSE
+├── README.md
+├── analysis_options.yaml
+├── example
+│   ├── README.md
+│   └── logger_builder_examples
+│       ├── CHANGELOG.md
+│       ├── README.md
+│       ├── analysis_options.yaml
+│       ├── bin
+│       │   ├── async_publishers
+│       │   │   ├── async_publisher.dart
+│       │   │   ├── async_publisher_with_buffer.dart
+│       │   │   ├── async_publisher_with_buffer_and_param.dart
+│       │   │   ├── async_publisher_with_param.dart
+│       │   │   └── multi_publisher.dart
+│       │   ├── benchmarks.dart
+│       │   ├── complex_logger.dart
+│       │   ├── hierarchical_logger.dart
+│       │   ├── json_reporter.dart
+│       │   └── simple_logger.dart
+│       ├── lib
+│       │   ├── benchmark.dart
+│       │   ├── complex_logger.dart
+│       │   ├── console.dart
+│       │   ├── hierarchical_logger.dart
+│       │   ├── json_reporter.dart
+│       │   └── simple_logger.dart
+│       └── pubspec.yaml
+├── lib
+│   ├── logger_builder.dart
+│   └── src
+│       ├── async_publishers
+│       │   ├── async_publisher.dart
+│       │   ├── async_publisher_with_buffer.dart
+│       │   ├── async_publisher_with_buffer_and_param.dart
+│       │   ├── async_publisher_with_param.dart
+│       │   ├── internal
+│       │   │   ├── async_param_publisher.dart
+│       │   │   ├── async_pipeline.dart
+│       │   │   ├── batch_format.dart
+│       │   │   ├── buffered_pipeline.dart
+│       │   │   ├── dropped_reporter.dart
+│       │   │   └── report.dart
+│       │   ├── multi_publisher.dart
+│       │   └── transform_publisher.dart
+│       ├── custom_logger
+│       │   ├── custom_level_logger.dart
+│       │   ├── custom_log.dart
+│       │   ├── custom_log_publisher.dart
+│       │   └── custom_logger.dart
+│       └── utils
+│           ├── lazy.dart
+│           └── levels.dart
+└── pubspec.yaml

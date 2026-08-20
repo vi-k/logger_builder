@@ -58,6 +58,24 @@ jobs:
       - name: Run tests
         run: dart test
 
+      # M4 (project review 2026-08-20[1]): the package advertises
+      # platform:web, runtime:web and is:wasm-ready, and until this step not
+      # one line of it had ever run on either. pana, which decides those
+      # tags, derives them from imports — statically — so it cannot notice a
+      # runtime difference, and there are several to notice: WeakReference is
+      # a JS WeakRef with the host's own collection policy, `int` is a double
+      # under dart2js, and the microtask and timer ordering both pipelines
+      # lean on is the browser's.
+      #
+      # Four tests are marked `testOn: 'vm'`: they assert that a collection
+      # *happened*, which nothing on the web can be made to do. Everything
+      # else runs on all three.
+      - name: Run tests on the web
+        run: dart test -p chrome
+
+      - name: Run tests compiled to wasm
+        run: dart test -p chrome -c dart2wasm
+
       # Item 1 of the release checklist (docs/conventions.md section 7), and
       # until now it lived only in that checklist. `dart doc` exits 0 on
       # warnings, so the count is what gets asserted.
@@ -73,8 +91,46 @@ jobs:
       # .pubignore is load-bearing here — the published example includes the
       # root analysis_options.yaml through a relative path — and nothing but a
       # dry run notices when it stops being right.
+      #
+      # M3 (project review 2026-08-20[1]): the dry run notices less than that
+      # claimed. Measured on a clean clone — a file added to the root and left
+      # out of .pubignore was listed in the tree, and the command still said
+      # "Package has 0 warnings" and exited 0. The archive is the one artefact
+      # that cannot be taken back, in either direction: a file that slips in
+      # stays on pub.dev, and a file that silently drops out breaks the
+      # published example. So the file list is asserted against
+      # .github/published_files.txt, which is the archive as it is meant to
+      # be. Sizes are stripped, names and structure are not. Regenerate it
+      # the same way the check builds it, and read the diff before trusting
+      # it.
       - name: Validate the published archive
-        run: dart pub publish --dry-run
+        run: |
+          set -euo pipefail
+          dart pub publish --dry-run 2>&1 | tee /tmp/publish.log
+          sed -n '/^Publishing logger_builder/,/^Total compressed archive size/p' \
+            /tmp/publish.log |
+            sed '1d;$d' |
+            sed -E 's/ \([^)]*\)$//' |
+            sed '/^$/d' > /tmp/archive.txt
+          diff -u .github/published_files.txt /tmp/archive.txt
+
+      # L5 (project review 2026-08-20[1]): the release checklist says to add
+      # a CHANGELOG section for the version being published, and nothing
+      # checked that its heading is that version. `(unreleased)` is allowed —
+      # that is how a version is opened here — but the number has to match.
+      - name: Check the CHANGELOG heading
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version: *//p' pubspec.yaml | head -1)
+          heading=$(grep -m1 '^## ' CHANGELOG.md)
+          case "$heading" in
+            "## $version"|"## $version ("*) ;;
+            *)
+              echo "CHANGELOG heading '$heading' is not version $version"
+              exit 1
+              ;;
+          esac
+          echo "CHANGELOG heading matches $version"
 
       # The examples are the package's primary documentation and were only
       # ever type-checked. A deadlock or a runaway retry loop passes analysis
@@ -118,7 +174,13 @@ jobs:
       - name: Verify the pub.dev platform tags
         run: |
           set -e
-          dart pub global activate pana
+          # Pinned (M5, project review 2026-08-20[1]): pana was the only
+          # unpinned dependency in this workflow — actions are pinned by SHA,
+          # pub dependencies are watched by dependabot — and it runs on every
+          # push with its whole transitive tree. The likely accident is not an
+          # attack but a bad pana release painting the branch red with nothing
+          # changed here. Bump it by hand.
+          dart pub global activate pana 0.23.18
           dart pub global run pana --no-warning --json . > /tmp/pana.json
           python3 - <<'EOF'
           import json, sys
@@ -218,3 +280,15 @@ jobs:
 
       - name: Run tests
         run: dart test
+
+      # L7 (project review 2026-08-20[1]): `continue-on-error` gives the job
+      # the conclusion `success`, so a beta regression looked exactly like a
+      # beta that was fine — nobody would open the log to find out. The
+      # annotation is the compromise: the job still does not gate anything,
+      # but the run carries a visible warning when it fails.
+      - name: Say so when the beta job fails
+        if: failure()
+        run: >-
+          echo "::warning title=beta SDK::The beta job failed. It does not
+          gate anything (continue-on-error), so the run stays green — open
+          this job's log."
