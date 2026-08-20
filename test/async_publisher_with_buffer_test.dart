@@ -257,13 +257,30 @@ void main() {
     // Regression: C1 (project review 2026-08-16[4]) — a handler that keeps
     // handing the batch back used to re-tick through the microtask queue,
     // which never yields: timers, I/O and close() itself were starved.
+    //
+    // Regression: M7 (project review 2026-08-20[1]) — this guard was
+    // disarmed by a feature that arrived after it. With the default
+    // maxRetries of 100 the microtask loop ends by itself after a hundred
+    // attempts, the delay below then completes, and the test passed with
+    // the defect restored. Two things fix that. The budget is raised out of
+    // the way so the loop cannot end on its own, and the number of attempts
+    // is what is asserted: spaced by a timer they are counted in single
+    // digits, while a microtask loop spends the whole budget inside one
+    // turn of the event loop. The count also keeps the failure loud — a
+    // starved isolate cannot fail a test, it can only hang it, and a hung
+    // `dart test` prints nothing at all.
     test('a permanently retrying handler does not starve the event loop',
         () async {
       var attempts = 0;
-      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) {
-        attempts++;
-        retry.addAll(logs);
-      });
+      final publisher = AsyncPublisherWithBuffer<Log>(
+        (logs, retry) {
+          attempts++;
+          retry.addAll(logs);
+        },
+        retryDelay: const Duration(milliseconds: 1),
+        maxRetries: 100000,
+        onDropped: (logs) {},
+      );
       final log = makeLogger(publisher);
 
       log.i('undeliverable');
@@ -272,6 +289,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(attempts, greaterThan(1), reason: 'the batch should be retried');
+      expect(
+        attempts,
+        lessThan(200),
+        reason: 'retries go through the event loop, not the microtask queue',
+      );
 
       await publisher.close().timeout(const Duration(seconds: 2));
     });
@@ -858,6 +880,26 @@ void main() {
       expect(zoneErrors.single, isA<StateError>());
     });
 
+    // Regression: L9 (project review 2026-08-20[1]) — the buffered twin of
+    // the identity check: the same future, not merely one that completes at
+    // the same time.
+    test('flush during a close hands back that very future', () async {
+      final publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      makeLogger(publisher).i('one');
+      final closing = publisher.close();
+
+      expect(identical(publisher.flush(), closing), isTrue);
+      expect(
+        identical(publisher.close(), closing),
+        isTrue,
+        reason: 'and close',
+      );
+
+      await closing.timeout(const Duration(seconds: 2));
+    });
+
     // Regression: M5 (project review 2026-08-17[1]) — isClosed flips when
     // close() is *called*, so flush() short-circuited to an already-completed
     // future while the queue was still in flight: a false all-clear.
@@ -919,6 +961,88 @@ void main() {
     // one object twice, so identity and value equality behave alike in it and
     // it cannot fail if the identity map is replaced by a plain one. This case
     // uses two distinct logs that compare equal, which only identity separates.
+    // Regression: M8 (project review 2026-08-20[1]) — `_inPublishOrder`
+    // counts the handed-back entries in an identity map, and the sibling
+    // counter in `remainingEntries` had a test for exactly that while this
+    // one had none. With a value map two distinct logs that compare equal
+    // collapse into one key, and the batch that goes back into the queue
+    // holds the entry that was *not* handed back.
+    test('the retried batch keeps the entries the handler handed back',
+        () async {
+      final levelLogger = Logger('test')[Levels.info];
+      final a = EqLog(levelLogger, 'dup');
+      final other = EqLog(levelLogger, 'other');
+      final b = EqLog(levelLogger, 'dup');
+      expect(a == b, isTrue, reason: 'the fixture must have value equality');
+      expect(identical(a, b), isFalse);
+
+      final batches = <List<EqLog>>[];
+      final publisher = AsyncPublisherWithBuffer<EqLog>((logs, retry) {
+        batches.add(List<EqLog>.of(logs));
+        if (batches.length == 1) {
+          // Handed back out of publish order, so the reordering runs.
+          retry
+            ..add(logs[2])
+            ..add(logs[1]);
+        }
+      })
+        ..publish(a)
+        ..publish(other)
+        ..publish(b);
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(batches, hasLength(2), reason: 'one retry');
+      String name(EqLog log) {
+        if (identical(log, a)) {
+          return 'a';
+        }
+
+        return identical(log, other) ? 'other' : 'b';
+      }
+
+      expect(
+        batches[1].map(name),
+        ['other', 'b'],
+        reason: 'the entries handed back, in publish order',
+      );
+    });
+
+    // Regression: M8 — `retryWholeBatch` clears the retry buffer before
+    // refilling it. Without the clear, a `format` that put part of the
+    // batch back and only then threw left those entries in the buffer and
+    // the whole batch on top of them: the sink received them twice, which
+    // in production is indistinguishable from a retransmission.
+    test('a format that hands back and then throws does not duplicate',
+        () async {
+      final delivered = <String?>[];
+      var first = true;
+      final publisher = AsyncFormatterWithBuffer<Log, String>(
+        format: (logs, retry) {
+          if (first) {
+            first = false;
+            retry.add(logs[0]);
+
+            throw StateError('format failed after handing one back');
+          }
+
+          return 'batch';
+        },
+        output: (out, remaining, retry) =>
+            delivered.addAll(messagesOf(remaining)),
+        onError: (error, stackTrace) {},
+      );
+      makeLogger(publisher)
+        ..i('one')
+        ..i('two');
+
+      await publisher.flush().timeout(const Duration(seconds: 2));
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(delivered, ['one', 'two'], reason: 'each log exactly once');
+    });
+
     test('retrying one of two equal but distinct logs keeps both', () async {
       final levelLogger = Logger('test')[Levels.info];
       final a = EqLog(levelLogger, 'dup');

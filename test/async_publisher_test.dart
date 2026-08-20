@@ -166,6 +166,63 @@ void main() {
       expect(handled, ['one', 'two', 'three']);
     });
 
+    // Regression: L9 (project review 2026-08-20[1]) — the dartdoc promises
+    // that a flush during a close hands back *that same* future, and only
+    // the observable half of it was ever checked: that the drain is waited
+    // out. Removing the early return from flush() left the suite green,
+    // because closing the controller drains the queue anyway.
+    test('flush during a close hands back that very future', () async {
+      final publisher = AsyncPublisher<Log>((log) async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      makeLogger(publisher).i('one');
+      final closing = publisher.close();
+
+      expect(identical(publisher.flush(), closing), isTrue);
+      expect(
+        identical(publisher.close(), closing),
+        isTrue,
+        reason: 'and close',
+      );
+
+      await closing.timeout(const Duration(seconds: 2));
+    });
+
+    // M8 (project review 2026-08-20[1]) — a flush queued behind another one
+    // re-checks for a close that started while it waited, and hands back
+    // that close instead of draining a queue the close is already draining.
+    //
+    // Honest about what this test is: a contract test, not a guard. The
+    // finding expected the re-check to be observable, and it is not —
+    // removing it leaves this test green, because the second flush then
+    // waits on the very controller the close is draining and cannot return
+    // any earlier. What the test does catch is the contract itself: a
+    // queued flush that ever started answering before the drain finished.
+    test('a queued flush waits for a close that started meanwhile', () async {
+      final handled = <String?>[];
+      final publisher = AsyncPublisher<Log>((log) async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        handled.add(log.message);
+      });
+      final log = makeLogger(publisher);
+
+      log.i('one');
+      final first = publisher.flush();
+      final second = publisher.flush();
+      log.i('two');
+      final closing = publisher.close();
+
+      await second.timeout(const Duration(seconds: 2));
+
+      expect(
+        handled,
+        ['one', 'two'],
+        reason: 'the queued flush answers for the close that is draining',
+      );
+
+      await Future.wait([first, closing]).timeout(const Duration(seconds: 2));
+    });
+
     // Regression: CR2 (cross-review) — unbuffered variant keeps flowing
     test(
         'a throwing onError is reported to the zone '

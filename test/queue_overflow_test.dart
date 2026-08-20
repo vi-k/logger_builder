@@ -446,9 +446,18 @@ void main() {
       });
     }
 
+    // Regression: M1 (project review 2026-08-20[1]) — this test used to
+    // assert only that one error reached the zone. That is true in both
+    // worlds: with the guard because it sent the error there, without one
+    // because the error flew out of the logging call and the surrounding
+    // runZonedGuarded caught it. Removing `guarded` around onDropped left
+    // the test green. What the guard promises is that the logging call
+    // *returns*, so that is what is asserted now.
     test('a throwing onDropped does not reach the logging call', () async {
       final gate = Completer<void>();
       final errors = <Object>[];
+      Object? atCallSite;
+      var returned = false;
       late final AsyncPublisher<Log> publisher;
       runZonedGuarded(
         () {
@@ -457,14 +466,59 @@ void main() {
             maxQueueSize: 1,
             onDropped: (log) => throw StateError('boom'),
           );
-          makeLogger(publisher)
-            ..i('one')
-            ..i('two');
+          final log = makeLogger(publisher)..i('one');
+          try {
+            log.i('two');
+            returned = true;
+          } on Object catch (error) {
+            atCallSite = error;
+          }
         },
         (error, stackTrace) => errors.add(error),
       );
 
-      expect(errors, hasLength(1));
+      expect(atCallSite, isNull, reason: 'the guard keeps it off the call');
+      expect(returned, isTrue, reason: 'the logging call returned normally');
+      expect(errors, hasLength(1), reason: 'and the error went to the zone');
+
+      gate.complete();
+      await publisher.close();
+    });
+
+    // Regression: M1 — the buffered twin of the test above. The buffered
+    // family had no test for this path at all: its throwing-onDropped test
+    // covers the shutdown, where both worlds end up in the zone anyway
+    // (the tick loop's last-resort guard puts them there), so it cannot
+    // tell a guarded callback from an unguarded one. The full queue can:
+    // there the callback runs on the stack of the logging call.
+    test('a throwing onDropped does not reach the logging call, buffered',
+        () async {
+      final gate = Completer<void>();
+      final errors = <Object>[];
+      Object? atCallSite;
+      var returned = false;
+      late final AsyncPublisherWithBuffer<Log> publisher;
+      runZonedGuarded(
+        () {
+          publisher = AsyncPublisherWithBuffer<Log>(
+            (logs, retryBuffer) => gate.future,
+            maxQueueSize: 1,
+            onDropped: (logs) => throw StateError('boom'),
+          );
+          final log = makeLogger(publisher)..i('one');
+          try {
+            log.i('two');
+            returned = true;
+          } on Object catch (error) {
+            atCallSite = error;
+          }
+        },
+        (error, stackTrace) => errors.add(error),
+      );
+
+      expect(atCallSite, isNull, reason: 'the guard keeps it off the call');
+      expect(returned, isTrue, reason: 'the logging call returned normally');
+      expect(errors, hasLength(1), reason: 'and the error went to the zone');
 
       gate.complete();
       await publisher.close();
