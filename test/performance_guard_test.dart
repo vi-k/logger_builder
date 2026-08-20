@@ -1,3 +1,13 @@
+// VM only, and the wasm run is what proved it: browsers coarsen their
+// clocks on purpose — a Spectre mitigation — so a ratio built from
+// nanoseconds per call measures the quantisation, not the package. Under
+// dart2wasm the two sides came out 3.00 and 4.50 ns, which is one tick
+// against one and a half, and the guard failed on arithmetic rather than on
+// a regression. The shape this file guards is a property of the code, not
+// of the runtime, so measuring it once, where the clock is real, is enough.
+@TestOn('vm')
+library;
+
 import 'package:logger_builder/logger_builder.dart';
 import 'package:test/test.dart';
 
