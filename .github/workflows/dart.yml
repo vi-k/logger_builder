@@ -258,6 +258,52 @@ jobs:
       - name: Analyze project source
         run: dart analyze --fatal-infos
 
+  # M15 (project review 2026-08-19[2]): `meta: ^1.15.0` is pinned for one
+  # reason — Flutter ships `meta` from its own SDK and older releases pin it
+  # to an exact version, so `^1.16.0` made this package unresolvable there —
+  # and that reason was never checked by anything. It was checked by hand,
+  # with a probe package that lived in a scratch directory and did not
+  # survive a restart. The probe is `tool/flutter_probe` now, and this job
+  # resolves and analyses it on two Flutters: 3.27.0, the oldest inside
+  # `sdk: ^3.6.0` and the one that pins `meta 1.15.0` exactly, and the
+  # current stable.
+  #
+  # `flutter analyze`, not `dart analyze --fatal-infos`: the probe answers
+  # "does this resolve and type-check under Flutter", not "is it lint-clean".
+  # It carries its own bare analysis_options.yaml so the root one — written
+  # for the package proper — does not reach it.
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flutter: ["3.27.0", "stable"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba # v2.9.1
+        with:
+          flutter-version: ${{ matrix.flutter }}
+          channel: stable
+
+      - name: Resolve the probe against this package
+        working-directory: tool/flutter_probe
+        run: flutter pub get
+
+      # Printed, not asserted: the number that matters differs per Flutter
+      # (1.15.0 on 3.27, newer on stable), and what is being checked is that
+      # a resolution exists at all. The log is where you look when it stops.
+      - name: Say what meta resolved to
+        working-directory: tool/flutter_probe
+        run: flutter pub deps --style=compact | grep '^- meta'
+
+      - name: Analyze the probe
+        working-directory: tool/flutter_probe
+        run: flutter analyze
+
   # Warning, not a gate: `environment.sdk` is `^3.6.0`, so the upper bound is
   # `<4.0.0` and nothing exercised it except whatever `stable` happened to be
   # that day. `continue-on-error` keeps someone else's regression in a beta

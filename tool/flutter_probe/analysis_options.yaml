@@ -1,0 +1,7 @@
+# Deliberately bare, and present for exactly that reason: without a file
+# here the probe would inherit the root analysis_options.yaml, which is
+# written for the package proper. The probe is not linted, it is resolved
+# and type-checked — that is the whole question it answers.
+analyzer:
+  language:
+    strict-casts: true

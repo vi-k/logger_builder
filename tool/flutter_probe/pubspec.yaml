@@ -1,0 +1,21 @@
+# Not a package anyone installs, and not part of the published archive
+# (.pubignore). It exists so CI can check the one thing `meta: ^1.15.0` is
+# pinned for: that logger_builder still resolves under a Flutter that pins
+# `meta` from its own SDK, exactly, rather than by a range.
+#
+# Until 2026-08-20 that check lived on somebody's machine, in a scratch
+# directory, and did not survive a restart — see M15 in
+# docs/records/2026-08-19[2]-project-review.md.
+name: flutter_probe
+description: Resolves logger_builder under Flutter, so CI can see the pin work.
+publish_to: none
+version: 0.0.0
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  logger_builder:
+    path: ../..

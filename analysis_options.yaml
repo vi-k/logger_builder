@@ -1,6 +1,13 @@
 include: package:lints/recommended.yaml
 
 analyzer:
+  # The Flutter probe is resolved and analysed by `flutter analyze` in its
+  # own CI job, against its own bare options file. From here it would be a
+  # package whose `flutter` import cannot resolve — 353 errors and exit 3 on
+  # a clean checkout, the same trap example/ has.
+  exclude:
+    - tool/flutter_probe/**
+
   language:
     strict-casts: true
     strict-inference: true

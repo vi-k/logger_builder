@@ -17,6 +17,11 @@ README.ru.md
 # archive.
 test/
 
+# The Flutter probe: a package that exists so CI can resolve this one under
+# a Flutter that pins `meta` exactly. Nothing a consumer wants, and it would
+# drag a `flutter` dependency into the listing of a pure Dart package.
+tool/
+
 # Do NOT add analysis_options.yaml here: example/logger_builder_examples
 # includes it through a relative path. Measured on an unpacked archive
 # without it, because the wording here used to guess: the example does not
