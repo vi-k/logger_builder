@@ -1,4 +1,4 @@
-## 0.7.0 (unreleased)
+## 0.7.0
 
 The 0.6.2 work below was never published; the per-level publisher pin
 landed on top of it and needed a breaking-change bump, so the unreleased
