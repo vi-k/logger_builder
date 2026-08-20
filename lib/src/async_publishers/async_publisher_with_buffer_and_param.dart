@@ -7,19 +7,23 @@ part of 'async_publisher_with_buffer.dart';
 /// contextual routing of parameter-based publishers.
 ///
 /// > [!IMPORTANT]
-/// > The buffer is unbounded. If the handler cannot keep up — or keeps
-/// > handing batches back through the retry buffer while the sink is down —
-/// > the queue grows until the process runs out of memory. There is no
-/// > overflow policy; bound the input yourself if the sink can stall for
-/// > long. Entries handed back to the retry buffer *after* [close] was called
-/// > cannot be processed and are dropped — set [onDropped] to see them.
-/// > Entries already queued when [close] was called are drained (see
-/// > [close]).
+/// > The queue is bounded: [maxQueueSize] entries may be accepted and not
+/// > yet handled, 100 000 of them by default, the batch in flight included.
+/// > At the limit it is the *incoming* entry that is refused, so a handler
+/// > that cannot keep up — or one that keeps handing batches back through
+/// > the retry buffer while the sink is down — costs the newest entries
+/// > rather than the process. `maxQueueSize: null` gives the bound up: the
+/// > queue then grows until memory runs out.
 /// >
-/// > The queue is created lazily, on the first publish or [close], not in
-/// > the constructor ([flush] and [isClosed] no longer create it). Without an
-/// > [onError] the zone that receives handler errors is therefore the one
-/// > that published first, not the one that built the publisher.
+/// > A refused entry goes to [onDropped], and so does an entry handed back
+/// > to the retry buffer *after* [close] was called: that one cannot be
+/// > processed any more. Leaving [onDropped] unset hides neither — the
+/// > publisher says so itself. Entries already queued when [close] was
+/// > called are drained (see [close]).
+/// >
+/// > Without an [onError] the zone that receives handler errors is the one
+/// > that *built* the publisher: it is captured in the constructor, not at
+/// > the first publish.
 ///
 /// Example usage:
 ///

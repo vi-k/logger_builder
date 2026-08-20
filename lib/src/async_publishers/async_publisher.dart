@@ -166,10 +166,13 @@ abstract base class _AsyncFacade<E extends Object?> {
 /// avoiding blocking operations during application execution.
 ///
 /// > [!IMPORTANT]
-/// > The queue is unbounded: if [handle] is slower than the rate of logging,
-/// > pending events accumulate until the process runs out of memory. There
-/// > is no overflow policy and no dropped-log counter — bound the input
-/// > yourself if the destination can stall.
+/// > The queue is bounded: [maxQueueSize] events may be accepted and not
+/// > yet handled, 100 000 of them by default. At the limit it is the
+/// > *incoming* event that is refused, so a [handle] slower than the rate
+/// > of logging costs the newest logs rather than the process. A refused
+/// > event goes to [onDropped], and leaving that unset does not hide the
+/// > loss — the publisher says so itself. `maxQueueSize: null` gives the
+/// > bound up: the queue then grows until memory runs out.
 ///
 /// Example usage:
 ///
