@@ -31,12 +31,15 @@ final class _LifecyclePublisher
 /// takes when it checks its state up front: the error arrives synchronously,
 /// not as a failed future.
 final class _SyncThrowingClosePublisher
-    implements CustomLogPublisher<Log>, Closable {
+    implements CustomLogPublisher<Log>, Closable, Flushable {
   final published = <Log>[];
   int closeCount = 0;
 
   @override
   void publish(Log log) => published.add(log);
+
+  @override
+  Future<void> flush() => throw StateError('inner flush failed');
 
   @override
   Future<void> close() {
@@ -370,6 +373,29 @@ void main() {
 
       expect(secondError, same(closeError), reason: 'the same future');
       expect(inner.closeCount, 1);
+    });
+
+    // Noted while closing H3 (project review 2026-08-20[1]) and fixed with
+    // it: flush() had the asymmetry close() had. A wrapped flush() that
+    // throws before its first await threw at the caller's call site rather
+    // than failing the future it handed back — MultiPublisher, which routes
+    // the same call through Future.sync, did not.
+    test('a synchronous throw from the inner flush fails the future', () async {
+      final publisher = TransformPublisher<Log>(
+        _SyncThrowingClosePublisher(),
+        transformer: (log) => log,
+      );
+
+      Object? atCallSite;
+      Future<void>? flushing;
+      try {
+        flushing = publisher.flush();
+      } on Object catch (error) {
+        atCallSite = error;
+      }
+
+      expect(atCallSite, isNull, reason: 'a future, not a throw');
+      await expectLater(flushing, throwsStateError);
     });
 
     // Regression: L8 (project review 2026-08-17[1]) — every sibling

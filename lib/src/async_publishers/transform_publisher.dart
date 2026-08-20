@@ -143,10 +143,17 @@ final class TransformPublisher<Log extends CustomLog>
       return closing;
     }
 
-    return switch (_inner) {
-      final Flushable flushable => flushable.flush(),
-      _ => Future.value(),
-    };
+    // Future.sync for the same reason close() has it: a wrapped `flush()`
+    // that throws before its first `await` would otherwise throw at the
+    // logging side's call site instead of failing the future it handed
+    // back. MultiPublisher has always materialised the call this way, and
+    // there is no reason for the two to disagree.
+    return Future.sync(
+      () => switch (_inner) {
+        final Flushable flushable => flushable.flush(),
+        _ => Future.value(),
+      },
+    );
   }
 
   @override
