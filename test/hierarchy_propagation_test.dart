@@ -807,23 +807,27 @@ void main() {
     // pressure from Dart proves nothing there — the test would flake rather
     // than guard. What the web run does still cover is every other test in
     // this file.
-    test('dead subloggers are pruned from the parent', () async {
-      final parent = VarLogger([Levels.info]);
-      final probe = createDiscardedSublogger(parent);
-      expect(parent.subLoggersCount, 1);
+    test(
+      'dead subloggers are pruned from the parent',
+      () async {
+        final parent = VarLogger([Levels.info]);
+        final probe = createDiscardedSublogger(parent);
+        expect(parent.subLoggersCount, 1);
 
-      final collected = await tryCollectGarbage(probe);
-      expect(
-        collected,
-        isTrue,
-        reason: 'the parent must not keep a discarded sublogger alive; '
-            'skipping here would hide exactly the leak this test guards',
-      );
+        final collected = await tryCollectGarbage(probe);
+        expect(
+          collected,
+          isTrue,
+          reason: 'the parent must not keep a discarded sublogger alive; '
+              'skipping here would hide exactly the leak this test guards',
+        );
 
-      parent.pruneSubloggers();
+        parent.pruneSubloggers();
 
-      expect(parent.subLoggersCount, 0);
-    }, testOn: 'vm');
+        expect(parent.subLoggersCount, 0);
+      },
+      testOn: 'vm',
+    );
 
     // Regression: M1
     // VM only (M4, project review 2026-08-20[1]): the assertion is that a
@@ -832,22 +836,26 @@ void main() {
     // pressure from Dart proves nothing there — the test would flake rather
     // than guard. What the web run does still cover is every other test in
     // this file.
-    test('level changes prune dead sublogger references', () async {
-      final parent = VarLogger([Levels.info]);
-      final probe = createDiscardedSublogger(parent);
+    test(
+      'level changes prune dead sublogger references',
+      () async {
+        final parent = VarLogger([Levels.info]);
+        final probe = createDiscardedSublogger(parent);
 
-      final collected = await tryCollectGarbage(probe);
-      expect(
-        collected,
-        isTrue,
-        reason: 'the parent must not keep a discarded sublogger alive; '
-            'skipping here would hide exactly the leak this test guards',
-      );
+        final collected = await tryCollectGarbage(probe);
+        expect(
+          collected,
+          isTrue,
+          reason: 'the parent must not keep a discarded sublogger alive; '
+              'skipping here would hide exactly the leak this test guards',
+        );
 
-      parent.level = Levels.info;
+        parent.level = Levels.info;
 
-      expect(parent.subLoggersCount, 0);
-    }, testOn: 'vm');
+        expect(parent.subLoggersCount, 0);
+      },
+      testOn: 'vm',
+    );
 
     // Regression: M22 (project review 2026-08-17[1]) — every existing pruning
     // test either calls pruneSubloggers() by hand or changes a setting, and
@@ -862,24 +870,29 @@ void main() {
     // pressure from Dart proves nothing there — the test would flake rather
     // than guard. What the web run does still cover is every other test in
     // this file.
-    test('registration alone compacts the sublogger list', () {
-      const total = 2000;
-      final parent = VarLogger([Levels.info])..level = Levels.all;
+    test(
+      'registration alone compacts the sublogger list',
+      () {
+        const total = 2000;
+        final parent = VarLogger([Levels.info])..level = Levels.all;
 
-      for (var i = 0; i < total; i++) {
-        createDiscardedSublogger(parent);
-        // Allocation pressure, so the discarded subloggers become collectable
-        // during the loop rather than only after it. No setting is touched
-        // here on purpose: registration must carry the pruning on its own.
-        List<Object>.generate(2000, (_) => Object(), growable: false);
-      }
+        for (var i = 0; i < total; i++) {
+          createDiscardedSublogger(parent);
+          // Allocation pressure, so the discarded subloggers become collectable
+          // during the loop rather than only after it. No setting is touched
+          // here on purpose: registration must carry the pruning on its own.
+          List<Object>.generate(2000, (_) => Object(), growable: false);
+        }
 
-      expect(
-        parent.subLoggersCount,
-        lessThan(total),
-        reason: 'registration must prune as it grows, not only on propagation',
-      );
-    }, testOn: 'vm');
+        expect(
+          parent.subLoggersCount,
+          lessThan(total),
+          reason:
+              'registration must prune as it grows, not only on propagation',
+        );
+      },
+      testOn: 'vm',
+    );
 
     // Regression: H1 (project review 2026-08-16[4]) — the parent reference
     // used to be weak too, so an intermediate logger the user did not keep
@@ -891,28 +904,36 @@ void main() {
     // pressure from Dart proves nothing there — the test would flake rather
     // than guard. What the web run does still cover is every other test in
     // this file.
-    test('an unreferenced intermediate logger keeps the chain alive', () async {
-      final root = VarLogger([Levels.info]);
-      final leaf = VarLogger.sub(
-        VarLogger.sub(root, [Levels.info]),
-        [Levels.info],
-      );
+    test(
+      'an unreferenced intermediate logger keeps the chain alive',
+      () async {
+        final root = VarLogger([Levels.info]);
+        final leaf = VarLogger.sub(
+          VarLogger.sub(root, [Levels.info]),
+          [Levels.info],
+        );
 
-      root.level = Levels.all;
-      expect(leaf.level, Levels.all);
+        root.level = Levels.all;
+        expect(leaf.level, Levels.all);
 
-      final collected = await tryCollectGarbage(WeakReference(Object()));
-      expect(collected, isTrue, reason: 'the probe should force a collection');
+        final collected = await tryCollectGarbage(WeakReference(Object()));
+        expect(
+          collected,
+          isTrue,
+          reason: 'the probe should force a collection',
+        );
 
-      root.level = Levels.info;
+        root.level = Levels.info;
 
-      expect(
-        leaf.level,
-        Levels.info,
-        reason: 'the leaf must keep following the root across a collection',
-      );
-      expect(root.subLoggersCount, 1);
-      expect(leaf.relink(), isTrue);
-    }, testOn: 'vm');
+        expect(
+          leaf.level,
+          Levels.info,
+          reason: 'the leaf must keep following the root across a collection',
+        );
+        expect(root.subLoggersCount, 1);
+        expect(leaf.relink(), isTrue);
+      },
+      testOn: 'vm',
+    );
   });
 }
