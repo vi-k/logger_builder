@@ -26,13 +26,13 @@ Future<void> main() async {
   log.i('Info message');
   log.e('Error message');
 
-  title('level = Level.info:');
+  title('level = Levels.info:');
   log.level = Levels.info;
   log.d('Debug message');
   log.i('Info message');
   log.e('Error message');
 
-  title('Level.error:');
+  title('Levels.error:');
   log.level = Levels.error;
   log.d('Debug message');
   log.i('Info message');

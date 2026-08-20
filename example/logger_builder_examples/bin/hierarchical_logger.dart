@@ -43,7 +43,7 @@ Future<void> main() async {
   log3.e('Error message');
 
   //
-  title('level = $Levels.info:');
+  title('level = Levels.info:');
   log1.level = Levels.info;
 
   description('log1');

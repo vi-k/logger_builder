@@ -39,7 +39,7 @@ Future<void> main() async {
   log.severe(MyClass, 'Severe message');
   log.shout(MyClass, 'Shout message');
 
-  title('level = Level.info:');
+  title('level = Levels.info:');
   log.level = Levels.info;
   log.finest(MyClass, 'Finest message');
   log.finer(MyClass, 'Finer message');
@@ -50,7 +50,7 @@ Future<void> main() async {
   log.severe(MyClass, 'Severe message');
   log.shout(MyClass, 'Shout message');
 
-  title('Level.error:');
+  title('Levels.error:');
   log.level = Levels.error;
   log.finest(MyClass, 'Finest message');
   log.finer(MyClass, 'Finer message');

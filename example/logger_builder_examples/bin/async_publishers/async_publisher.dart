@@ -56,6 +56,27 @@ Future<void> main() async {
 
   await asyncFormatter.flush();
 
+  title('close');
+
+  // Every example here ends on flush(), which says "everything published so
+  // far is out". close() says that and one thing more: there will be no
+  // more. It is what an application calls on the way down — the queue is
+  // drained, then the publisher refuses everything, including a log written
+  // by code that did not know the shutdown had started.
+  final closingPublisher = AsyncPublisher<Log>((log) async {
+    final str = await defaultAsyncFormat(log);
+    await defaultAsyncOutput(str);
+  });
+  log.publisher = closingPublisher;
+
+  log.i('Info message');
+  await closingPublisher.close();
+
+  // Publishing through it now throws a StateError — which is why isClosed
+  // exists: code that may still run during a shutdown can ask first.
+  print('isClosed: ${closingPublisher.isClosed}');
+  print('publishing now would throw a StateError');
+
   title('end of main');
 }
 
