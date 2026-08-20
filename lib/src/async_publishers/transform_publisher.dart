@@ -150,8 +150,10 @@ final class TransformPublisher<Log extends CustomLog>
   }
 
   @override
-  Future<void> close() => _closeFuture ??= switch (_inner) {
-        final Closable closable => closable.close(),
-        _ => Future.value(),
-      };
+  Future<void> close() => _closeFuture ??= Future.sync(
+        () => switch (_inner) {
+          final Closable closable => closable.close(),
+          _ => Future.value(),
+        },
+      );
 }

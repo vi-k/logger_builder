@@ -129,6 +129,12 @@ section became 0.7.0 instead.
   is the one setting resolved by walking the parent chain, and an enabled
   log paid for the walk on every call: 9.4 ns at depth 0 against 57.7 ns
   at depth 20 in AOT, now flat.
+* `TransformPublisher.close()` is terminal even when the wrapped
+  publisher's `close()` throws before its first `await`. The synchronous
+  throw escaped before the future was recorded, so `isClosed` stayed
+  `false` and the publisher went on accepting logs and handing them to the
+  publisher the application had just tried to close. `MultiPublisher` was
+  never affected: it already materialises the call with `Future.sync`.
 
 ## 0.6.2 (unreleased, folded into 0.7.0)
 

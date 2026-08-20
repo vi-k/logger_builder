@@ -26,6 +26,26 @@ final class _LifecyclePublisher
   }
 }
 
+/// An inner publisher whose `close()` throws before its first `await`.
+/// That is the shape any `Future<void> close()` written without `async`
+/// takes when it checks its state up front: the error arrives synchronously,
+/// not as a failed future.
+final class _SyncThrowingClosePublisher
+    implements CustomLogPublisher<Log>, Closable {
+  final published = <Log>[];
+  int closeCount = 0;
+
+  @override
+  void publish(Log log) => published.add(log);
+
+  @override
+  Future<void> close() {
+    closeCount++;
+
+    throw StateError('inner close failed');
+  }
+}
+
 void main() {
   group('TransformPublisher', () {
     late List<Log> published;
@@ -307,6 +327,48 @@ void main() {
       await publisher.close();
       await publisher.close();
 
+      expect(inner.closeCount, 1);
+    });
+
+    // Regression: H3 (project review 2026-08-20[1]) — an inner close() that
+    // threw synchronously escaped before _closeFuture was assigned, so
+    // isClosed stayed false and logs kept travelling into a publisher the
+    // application had already tried to close. MultiPublisher was right all
+    // along: it wraps the call in Future.sync.
+    test('close stays terminal when the inner close throws synchronously',
+        () async {
+      late Log sample;
+      Logger('sampler')
+        ..level = Levels.all
+        ..publisher = CustomLogPublisher<Log>((log) => sample = log)
+        ..i('sample');
+
+      final inner = _SyncThrowingClosePublisher();
+      final publisher = TransformPublisher<Log>(
+        inner,
+        transformer: (log) => log,
+      );
+
+      Object? closeError;
+      try {
+        await publisher.close();
+      } on Object catch (error) {
+        closeError = error;
+      }
+
+      expect(closeError, isStateError, reason: 'the failure is not swallowed');
+      expect(publisher.isClosed, isTrue);
+      expect(() => publisher.publish(sample), throwsPublisherClosed);
+      expect(inner.published, isEmpty);
+
+      Object? secondError;
+      try {
+        await publisher.close();
+      } on Object catch (error) {
+        secondError = error;
+      }
+
+      expect(secondError, same(closeError), reason: 'the same future');
       expect(inner.closeCount, 1);
     });
 
