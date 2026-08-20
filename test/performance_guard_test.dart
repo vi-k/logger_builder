@@ -3,34 +3,62 @@ import 'package:test/test.dart';
 
 import 'utils/hierarchical_logger.dart';
 
-/// Nanoseconds per call, median of [repeats] passes of [count] iterations.
+/// One side of a comparison: its median cost, in nanoseconds per call.
+typedef _Shape = ({double ratio, double baseNs, double otherNs});
+
+/// Median of [repeats] ratios, each taken from a pair of passes measured
+/// back to back.
 ///
-/// A median rather than a mean: one descheduled pass on a shared CI runner
-/// should not decide the result.
-double _nsPerCall(
-  void Function() body, {
+/// The pairing is the whole point. Measuring one side nine times and then
+/// the other nine times compares two different moments in the machine's
+/// life: load that arrives between the halves moves the ratio bodily, and
+/// a median does not help, because it smooths nine equally skewed passes.
+/// Interleaved, both sides meet the same machine within a millisecond of
+/// each other — which is what this file has always claimed and did not do.
+///
+/// The median is still over ratios rather than over times: one descheduled
+/// pair should not decide the result.
+_Shape _shape(
+  void Function() base,
+  void Function() other, {
   int count = 200000,
   int repeats = 9,
 }) {
   for (var i = 0; i < count; i++) {
+    base();
+    other();
+  }
+
+  final sw = Stopwatch();
+  final pairs = <(int, int)>[];
+  for (var r = 0; r < repeats; r++) {
+    final baseUs = _passMicros(sw, base, count);
+    final otherUs = _passMicros(sw, other, count);
+    pairs.add((baseUs, otherUs));
+  }
+  pairs.sort((a, b) => (a.$2 / a.$1).compareTo(b.$2 / b.$1));
+  final (baseUs, otherUs) = pairs[repeats ~/ 2];
+
+  return (
+    ratio: otherUs / baseUs,
+    baseNs: baseUs / count * 1000,
+    otherNs: otherUs / count * 1000,
+  );
+}
+
+int _passMicros(Stopwatch sw, void Function() body, int count) {
+  sw
+    ..reset()
+    ..start();
+  for (var i = 0; i < count; i++) {
     body();
   }
+  sw.stop();
 
-  final samples = <int>[];
-  final sw = Stopwatch();
-  for (var r = 0; r < repeats; r++) {
-    sw
-      ..reset()
-      ..start();
-    for (var i = 0; i < count; i++) {
-      body();
-    }
-    sw.stop();
-    samples.add(sw.elapsedMicroseconds);
-  }
-  samples.sort();
-
-  return samples[repeats ~/ 2] / count * 1000;
+  // A pass fast enough to measure as zero would make the ratio meaningless;
+  // at 200 000 iterations even the cheapest side here takes about a
+  // millisecond, so this only ever guards against a future shrink of count.
+  return sw.elapsedMicroseconds == 0 ? 1 : sw.elapsedMicroseconds;
 }
 
 Logger _atDepth(int depth, CustomLogPublisher<Log> publisher) {
@@ -54,6 +82,11 @@ void main() {
   // numbers would not. The point is not to measure anything —
   // `benchmarks.dart` does that — but to fail loudly if a shape the package
   // sells collapses.
+  //
+  // L11 (project review 2026-08-20[1]): "slows both sides equally" was an
+  // assertion about a structure that did not hold it up. The two sides were
+  // measured one after the other, nine passes each, so load arriving between
+  // the halves hit one side only. They are interleaved now — see [_shape].
   //
   // Only depth is asserted, and that is a deliberate narrowing. The first
   // version of this file also checked that a disabled level is ten times
@@ -81,14 +114,13 @@ void main() {
       final root = _atDepth(0, _parking);
       final deep = _atDepth(20, _parking);
 
-      final atRoot = _nsPerCall(() => root.i('message'));
-      final atDepth = _nsPerCall(() => deep.i('message'));
+      final shape = _shape(() => root.i('message'), () => deep.i('message'));
 
       expect(
-        atDepth / atRoot,
+        shape.ratio,
         lessThan(1.5),
-        reason: 'root ${atRoot.toStringAsFixed(2)} ns, '
-            'depth 20 ${atDepth.toStringAsFixed(2)} ns',
+        reason: 'root ${shape.baseNs.toStringAsFixed(2)} ns, '
+            'depth 20 ${shape.otherNs.toStringAsFixed(2)} ns',
       );
     });
 
@@ -96,14 +128,13 @@ void main() {
       final root = _atDepth(0, _parking)..level = Levels.off;
       final deep = _atDepth(20, _parking)..level = Levels.off;
 
-      final atRoot = _nsPerCall(() => root.i('message'));
-      final atDepth = _nsPerCall(() => deep.i('message'));
+      final shape = _shape(() => root.i('message'), () => deep.i('message'));
 
       expect(
-        atDepth / atRoot,
+        shape.ratio,
         lessThan(1.5),
-        reason: 'root ${atRoot.toStringAsFixed(2)} ns, '
-            'depth 20 ${atDepth.toStringAsFixed(2)} ns',
+        reason: 'root ${shape.baseNs.toStringAsFixed(2)} ns, '
+            'depth 20 ${shape.otherNs.toStringAsFixed(2)} ns',
       );
     });
 
