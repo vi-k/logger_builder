@@ -17,11 +17,13 @@ environment:
 
 dependencies:
   # Not ^1.16.0: Flutter pins `meta` from its own SDK, with an *exact*
-  # version in older releases (3.24 and 3.27 pin 1.15.0), so `^1.16.0` made
-  # the package unresolvable there — pub failed with a version-solving error
-  # naming meta, on a Flutter whose Dart satisfied our floor. ^1.15.0 is the
-  # lowest pin any Flutter within `sdk: ^3.6.0` carries. Nothing here needs a
-  # newer meta: only @protected and @visibleForTesting are used.
+  # version in older releases, so `^1.16.0` made the package unresolvable
+  # there — pub failed with a version-solving error naming meta, on a Flutter
+  # whose Dart satisfied our floor. The case that matters is Flutter 3.27,
+  # which pins exactly 1.15.0 and is the oldest Flutter inside `sdk: ^3.6.0`;
+  # older ones carry Dart 3.5 and are already excluded by `environment.sdk`,
+  # so they cannot be the reason for anything here. Nothing needs a newer
+  # meta: only @protected and @visibleForTesting are used.
   meta: ^1.15.0
 
 dev_dependencies:

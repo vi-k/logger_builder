@@ -39,10 +39,18 @@ abstract base class AsyncPublisherWithParamBase<Param extends Object?,
   /// are told apart from its neighbours'.
   ///
   /// Leaving it unset does not hide the loss: the publisher then says so
-  /// itself. The first one prints a line at once, the rest are counted into
-  /// a summary at most once every five seconds — widening to a minute while
-  /// the losses keep coming, and back to five once they stop. Pass
-  /// `onDropped: (_) {}` to silence that.
+  /// itself. The first one prints a line at once; the rest are counted, and
+  /// the count is printed by the next loss to arrive more than five seconds
+  /// later — widening to a minute while the losses keep coming, and back to
+  /// five once they stop — or by [close], whichever comes first.
+  ///
+  /// There is no timer behind any of that, deliberately: a pending timer is
+  /// a live root for the event loop, and a dropped log must not buy the
+  /// process five more seconds of life. The consequence is worth knowing.
+  /// A burst that ends without a later loss and without a [close] — the
+  /// shape a synchronous loop of a hundred thousand logs takes — is
+  /// announced by that first line and never counted. Pass
+  /// `onDropped: (_) {}` to silence all of it.
   ///
   /// A throwing handler does not derail publishing: its own error goes to
   /// the current zone.

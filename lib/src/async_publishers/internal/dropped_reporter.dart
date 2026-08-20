@@ -129,7 +129,8 @@ final class DroppedReporter {
   String _opening() =>
       'logger_builder: dropping log events (${_causeText()}). Set onDropped '
       'to handle them, or onDropped: (_) {} to silence this; further losses '
-      'are reported at most once every ${window.inSeconds}s.';
+      'are counted and reported with the next one after ${window.inSeconds}s, '
+      'or when the publisher is closed.';
 
   String _summary(Duration since) {
     final seconds = (since.inMilliseconds / 1000).toStringAsFixed(1);

@@ -42,7 +42,26 @@ abstract interface class Closable {
 /// declared even though [flush] and [close] implement one. Why each of them,
 /// written out once — `_BufferedFacade` in `async_publisher_with_buffer.dart`.
 abstract base class _AsyncFacade<E extends Object?> {
-  /// Whether the underlying stream controller delivers events synchronously.
+  /// Whether the queue hands an entry to `handle` on the stack of the call
+  /// that published it.
+  ///
+  /// Off by default, and the default is the point of the class: `publish`
+  /// returns at once and the work happens on a later turn of the event
+  /// loop. With it on, the underlying stream controller is synchronous, so
+  /// `handle` starts before `publish` returns — an "asynchronous publisher"
+  /// that runs on the logging call's stack. Measured with a handler that
+  /// records its own name: `sync: true` gives
+  /// `before-publish, handle:x, after-publish`, and `sync: false` gives
+  /// `before-publish, after-publish, handle:x`.
+  ///
+  /// It is here for tests and for handlers that are genuinely cheap and
+  /// synchronous, where a turn of the event loop per log is the expensive
+  /// part. Two things come with it. A `handle` that throws in this mode
+  /// throws where the log was written, which is the zone's documented
+  /// behaviour and not something this class intercepts; and Dart's own
+  /// warning about synchronous controllers applies — the listener runs
+  /// inside `add`, so re-entering the publisher from `handle` is the
+  /// caller's problem to avoid.
   final bool sync;
 
   /// Called when `handle` throws.
@@ -195,10 +214,18 @@ abstract base class AsyncPublisherBase<Log extends CustomLog>
   /// least to count what the pressure costs.
   ///
   /// Leaving it unset does not hide the loss: the publisher then says so
-  /// itself. The first one prints a line at once, the rest are counted into
-  /// a summary at most once every five seconds — widening to a minute while
-  /// the losses keep coming, and back to five once they stop. Pass
-  /// `onDropped: (_) {}` to silence that.
+  /// itself. The first one prints a line at once; the rest are counted, and
+  /// the count is printed by the next loss to arrive more than five seconds
+  /// later — widening to a minute while the losses keep coming, and back to
+  /// five once they stop — or by [close], whichever comes first.
+  ///
+  /// There is no timer behind any of that, deliberately: a pending timer is
+  /// a live root for the event loop, and a dropped log must not buy the
+  /// process five more seconds of life. The consequence is worth knowing.
+  /// A burst that ends without a later loss and without a [close] — the
+  /// shape a synchronous loop of a hundred thousand logs takes — is
+  /// announced by that first line and never counted. Pass
+  /// `onDropped: (_) {}` to silence all of it.
   ///
   /// A throwing handler does not derail publishing: its own error goes to
   /// the current zone.

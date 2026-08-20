@@ -18,5 +18,8 @@ README.ru.md
 test/
 
 # Do NOT add analysis_options.yaml here: example/logger_builder_examples
-# includes it through a relative path, and the published example would stop
-# analysing without it.
+# includes it through a relative path. Measured on an unpacked archive
+# without it, because the wording here used to guess: the example does not
+# stop analysing. It analyses by the wrong rules — one unresolved-include
+# info, and the whole lint set silently gone. Which is worse than stopping,
+# and the reason this line stays.

@@ -976,9 +976,13 @@ All eight take the same four optional arguments:
   that spent its `maxRetries` budget and entries handed back to
   `retryBuffer` after `close()` was called, which can never be processed.
   Leaving it unset does not hide the loss: the publisher says so itself,
-  printing the first one at once and counting the rest into a summary at
-  most once every five seconds — widening to a minute while they keep
-  coming. `onDropped: (_) {}` silences that. The unbuffered four hand you
+  printing the first one at once and counting the rest into a summary —
+  printed by the next loss to arrive more than five seconds later, widening
+  to a minute while they keep coming, or by `close()`. There is no timer
+  behind that, on purpose, and the consequence is worth knowing: a burst
+  that ends without a later loss and without a `close()` is announced by
+  that first line and never counted. `onDropped: (_) {}` silences all of
+  it. The unbuffered four hand you
   one log at a time (with its `param`, where there is one), the buffered
   four a list.
 

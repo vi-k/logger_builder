@@ -490,9 +490,11 @@ abstract base class CustomLogger<
   /// > runs after the guard has been released, so an unconditional one loops
   /// > forever. And, for the same reason, **an asynchronous publisher**: its
   /// > `handle` runs long after `publish` returned, so a handler that logs
-  /// > into its own logger is not guarded at all and will grow the queue
-  /// > without bound instead of overflowing the stack. Logging into an
-  /// > unrelated logger is untouched.
+  /// > into its own logger is not guarded at all: instead of overflowing the
+  /// > stack it fills the queue, and at `maxQueueSize` the publisher starts
+  /// > refusing the incoming logs and reporting them as dropped — a loop
+  /// > that runs for ever and delivers nothing. Logging into an unrelated
+  /// > logger is untouched.
   LogTransformer<Log>? get transformer => _transformer;
 
   /// Sets the log [transformer].

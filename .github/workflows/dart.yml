@@ -153,13 +153,15 @@ jobs:
               [ -n "$out" ] || { echo "no output from $entry"; exit 1; }
             done
 
-      # That the example itself still builds for the web targets. This is
-      # NOT the badge check: `dart compile js` and `dart compile wasm` accept
-      # a `dart:io` import and fail only at runtime, and the file compiled
-      # here already imports it through console.dart. Measured on a tree with
+      # That the example itself still builds for the web targets — which is
+      # all this does, and the name says so now (L10/M4). It is NOT the badge
+      # check: `dart compile js` and `dart compile wasm` accept a `dart:io`
+      # import and fail only at runtime, and the file compiled here already
+      # imports it through console.dart. Measured on a tree with
       # `import 'dart:io'` added to lib/src/utils/levels.dart: both compiles
-      # exited 0 and the whole job stayed green.
-      - name: Smoke-test the web and wasm targets
+      # exited 0 and the whole job stayed green. What does exercise the web
+      # is the test run above; what guards the tags is pana below.
+      - name: Compile the example for web and wasm
         working-directory: example/logger_builder_examples
         run: |
           set -e
@@ -169,8 +171,11 @@ jobs:
       # The actual badge check. pub.dev advertises platform:web, runtime:web
       # and is:wasm-ready, and pana is what decides those tags, so pana is
       # what has to agree. On the same `dart:io` tree above it dropped all
-      # three — while still reporting 160/160, which is why the tags are
-      # asserted and the score is not.
+      # three, which is why the tags are asserted and the score is not. (The
+      # comment used to add "while still reporting 160/160". Re-measured on
+      # pana 0.23.18: that tree scores 130/160, so the score does move — it
+      # just moves for reasons of its own, which is the same argument for
+      # not asserting it.)
       - name: Verify the pub.dev platform tags
         run: |
           set -e
