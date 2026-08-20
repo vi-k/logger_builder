@@ -235,7 +235,11 @@ abstract base class _BufferedFacade<E extends Object?> {
   /// this same future. Repeated calls return it too.
   ///
   /// Do not await this (or [flush]) from inside [handle]: closing waits for
-  /// the running batch to complete, so it would deadlock.
+  /// the running batch to complete, so it would deadlock. Calling it
+  /// without awaiting is fine and is the way to shut a publisher down from
+  /// its own handler — a sink that discovers it is dead can start the close
+  /// and return; the close then waits for that same batch to finish, as it
+  /// does for any other.
   Future<void> close() => _pipeline.close();
 }
 

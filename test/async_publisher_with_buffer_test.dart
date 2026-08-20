@@ -880,6 +880,23 @@ void main() {
       expect(zoneErrors.single, isA<StateError>());
     });
 
+    // Regression: CR4 (cross-review 2026-07-29) — the buffered twin: a
+    // handler may start the close, it just may not wait for it.
+    test('a handler may start a close without awaiting it', () async {
+      late AsyncPublisherWithBuffer<Log> publisher;
+      final handled = <String?>[];
+      publisher = AsyncPublisherWithBuffer<Log>((logs, retry) async {
+        handled.addAll(messagesOf(logs));
+        unawaited(publisher.close());
+      });
+      makeLogger(publisher).i('one');
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(handled, ['one']);
+      expect(publisher.isClosed, isTrue);
+    });
+
     // Regression: L9 (project review 2026-08-20[1]) — the buffered twin of
     // the identity check: the same future, not merely one that completes at
     // the same time.

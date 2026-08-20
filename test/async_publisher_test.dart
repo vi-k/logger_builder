@@ -166,6 +166,31 @@ void main() {
       expect(handled, ['one', 'two', 'three']);
     });
 
+    // Regression: CR4 (cross-review 2026-07-29) — awaiting close() from
+    // inside handle deadlocks, and that was closed by documenting it rather
+    // than by code. This test guards the half that *works*: starting the
+    // close from the handler without awaiting it. Anything that ever turns
+    // the documented rule into a thrown StateError has to keep this
+    // working, because a sink that discovers it is dead and shuts itself
+    // down is a real pattern and a legitimate one.
+    test('a handler may start a close without awaiting it', () async {
+      late AsyncPublisher<Log> publisher;
+      final handled = <String?>[];
+      var returnedFromHandler = false;
+      publisher = AsyncPublisher<Log>((log) async {
+        handled.add(log.message);
+        unawaited(publisher.close());
+        returnedFromHandler = true;
+      });
+      makeLogger(publisher).i('one');
+
+      await publisher.close().timeout(const Duration(seconds: 2));
+
+      expect(handled, ['one']);
+      expect(returnedFromHandler, isTrue);
+      expect(publisher.isClosed, isTrue);
+    });
+
     // Regression: L9 (project review 2026-08-20[1]) — the dartdoc promises
     // that a flush during a close hands back *that same* future, and only
     // the observable half of it was ever checked: that the drain is waited
