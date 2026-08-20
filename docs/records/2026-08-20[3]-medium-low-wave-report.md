@@ -152,8 +152,10 @@ dart test -p chrome                   338/338 (четыре — testOn: 'vm')
 dart test -p chrome -c dart2wasm      338/338
 dart format                           55 files, 0 changed
 dart doc                              Found 0 warnings and 0 errors
-dart pub publish --dry-run            88 КБ, 0 предупреждений
+dart pub publish --dry-run            89 КБ, 0 предупреждений
+чистый клон, 3.13.0 и 3.7.0           0 issues, 342/342, 0 предупреждений
 все десять примеров                   exit 0
+CI, прогон 32323075322                четыре job'а из четырёх
 ```
 
 ## Что осталось
