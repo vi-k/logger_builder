@@ -171,6 +171,35 @@ void main() {
       expect(logger.levels, hasLength(3));
     });
 
+    // The subclassing contract calls two hooks before the subclass
+    // constructor body has run: `registerLevels`, always, and `processLog`,
+    // whenever a sublogger inherits a level its parent already had enabled.
+    // The dartdoc of both limits what an implementation may touch there, and
+    // that limit is only worth writing down while it is still true.
+    test('registerLevels and processLog run before the subclass body', () {
+      final parent = ConstructionOrderLogger([Levels.info])..level = Levels.all;
+
+      final sub = ConstructionOrderLogger.sub(parent, [Levels.info]);
+
+      expect(sub.bodyRan, isTrue, reason: 'the sublogger is built by now');
+      expect(
+        sub.bodyRanAtRegisterLevels,
+        isFalse,
+        reason: 'registerLevels runs from the base constructor',
+      );
+      expect(
+        sub.bodyRanAtFirstProcessLog,
+        isFalse,
+        reason: 'the inherited level turns on before the body runs',
+      );
+      expect(
+        parent.bodyRanAtFirstProcessLog,
+        isTrue,
+        reason: 'a root logger has no level to inherit, so the read comes '
+            'with the first level assignment, after construction',
+      );
+    });
+
     test('a freshly built logger publishes nothing', () {
       final published = <String?>[];
       final log = VarLogger([Levels.info])

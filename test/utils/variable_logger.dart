@@ -139,3 +139,54 @@ final class SharedLevelLogger extends VarLogger {
   @override
   void registerLevels() => registerLevel(shared);
 }
+
+/// A [VarLogger] that records what the package called before its own
+/// constructor body had run.
+///
+/// Two hooks of the subclassing contract are documented as running early —
+/// `registerLevels` always, and `processLog` whenever a sublogger inherits a
+/// level that is already enabled — and the dartdoc of both tells subclasses
+/// what they may safely touch there. This fixture is what makes the promise
+/// checkable instead of merely written down.
+base class ConstructionOrderLogger extends VarLogger {
+  bool bodyRan = false;
+  bool? bodyRanAtRegisterLevels;
+  bool? bodyRanAtFirstProcessLog;
+
+  ConstructionOrderLogger(super.levelValues) {
+    bodyRan = true;
+  }
+
+  ConstructionOrderLogger.sub(
+    ConstructionOrderLogger super.parent,
+    super.levelValues,
+  ) : super.sub() {
+    bodyRan = true;
+  }
+
+  @override
+  void registerLevels() {
+    bodyRanAtRegisterLevels = bodyRan;
+    for (final level in levelValues) {
+      registerLevel(
+        ConstructionOrderLevelLogger(level: level, name: 'L$level'),
+      );
+    }
+  }
+}
+
+/// The level logger [ConstructionOrderLogger] registers: it reports the first
+/// read of `processLog` back to its owner.
+final class ConstructionOrderLevelLogger extends VarLevelLogger {
+  ConstructionOrderLevelLogger({required super.level, required super.name});
+
+  @override
+  VarLogFn get processLog {
+    // Only the first read: a root logger reads it again on every toggle,
+    // long after its body has run, and that would erase the answer.
+    (logger as ConstructionOrderLogger).bodyRanAtFirstProcessLog ??=
+        (logger as ConstructionOrderLogger).bodyRan;
+
+    return super.processLog;
+  }
+}
