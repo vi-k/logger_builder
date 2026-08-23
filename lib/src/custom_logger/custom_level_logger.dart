@@ -141,11 +141,31 @@ abstract base class CustomLevelLogger<
   static String _firstCharacter(String name) =>
       String.fromCharCodes(name.runes.take(1));
 
-  /// Generates or executes the actual logging procedure when this level is
-  /// active.
+  /// The logging function this level runs while it is enabled.
   ///
-  /// Subclasses should implement this property to return the appropriate
-  /// [LogFn].
+  /// Build the [CustomLog] here and hand it to [publishLog]. Publishing
+  /// through [publisher] instead skips [CustomLogger.transformer], which is
+  /// where masking, redaction and the drop-on-`null` rule live.
+  ///
+  /// It is read on the *transition* into the enabled state, not on every
+  /// call: the function it returns is stored and reused until the level is
+  /// toggled again, and toggling an already-enabled level re-reads nothing.
+  /// Returning a fresh closure per read is what every documented pattern
+  /// does and it costs one allocation per toggle — but it is also why the
+  /// function's identity changes across a toggle, and why [log] has to be
+  /// read per call rather than hoisted.
+  ///
+  /// > [!WARNING]
+  /// > This getter can run *during construction*, before the subclass
+  /// > constructor body has. [CustomLogger.sub] registers the levels and
+  /// > then inherits the parent's level, both from inside its own body, so
+  /// > a sublogger of an already-enabled parent turns this level on — and
+  /// > reads this getter — while the subclass body is still pending. What
+  /// > the getter itself touches must therefore be limited to what is set
+  /// > by then: field initializers and the initializer list, not fields
+  /// > assigned in the body and not a `late` field the body fills in. The
+  /// > returned function is exempt: it only ever runs on a fully built
+  /// > logger.
   @protected
   LogFn get processLog;
 
@@ -165,9 +185,20 @@ abstract base class CustomLevelLogger<
   /// > on the stale path — only the level gate is bypassed.
   LogFn get log => _log;
 
-  /// Returns the actual parent [Logger] instance.
+  /// The logger this level logger belongs to.
   ///
-  /// Throws a [StateError] if this level logger hasn't been registered.
+  /// The owner, not the parent in the hierarchy: the logger whose
+  /// [CustomLogger.registerLevel] attached this level logger, and whose
+  /// [CustomLogger.transformer] and [CustomLogger.onError] apply to logs
+  /// published from here.
+  ///
+  /// Throws a [StateError] until that registration happens. A level logger
+  /// that was built but never registered has no owner to answer with, and
+  /// answering `null` would move the check into every caller.
+  ///
+  /// Readable from [processLog], including the early read described there,
+  /// with the caveat that follows from it: the owner exists, but its
+  /// constructor body may not have run yet.
   @protected
   Logger get logger => _logger ?? (throw StateError('Logger is not attached'));
 

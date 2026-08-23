@@ -247,12 +247,29 @@ abstract base class CustomLogger<
 
   /// Registers all the log levels supported by this logger.
   ///
-  /// Implementations must use the [registerLevel] method within this method
-  /// to add their predefined [CustomLevelLogger]s.
+  /// Implementations call [registerLevel] once per level and do nothing
+  /// else here.
+  ///
+  /// Both constructors call it, synchronously and exactly once, and the
+  /// timing is the part worth knowing: the subclass's field initializers
+  /// and initializer list have run by then, its constructor *body* has not.
+  /// Levels kept in `final` fields — the shape every example uses — are
+  /// therefore ready; anything the body assigns, a `late` field included,
+  /// is not.
+  ///
+  /// Nothing is enabled while this runs. The logger's level starts at
+  /// [Levels.off], so no level passes the gate and no
+  /// [CustomLevelLogger.processLog] is read from here. For a sublogger that
+  /// read comes moments later, when [CustomLogger.sub] inherits the
+  /// parent's level — still before the subclass body.
   @protected
   void registerLevels();
 
   /// Registers a specific [levelLogger] dynamically.
+  ///
+  /// Called from [registerLevels] while the logger is being built, or at any
+  /// point afterwards — a level added later behaves like one declared from
+  /// the start, publisher inheritance included, as described below.
   ///
   /// Throws a [StateError] if this level value is already registered, or if
   /// [levelLogger] already belongs to another logger — sharing one level
