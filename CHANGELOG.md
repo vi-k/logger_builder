@@ -1,3 +1,15 @@
+## 0.8.0 (unreleased)
+
+**[breaking changes]**
+
+* `HasFlush` is removed. It was the name `Flushable` carried before 0.4.0
+  and has been a deprecated alias ever since; three minor versions later
+  nothing referenced it — not the package, not its examples, not its known
+  consumers. Replace any remaining use with `Flushable`.
+
+  The removal happens now because the public API is about to be frozen at
+  1.0, and an alias carried into 1.0 would have to be carried until 2.0.
+
 ## 0.7.0
 
 The 0.6.2 work below was never published; the per-level publisher pin

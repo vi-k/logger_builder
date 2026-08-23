@@ -17,10 +17,6 @@ abstract interface class Flushable {
   Future<void> flush();
 }
 
-/// The old name of [Flushable].
-@Deprecated('Use Flushable instead')
-typedef HasFlush = Flushable;
-
 /// An interface for log-event handlers that can be closed.
 ///
 /// Closing is terminal: after the returned future completes, the handler no

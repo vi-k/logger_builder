@@ -282,8 +282,6 @@ log.i('...')
 - `Flushable` — `Future<void> flush()`;
 - `Closable` — `Future<void> close()`.
 
-(`HasFlush` — deprecated-алиас `Flushable`.)
-
 Четыре базовых класса — по двум осям «нужен ли дополнительный параметр»
 и «нужны ли батчи»:
 
