@@ -10,6 +10,18 @@
   The removal happens now because the public API is about to be frozen at
   1.0, and an alias carried into 1.0 would have to be carried until 2.0.
 
+**Documentation**
+
+* The subclassing contract — the six `@protected` members — is documented
+  as a contract rather than as an implementation. `processLog` now says
+  when it is read: on the transition into the enabled state, not per call,
+  and for a sublogger of an already-enabled parent *during construction*,
+  before the subclass constructor body has run. `logger` names the owning
+  logger instead of "the parent", which in this package means something
+  else. `registerLevels` says what is initialized by the time it runs —
+  field initializers yes, constructor body no — and that no level is
+  enabled yet.
+
 ## 0.7.0
 
 The 0.6.2 work below was never published; the per-level publisher pin
