@@ -21,6 +21,9 @@
   else. `registerLevels` says what is initialized by the time it runs —
   field initializers yes, constructor body no — and that no level is
   enabled yet.
+* The README's list of mistakes gains the same rule as an entry: a `late`
+  field assigned in the constructor body and read from `registerLevels` or
+  `processLog` throws, because both run before that body does.
 
 ## 0.7.0
 

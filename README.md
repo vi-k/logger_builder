@@ -1517,6 +1517,37 @@ LogFn get processLog => (message, {error, stackTrace}) {
 log on. Going straight to the publisher silently skips it, so masking and
 filtering never run.
 
+**Reading state the constructor body has not set yet**
+
+```dart
+final class MyLogger extends CustomLogger<MyLogger, LevelLogger, LogFn, Log> {
+  MyLogger(this.tag) {
+    _sink = Sink(tag); // the body runs last
+  }
+
+  final String tag;
+  late final Sink _sink;
+
+  @override
+  void registerLevels() {
+    _sink.warmUp(); // BAD: throws LateError, nothing has assigned it yet
+    registerLevel(_info);
+  }
+}
+```
+
+The package calls into your subclass before that subclass's constructor
+body has run. `registerLevels` always does — both constructors call it from
+the base class. `processLog` does it too whenever a sublogger inherits a
+level its parent already had enabled: `CustomLogger.sub` registers the
+levels and then takes the parent's level, so the level switches on while
+the body is still pending.
+
+Field initializers and the initializer list *have* run by then, which is
+why levels kept in `final` fields work. Anything the body assigns has not,
+and a `late` field read there throws. Keep both hooks off anything the body
+touches, or move that work into a field initializer.
+
 **Timestamping in the formatter**
 
 `DateTime.now()` in a formatter is the time the log was *printed*, which
