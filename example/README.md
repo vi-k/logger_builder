@@ -1,4 +1,6 @@
-The [example/logger_builder_examples](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/) directory contains more elaborate examples, demonstrating:
+The
+[example/logger_builder_examples](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/)
+directory contains more elaborate examples, demonstrating:
 
 ## Loggers
 

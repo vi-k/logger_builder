@@ -15,17 +15,17 @@ dart pub add logger_builder
 - **Custom Loggers**: Build your own logger classes extending `CustomLogger`
   with tailored log methods, entries, and customizable properties.
 - **Hierarchical Loggers**: Inbuilt support for hierarchical structures where
-  subloggers inherit capabilities (levels, publishers) from parents,
-  with the flexibility to override them.
+  subloggers inherit capabilities (levels, publishers) from parents, with the
+  flexibility to override them.
 - **Lazy Evaluation**: Includes utilities like `Lazy` and `LazyString` to avoid
-  expensive operations (like string interpolations or JSON encoding) when
-  a logging level is disabled.
+  expensive operations (like string interpolations or JSON encoding) when a
+  logging level is disabled.
 - **Async & Buffered Publishers**: Base classes like `AsyncPublisherBase` for
   printing logs asynchronously or buffering them before sending (e.g., to an
   analytics service).
-- **Transformers**: A `LogTransformer` on the logger or on a single
-  destination masks secrets and PII, or drops forbidden logs entirely,
-  before they reach any output.
+- **Transformers**: A `LogTransformer` on the logger or on a single destination
+  masks secrets and PII, or drops forbidden logs entirely, before they reach
+  any output.
 - **Flexible Formatting & Output**: Loggers decouple the **format** step (which
   formats the entry into a string or other object) and the **output** step
   (which decides what to do with the formatted object, like printing to the
@@ -140,13 +140,14 @@ logoutLog.i('User logout');               // app | auth | logout | User logout
 best. It is defined on the `Logger` built in
 [Hierarchical Loggers](#hierarchical-loggers).
 
-The `app | auth | login` shape in the comments is not automatic either.
-Nothing in the package knows a logger's name: it comes from the fuller
-logger in the example below, whose `Log` carries a `path` and joins it with
-` | `. The `Logger` in [Hierarchical Loggers](#hierarchical-loggers) joins
-with a dot and does not print the path at all.
+The `app | auth | login` shape in the comments is not automatic either. Nothing
+in the package knows a logger's name: it comes from the fuller logger in the
+example below, whose `Log` carries a `path` and joins it with ` | `. The
+`Logger` in [Hierarchical Loggers](#hierarchical-loggers) joins with a dot and
+does not print the path at all.
 
-See example: [hierarchical_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart).
+See example:
+[hierarchical_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/hierarchical_logger.dart).
 
 **Any output type**
 
@@ -162,7 +163,8 @@ log.i('info-event', data: {'id': 2, 'data': 'Info data'});
 //  "data":{"id":2,"data":"Info data"}}
 ```
 
-See example: [json_reporter.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/json_reporter.dart).
+See example:
+[json_reporter.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/json_reporter.dart).
 
 **Customizable formatting**
 
@@ -177,11 +179,11 @@ log.publisher = CustomLogPublisher(
 
 Formatting is available not only at the stage of creating a logger class, but
 also later, in real time. This allows you to create loggers for packages: you
-create a package and logging in it, which will be useful not only to you as
-the package developer, but also to its users. And you give the user not only
-access to the logs, but also the ability to configure the output format so that
-YOUR logs become an integral part of the USER's logs in the form in which they
-want to see them.
+create a package and logging in it, which will be useful not only to you as the
+package developer, but also to its users. And you give the user not only access
+to the logs, but also the ability to configure the output format so that YOUR
+logs become an integral part of the USER's logs in the form in which they want
+to see them.
 
 ```dart
 final log = Logger('package');
@@ -248,8 +250,8 @@ log.d('This will not be logged');
 ```
 
 If logging is disabled, a no-op function is called under the hood. No
-calculations, no checks. Just one call to an empty no-op function, which, as
-a rule, is well optimized by the compiler.
+calculations, no checks. Just one call to an empty no-op function, which, as a
+rule, is well optimized by the compiler.
 
 **Lazy evaluation of parameters**
 
@@ -266,8 +268,8 @@ log.d(expensiveCalculation);
 
 **Complete removal of logging code**
 
-For more demanding cases where maximum performance is required, the logger
-is designed for convenient use with asserts and constants.
+For more demanding cases where maximum performance is required, the logger is
+designed for convenient use with asserts and constants.
 
 Using asserts is a common life hack for cutting out not only unnecessary checks
 from the code, but also logging functions. Usually it looks like this:
@@ -310,13 +312,14 @@ resolving them per call. Measured at depths 0, 1, 5 and 20, AOT: 83.2, 83.2,
 83.6, 83.5 ns with the level enabled, and 1.66, 1.78, 1.72, 1.77 ns with it
 disabled. Flat, within the sd of each figure.
 
-The exception is anything your own publisher resolves per log. The
-`Logger` in the example carries a lazily built `path`, and a publisher that
-reads it pays for the walk: the same four depths become 101.7, 103.5, 112.6
-and 152.0 ns — roughly 2.5 ns per level. That cost is yours, not the
-package's, and it only arrives if a publisher asks for the path.
+The exception is anything your own publisher resolves per log. The `Logger` in
+the example carries a lazily built `path`, and a publisher that reads it pays
+for the walk: the same four depths become 101.7, 103.5, 112.6 and 152.0 ns —
+roughly 2.5 ns per level. That cost is yours, not the package's, and it only
+arrives if a publisher asks for the path.
 
-Benchmarks can be seen here: [benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart).
+Benchmarks can be seen here:
+[benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart).
 
 
 ## Why not just `if (logging)`?
@@ -328,42 +331,40 @@ const logging = bool.fromEnvironment('logging');
 if (logging) print('User $id logged in');
 ```
 
-then keep doing that. It costs nothing, and this package does not ask you
-to give it up — as shown above, `logging && log.i(...)` is the same trick
-and compiles away just as completely.
+then keep doing that. It costs nothing, and this package does not ask you to
+give it up — as shown above, `logging && log.i(...)` is the same trick and
+compiles away just as completely.
 
 The difference is *when* the switch is thrown.
 
 `if (logging)` is a **compile-time** switch. One constant turns the whole
-program's logging on or off, and the destination — `print` — is written
-into every call site. That is fine while the only reader is you, at your
-own terminal, right now.
+program's logging on or off, and the destination — `print` — is written into
+every call site. That is fine while the only reader is you, at your own
+terminal, right now.
 
 A logger is a **runtime** switch, and that buys four things a bare `print`
 cannot:
 
-- **Granularity.** `Levels.off` for the app and `Levels.all` for
-  `authLog`: one noisy subsystem, without recompiling and without
-  drowning in everything else.
-- **Levels.** `print` has exactly one severity. Someone chasing a bug
-  wants debug output; the same person in production wants errors only.
-- **A destination you can change later.** The call site says *what*
-  happened; the publisher decides where that goes. Console today, a file
-  or an analytics service tomorrow, both at once when you need it — and
-  not one call site changes.
+- **Granularity.** `Levels.off` for the app and `Levels.all` for `authLog`: one
+  noisy subsystem, without recompiling and without drowning in everything else.
+- **Levels.** `print` has exactly one severity. Someone chasing a bug wants
+  debug output; the same person in production wants errors only.
+- **A destination you can change later.** The call site says *what* happened;
+  the publisher decides where that goes. Console today, a file or an analytics
+  service tomorrow, both at once when you need it — and not one call site
+  changes.
 - **Something to hand your users.** A package built on
-  `if (logging) print(...)` offers its users nothing: they cannot turn
-  its logs on, cannot format them, cannot fold them into their own log
-  stream. See
+  `if (logging) print(...)` offers its users nothing: they cannot turn its logs
+  on, cannot format them, cannot fold them into their own log stream. See
   [Using logger_builder in your own package](#using-logger_builder-in-your-own-package).
 
-And none of it is paid for while logging is off: a disabled level is one
-call to an empty function, and under `assert` or a constant the call
-disappears entirely.
+And none of it is paid for while logging is off: a disabled level is one call
+to an empty function, and under `assert` or a constant the call disappears
+entirely.
 
-So it is not one or the other. Use `assert(log.d(...))` for what should be
-gone from release builds, and levels and publishers for what should stay
-switchable at runtime.
+So it is not one or the other. Use `assert(log.d(...))` for what should be gone
+from release builds, and levels and publishers for what should stay switchable
+at runtime.
 
 
 ## How to make your own logger?
@@ -372,8 +373,8 @@ Building a basic custom logger involves defining your log function signature,
 the log entry payload, the level logger configuration, and the main logger
 manager.
 
-Here is a simplified example of how you can build a logger tailored strictly
-to your application's needs:
+Here is a simplified example of how you can build a logger tailored strictly to
+your application's needs:
 
 **1. Define the log function signature**
 
@@ -433,8 +434,8 @@ the data about the level from it: `level`, `levelName`, `shortLevelName`. The
 reference itself is not saved.
 
 Also, the base class `CustomLog` already has ready-made fields `error` and
-`stackTrace`. They are not required to be filled in, but you can use them
-if your logging system requires it. `stackTrace` can be used independently of
+`stackTrace`. They are not required to be filled in, but you can use them if
+your logging system requires it. `stackTrace` can be used independently of
 `error`. But if you do not pass `stackTrace`, and pass `Error` instead of
 `Exception` as `error`, then `stackTrace` will be taken automatically from
 `error`, if it is there:
@@ -492,15 +493,15 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   `critical`. In any case, it is just numbers: greater than 0 (`Levels.all`)
   and less than 2000 (`Levels.off`). You can use your own values.
 
-- `name` - the name of the log level. This is a string value that you can
-  use to output the log. The parameter is mandatory, although it is not
-  necessary to use it. In the `CustomLog` structure, this value is stored
-  with the name `levelName`.
+- `name` - the name of the log level. This is a string value that you can use
+  to output the log. The parameter is mandatory, although it is not necessary
+  to use it. In the `CustomLog` structure, this value is stored with the name
+  `levelName`.
 
 - `shortName` - short name of the log level. This is an optional parameter. If
   it is not specified, the first character of `name` will be used as
-  `shortName`. In the `CustomLog` structure, this value is stored with the
-  name `shortLevelName`. You can use this value as you wish.
+  `shortName`. In the `CustomLog` structure, this value is stored with the name
+  `shortLevelName`. You can use this value as you wish.
 
 - `noLog` is a no-op function that will be called when this log level is not
   enabled. Since you yourself define the signature of the log function, you
@@ -508,23 +509,16 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   match exactly the type of the `LogFn`. Pass a global function or static
   method here:
 
-  ```dart
-  noLog: _noLog,
+  ```dart noLog: _noLog,
 
   ...
 
-  static bool _noLog(
-    Object? message, {
-    Object? error,
-    StackTrace? stackTrace,
-  }) => true;
-  ```
+  static bool _noLog( Object? message, { Object? error, StackTrace? stackTrace,
+  }) => true; ```
 
   Or an empty closure:
 
-  ```dart
-  noLog: (_, {error, stackTrace}) => true,
-  ```
+  ```dart noLog: (_, {error, stackTrace}) => true, ```
 
   Performance will be the same in both cases.
 
@@ -532,22 +526,16 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
   event. Typically, the publisher handles formatting and outputting the
   results. However, it may also forward the log to other publishers
   (`MultiPublisher`) or place the event processing in an asynchronous queue
-  (`AsyncPublisher`). By default, `CustomLogPublisher.noOp()` is used, which does
-  nothing.
+  (`AsyncPublisher`). By default, `CustomLogPublisher.noOp()` is used, which
+  does nothing.
 
-  ```dart
-  final log = Logger()
-    ..level = Levels.all
-    ..publisher = CustomLogPublisher(
-      (log) => print(log.message),
-    );
-  ```
+  ```dart final log = Logger() ..level = Levels.all ..publisher =
+  CustomLogPublisher( (log) => print(log.message), ); ```
 
   or:
 
-  ```dart
-  final class DefaultLogPublisher implements CustomLogPublisher<Log> {
-    const DefaultLogPublisher();
+  ```dart final class DefaultLogPublisher implements CustomLogPublisher<Log> {
+  const DefaultLogPublisher();
 
     @override
     void publish(Log log) {
@@ -557,17 +545,15 @@ The constructor of the `CustomLevelLogger` class accepts several parameters:
 
   // ...
 
-  final log = Logger()
-    ..level = Levels.all
-    ..publisher = const DefaultLogPublisher();
-  ```
+  final log = Logger() ..level = Levels.all ..publisher = const
+  DefaultLogPublisher(); ```
 
 Finally, you need to create the main function `processLog`, which will be
 called under the hood instead of `log.info`, `log.error`, etc.
 
-Due to technical features, `processLog` cannot be just a function. It is
-a getter of type `LogFn`, which accepts either a function or a `closure` of
-the corresponding type. Implement `processLog` as you see fit.
+Due to technical features, `processLog` cannot be just a function. It is a
+getter of type `LogFn`, which accepts either a function or a `closure` of the
+corresponding type. Implement `processLog` as you see fit.
 
 For example, using a closure:
 
@@ -602,28 +588,28 @@ bool _processLog(Object? message, {Object? error, StackTrace? stackTrace}) {
 
 The two are equivalent in practice, and the usual argument for the method —
 that it avoids allocating a closure on every call — describes something that
-never happens. `processLog` is read once per level toggle: switching a level
-on assigns its result to the field that `log` dispatches through, so the
-closure is created when the level is enabled, not when a log is written.
-Measured over 1M calls per form
+never happens. `processLog` is read once per level toggle: switching a level on
+assigns its result to the field that `log` dispatches through, so the closure
+is created when the level is enabled, not when a log is written. Measured over
+1M calls per form
 ([benchmarks.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/benchmarks.dart)),
 the two land within about 1 ns of each other. AOT: 10.25 ns for the closure
 against 11.12 ns for the method, sd 0.05 and 0.07 — a real gap, and a
-negligible one. The JIT: 11.75 against 11.99, sd 0.25 and 0.28 — no gap at
-all. Use whichever reads better.
+negligible one. The JIT: 11.75 against 11.99, sd 0.25 and 0.28 — no gap at all.
+Use whichever reads better.
 
 Inside `processLog`, you need to do three things:
 
 1. Create a `Log`.
 2. Publish the `Log` via `publishLog` — the protected method that applies
-   `CustomLogger.transformer` and then hands the log to the publisher.
-   Calling `publisher.publish` directly skips the transformer.
-3. Return `true` (if you decided to follow the advice and use `bool` as
-   the return value).
+   `CustomLogger.transformer` and then hands the log to the publisher. Calling
+   `publisher.publish` directly skips the transformer.
+3. Return `true` (if you decided to follow the advice and use `bool` as the
+   return value).
 
-You will have to do all this yourself. Yes, creating a logger requires
-writing a large amount of code. But this is only done once, and it will be
-YOUR own unique logger.
+You will have to do all this yourself. Yes, creating a logger requires writing
+a large amount of code. But this is only done once, and it will be YOUR own
+unique logger.
 
 **4. Define the Main Logger (manages the different level loggers)**
 
@@ -653,8 +639,8 @@ extending `CustomLevelLogger`.
 
 Next, you need to decide which logging levels you need and create the
 corresponding level loggers, then register them in the `registerLevels` method
-using `registerLevel` method. Then, using the appropriate getters, pass
-a reference to the `log` getter of the corresponding logger. Be careful not to
+using `registerLevel` method. Then, using the appropriate getters, pass a
+reference to the `log` getter of the corresponding logger. Be careful not to
 make a mistake here: do not accidentally pass a reference to `processLog`!
 `log` will automatically change to `noLog` when logging at this level is
 disabled, and to `processLog` when it is enabled!
@@ -672,14 +658,15 @@ void main() {
 }
 ```
 
-The entire example can be viewed here: [simple_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart).
+The entire example can be viewed here:
+[simple_logger.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/lib/simple_logger.dart).
 
 
 ## Lazy Evaluation
 
 When invoking log methods with potentially expensive payload evaluations, you
-can use closures. The log entry will lazily convert closures using
-`Lazy` and `LazyString` only when the specific level is enabled and printed.
+can use closures. The log entry will lazily convert closures using `Lazy` and
+`LazyString` only when the specific level is enabled and printed.
 
 ```dart
 // The closure will only execute if the 'info' level is currently enabled
@@ -689,19 +676,18 @@ log.info(() => jsonEncode(hugeObject));
 I recommend using closures in all cases when you pass something other than
 ready-made values, even if it's a simple string with minor interpolations or
 something like `i++`. The asymmetry is what makes it pay: with the level
-enabled the three forms are indistinguishable — 128.9, 126.8 and 128.4 ns
-with sd up to 2 — while with the level disabled the closure turns 36 ns into
-3.6 ns. Nothing measurable when you lose, an order of magnitude when you
-win.
+enabled the three forms are indistinguishable — 128.9, 126.8 and 128.4 ns with
+sd up to 2 — while with the level disabled the closure turns 36 ns into 3.6 ns.
+Nothing measurable when you lose, an order of magnitude when you win.
 
 A tear-off of an existing function is cheaper still: `log.d(buildMessage)`
 allocates nothing per call and comes to 1.89 ns on a disabled level, against
 3.57 ns for `log.d(() => ...)`, which allocates one closure on every call
 whether the level is on or off. Both are far below the 36 ns of building the
-string eagerly. (Median of ten runs of 1M calls, AOT, on one machine; the
-JIT numbers differ in scale, not in shape. The benchmark prints min, max,
-mean and sd next to every result — do not trust a gap smaller than the sd
-beside it, including the ones quoted here.)
+string eagerly. (Median of ten runs of 1M calls, AOT, on one machine; the JIT
+numbers differ in scale, not in shape. The benchmark prints min, max, mean and
+sd next to every result — do not trust a gap smaller than the sd beside it,
+including the ones quoted here.)
 
 The main class for lazy computations is `Lazy`:
 
@@ -735,8 +721,8 @@ called.
 
 ## Custom Publishers
 
-At runtime, you can swap out publishers for the whole logger, or just
-a specific level:
+At runtime, you can swap out publishers for the whole logger, or just a
+specific level:
 
 ```dart
 import 'package:ansi_escape_codes/style.dart';
@@ -790,10 +776,10 @@ log.publisher = CustomLogPublisher((log) async {
 });
 ```
 
-But the logs will be output in parallel without waiting for each other. In
-some cases, this might be exactly what you need. But if the order of log
-processing is important to you (for example, when writing to a file), then
-this is not the right option for you.
+But the logs will be output in parallel without waiting for each other. In some
+cases, this might be exactly what you need. But if the order of log processing
+is important to you (for example, when writing to a file), then this is not the
+right option for you.
 
 Therefore, for asynchronous processing of logs, `log.publisher` should act
 internally to register and coordinate events sequentially.
@@ -927,8 +913,8 @@ See also an example:
 ### The full set
 
 Two independent axes — does the handler need an extra parameter, and does it
-work on batches — give four base classes, and each comes in a "do it
-yourself" and a "format + output" flavour:
+work on batches — give four base classes, and each comes in a "do it yourself"
+and a "format + output" flavour:
 
 |                      | one log at a time                        | batches                                                |
 | -------------------- | ---------------------------------------- | ------------------------------------------------------ |
@@ -937,9 +923,9 @@ yourself" and a "format + output" flavour:
 
 The `Async*Publisher*` half takes one `handle`/handler callback and you do
 everything in it. The `AsyncFormatter*` half splits that in two — `format`
-turns the log (or the batch) into an `Out` object, `output` sends that
-object somewhere — which is what you want when the same payload goes to
-several destinations, or when formatting is the expensive part:
+turns the log (or the batch) into an `Out` object, `output` sends that object
+somewhere — which is what you want when the same payload goes to several
+destinations, or when formatting is the expensive part:
 
 ```dart
 final asyncFormatter = AsyncFormatter<Log, Map<String, Object?>>(
@@ -950,64 +936,61 @@ final asyncFormatter = AsyncFormatter<Log, Map<String, Object?>>(
 
 All eight take the same four optional arguments:
 
-- **`onError`** — called when the handler throws. Without it the error goes
-  to the current zone, and in a plain Dart program without an error zone an
+- **`onError`** — called when the handler throws. Without it the error goes to
+  the current zone, and in a plain Dart program without an error zone an
   uncaught asynchronous error **terminates the isolate**, after which nothing
   keeps processing your logs. Set it, or wrap the app in `runZonedGuarded`;
-- **`sync`** — whether the internal `StreamController` delivers
-  synchronously. Leave it alone unless you know you need it;
+- **`sync`** — whether the internal `StreamController` delivers synchronously.
+  Leave it alone unless you know you need it;
 - **`maxQueueSize`** — the most entries the queue accepts before it starts
   refusing them, counting what has been accepted and not yet handled: the
-  entries waiting plus the one (or the batch) being handled right now.
-  Default 100 000 — about 20 MB at two hundred bytes a log. At the limit it
-  is the **incoming** log that is refused — it goes to `onDropped` and never
-  enters the queue, so everything already accepted is still delivered and
-  `flush()` and `close()` mean exactly what they meant before. The queue
-  drains only when the event loop turns, so a tight loop that publishes more
-  than the bound without awaiting anything loses the rest however healthy the
-  sink is; that loop, not a stalled sink, is what the default is sized
-  against — this package's own benchmark publishes 20 000 logs in exactly
-  such a burst, and the bound carries all of it. `null` gives the bound up on
-  purpose: the queue then grows until the process runs out of memory, which
-  is the right trade only when the input is bounded elsewhere and losing a
-  log is worse than dying;
-- **`onDropped`** — called with what was dropped. In all eight that means a
-  log the full queue refused; in the buffered four it also means a batch
-  that spent its `maxRetries` budget and entries handed back to
-  `retryBuffer` after `close()` was called, which can never be processed.
-  Leaving it unset does not hide the loss: the publisher says so itself,
-  printing the first one at once and counting the rest into a summary —
-  printed by the next loss to arrive more than five seconds later, widening
-  to a minute while they keep coming, or by `close()`. There is no timer
-  behind that, on purpose, and the consequence is worth knowing: a burst
-  that ends without a later loss and without a `close()` is announced by
-  that first line and never counted. It says it with `print`, so it lands
-  in the application's stdout — worth a thought if your stdout carries a
-  protocol rather than a console. `onDropped: (_) {}` silences all of it,
-  and a `print` of your own redirects it: `print` goes through the current
-  zone. The unbuffered four hand you
-  one log at a time (with its `param`, where there is one), the buffered
-  four a list.
+  entries waiting plus the one (or the batch) being handled right now. Default
+  100 000 — about 20 MB at two hundred bytes a log. At the limit it is the
+  **incoming** log that is refused — it goes to `onDropped` and never enters
+  the queue, so everything already accepted is still delivered and `flush()`
+  and `close()` mean exactly what they meant before. The queue drains only when
+  the event loop turns, so a tight loop that publishes more than the bound
+  without awaiting anything loses the rest however healthy the sink is; that
+  loop, not a stalled sink, is what the default is sized against — this
+  package's own benchmark publishes 20 000 logs in exactly such a burst, and
+  the bound carries all of it. `null` gives the bound up on purpose: the queue
+  then grows until the process runs out of memory, which is the right trade
+  only when the input is bounded elsewhere and losing a log is worse than
+  dying;
+- **`onDropped`** — called with what was dropped. In all eight that means a log
+  the full queue refused; in the buffered four it also means a batch that spent
+  its `maxRetries` budget and entries handed back to `retryBuffer` after
+  `close()` was called, which can never be processed. Leaving it unset does not
+  hide the loss: the publisher says so itself, printing the first one at once
+  and counting the rest into a summary — printed by the next loss to arrive
+  more than five seconds later, widening to a minute while they keep coming, or
+  by `close()`. There is no timer behind that, on purpose, and the consequence
+  is worth knowing: a burst that ends without a later loss and without a
+  `close()` is announced by that first line and never counted. It says it with
+  `print`, so it lands in the application's stdout — worth a thought if your
+  stdout carries a protocol rather than a console. `onDropped: (_) {}` silences
+  all of it, and a `print` of your own redirects it: `print` goes through the
+  current zone. The unbuffered four hand you one log at a time (with its
+  `param`, where there is one), the buffered four a list.
 
 The four buffered ones take two more:
 
-- **`retryDelay`** — how long to wait before retrying a batch that was
-  handed back through `retryBuffer`. The default `Duration.zero` still goes
-  through the event loop, so a dead sink cannot starve timers or your own
-  `close()`, but it retries as fast as the loop allows. Set a real delay
-  when the destination can be down for a while; it doubles with each
-  attempt, capped at 32 times the base. `close()` does not wait any of it
-  out — it cancels the pending timer and makes one prompt final attempt
-  instead;
-- **`maxRetries`** — how many times a batch handed back through
-  `retryBuffer` is retried before it is dropped. Default 100. It counts a
-  *run* of failures, so a batch that gets through pays the whole budget back
-  and a sink that recovers gets the full allowance again. Zero drops a
-  handed-back batch at once, and there is deliberately no unbounded setting:
-  retrying for ever never delivers a batch that fails deterministically — a
-  `toString` that throws, a value that will not serialise — and never drops
-  it either, so it pins a core, drowns `onError`, and keeps a pending timer
-  alive, which on its own is enough to stop a worker from ever exiting.
+- **`retryDelay`** — how long to wait before retrying a batch that was handed
+  back through `retryBuffer`. The default `Duration.zero` still goes through
+  the event loop, so a dead sink cannot starve timers or your own `close()`,
+  but it retries as fast as the loop allows. Set a real delay when the
+  destination can be down for a while; it doubles with each attempt, capped at
+  32 times the base. `close()` does not wait any of it out — it cancels the
+  pending timer and makes one prompt final attempt instead;
+- **`maxRetries`** — how many times a batch handed back through `retryBuffer`
+  is retried before it is dropped. Default 100. It counts a *run* of failures,
+  so a batch that gets through pays the whole budget back and a sink that
+  recovers gets the full allowance again. Zero drops a handed-back batch at
+  once, and there is deliberately no unbounded setting: retrying for ever never
+  delivers a batch that fails deterministically — a `toString` that throws, a
+  value that will not serialise — and never drops it either, so it pins a core,
+  drowns `onError`, and keeps a pending timer alive, which on its own is enough
+  to stop a worker from ever exiting.
 
 The `Base` classes (`AsyncPublisherBase` and friends) are for when you want a
 named class with its own state instead of a callback; `isClosed` tells you
@@ -1015,8 +998,8 @@ whether `close()` has been called.
 
 `flush()` completes when everything accepted so far has been processed, and
 `close()` drains before it finishes. Calling `flush()` while a `close()` is
-still draining hands you that close rather than an already-completed future
-— the same answer from all eight and from both wrappers, so a shutdown that
+still draining hands you that close rather than an already-completed future —
+the same answer from all eight and from both wrappers, so a shutdown that
 awaits a flush cannot be told the queue is empty while it is not.
 
 > [!IMPORTANT]
@@ -1075,10 +1058,10 @@ asynchronous error (in Flutter it ends up in `PlatformDispatcher.onError`,
 inside `runZonedGuarded` — in its handler). Note that a plain Dart program
 without an error zone terminates the isolate on such errors by default.
 
-`flush()` and `close()` cascade only to the publishers that can be flushed
-and closed — the ones implementing `Flushable` and `Closable`. All the
-asynchronous publishers do, including the adapter returned by `withParam()`;
-a plain `CustomLogPublisher` has nothing to drain and is skipped.
+`flush()` and `close()` cascade only to the publishers that can be flushed and
+closed — the ones implementing `Flushable` and `Closable`. All the asynchronous
+publishers do, including the adapter returned by `withParam()`; a plain
+`CustomLogPublisher` has nothing to drain and is skipped.
 
 See also an example:
 [multi_publisher.dart](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/async_publishers/multi_publisher.dart).
@@ -1087,8 +1070,8 @@ See also an example:
 ## Hierarchical Loggers
 
 A sublogger is created through the protected `CustomLogger.sub` constructor.
-Since it is protected, you expose it the way that suits your logger — usually
-a named constructor plus a method that reads well at the call site:
+Since it is protected, you expose it the way that suits your logger — usually a
+named constructor plus a method that reads well at the call site:
 
 ```dart
 final class Logger extends CustomLogger<Logger, LevelLogger, LogFn, Log> {
@@ -1114,73 +1097,71 @@ final http = root.child('http');
 ```
 
 **What is inherited.** Three things by copy — the `level`, the per-level
-publishers and the `transformer` — and `onError` by lookup. Each of the
-three has its own link, and the publishers carry one
-knob more — a pin per level, on top of the logger's link. A change on the
-parent reaches every sublogger whose corresponding link is still up, and
-there every level that holds no pin of its own:
+publishers and the `transformer` — and `onError` by lookup. Each of the three
+has its own link, and the publishers carry one knob more — a pin per level, on
+top of the logger's link. A change on the parent reaches every sublogger whose
+corresponding link is still up, and there every level that holds no pin of its
+own:
 
 ```dart
 root.level = Levels.debug; // db and http switch to debug too
 ```
 
 `onError` is the odd one out. It is resolved through the parent chain at the
-moment it is needed rather than copied down, so a sublogger with no handler
-of its own uses its parent's. There is no link flag for it, `relink()` does
-not affect it, and assigning `null` restores the inherited handler instead
-of detaching — see
-[Errors on the publish path](#errors-on-the-publish-path).
+moment it is needed rather than copied down, so a sublogger with no handler of
+its own uses its parent's. There is no link flag for it, `relink()` does not
+affect it, and assigning `null` restores the inherited handler instead of
+detaching — see [Errors on the publish path](#errors-on-the-publish-path).
 
-**How a sublogger detaches.** Assigning the `level`, the common `publisher`
-or the `transformer` directly on the sublogger drops that link — from then
-on the sublogger keeps its own value and ignores the parent:
+**How a sublogger detaches.** Assigning the `level`, the common `publisher` or
+the `transformer` directly on the sublogger drops that link — from then on the
+sublogger keeps its own value and ignores the parent:
 
 ```dart
 http.level = Levels.all;   // http is now independent, db still follows root
 root.level = Levels.error; // db → error, http stays at all
 ```
 
-A publisher assigned to a single level is the exception: it does not drop
-the link, it pins that level. The other levels of that sublogger keep
-following the parent, `publisherLinked` stays `true`, and the pin is
-lifted per level — see **How to re-attach** below.
+A publisher assigned to a single level is the exception: it does not drop the
+link, it pins that level. The other levels of that sublogger keep following the
+parent, `publisherLinked` stays `true`, and the pin is lifted per level — see
+**How to re-attach** below.
 
-Assigning the same value is the idiom for unlinking without changing
-anything: `child.level = child.level` and `child.transformer =
-child.transformer`. For publishers that idiom is per level too
-(`child[Levels.info].publisher = child[Levels.info].publisher` pins
-without changing anything); there is no idiom for detaching every
-publisher at once without changing values, so assign a common publisher,
-or loop over `levels`.
+Assigning the same value is the idiom for unlinking without changing anything:
+`child.level = child.level` and `child.transformer = child.transformer`. For
+publishers that idiom is per level too
+(`child[Levels.info].publisher = child[Levels.info].publisher` pins without
+changing anything); there is no idiom for detaching every publisher at once
+without changing values, so assign a common publisher, or loop over `levels`.
 
 **How to re-attach.** `relink()` re-inherits all three from the parent and
-turns propagation back on. It drops every per-level pin along the way, so
-the logger follows the parent whole again. It returns `false` only for a
-root logger:
+turns propagation back on. It drops every per-level pin along the way, so the
+logger follows the parent whole again. It returns `false` only for a root
+logger:
 
 ```dart
 http.relink(); // follows root again, pins included
 ```
 
-`CustomLevelLogger.relink()` is the narrower one: called on a level, it
-lifts that level's pin alone and leaves the rest of the logger as it is.
-It returns nothing, unlike the logger's `relink()` — a level always has
-something above it, at worst its own logger:
+`CustomLevelLogger.relink()` is the narrower one: called on a level, it lifts
+that level's pin alone and leaves the rest of the logger as it is. It returns
+nothing, unlike the logger's `relink()` — a level always has something above
+it, at worst its own logger:
 
 ```dart
 http[Levels.info].relink(); // only this level returns to the chain
 ```
 
-When there is nothing above to take — a logger configured only per level,
-with no common publisher anywhere up the chain — the level goes back to the
-no-op publisher and `hasPublisher` becomes `false`, rather than keeping what
-it happened to hold. `CustomLogger.relink()` applies the same rule to every
-level whose pin it drops.
+When there is nothing above to take — a logger configured only per level, with
+no common publisher anywhere up the chain — the level goes back to the no-op
+publisher and `hasPublisher` becomes `false`, rather than keeping what it
+happened to hold. `CustomLogger.relink()` applies the same rule to every level
+whose pin it drops.
 
-A parent keeps its subloggers through weak references, so subloggers never
-need disposing — an abandoned branch is collected whole. A sublogger, on the
-other hand, holds its parent strongly, so a logger you keep never loses the
-chain it inherits from.
+A parent keeps its subloggers through weak references, so subloggers never need
+disposing — an abandoned branch is collected whole. A sublogger, on the other
+hand, holds its parent strongly, so a logger you keep never loses the chain it
+inherits from.
 
 A sublogger is not required to register the same levels as its parent. A
 per-level publisher for a level the sublogger does not have is skipped
@@ -1216,15 +1197,15 @@ final log = Logger('app')
 log.i('GET /api?token=abcdef'); // [i] GET /api?token=***
 ```
 
-Transformers are inherited by subloggers and follow the same link rules as
-the level and the publishers (see above).
+Transformers are inherited by subloggers and follow the same link rules as the
+level and the publishers (see above).
 
-**Fail-closed.** If the transformer throws, the log is **not** published —
-the untransformed log never leaks — and the error goes to the current zone.
+**Fail-closed.** If the transformer throws, the log is **not** published — the
+untransformed log never leaks — and the error goes to the current zone.
 
 **Per destination: `TransformPublisher`.** `CustomLogger.transformer` applies
-to everything the logger publishes. To mask for one destination only, wrap
-that destination:
+to everything the logger publishes. To mask for one destination only, wrap that
+destination:
 
 ```dart
 log.publisher = MultiPublisher([
@@ -1233,13 +1214,12 @@ log.publisher = MultiPublisher([
 ]);
 ```
 
-`TransformPublisher` takes its own `onError`, and it covers both halves of
-the job: a throwing `transformer` and a throwing wrapped publisher. Without
-a handler the two part ways — a transformer error goes to the current zone,
-while the wrapped publisher's error keeps travelling to the logging call
-site, exactly as it would without the wrapper. `flush` and `close` are
-delegated to the wrapped publisher when it supports them; `close` is
-terminal either way.
+`TransformPublisher` takes its own `onError`, and it covers both halves of the
+job: a throwing `transformer` and a throwing wrapped publisher. Without a
+handler the two part ways — a transformer error goes to the current zone, while
+the wrapped publisher's error keeps travelling to the logging call site,
+exactly as it would without the wrapper. `flush` and `close` are delegated to
+the wrapped publisher when it supports them; `close` is terminal either way.
 
 > [!WARNING]
 > A transformer must not log through its own logger, and neither must a
@@ -1267,8 +1247,8 @@ terminal either way.
 ### Errors on the publish path
 
 `CustomLogger.onError` is the single place every error the logger catches on
-the way to a publisher ends up: a throwing `transformer`, a throwing
-publisher, and a reentrancy guard violation.
+the way to a publisher ends up: a throwing `transformer`, a throwing publisher,
+and a reentrancy guard violation.
 
 ```dart
 final log = Logger('app')
@@ -1277,20 +1257,19 @@ final log = Logger('app')
   ..publisher = const DefaultLogPublisher();
 ```
 
-Wrap the arrow function in parentheses inside a cascade, as with
-`transformer`: without them the `..` of the next line is parsed as part of
-the arrow's body.
+Wrap the arrow function in parentheses inside a cascade, as with `transformer`:
+without them the `..` of the next line is parsed as part of the arrow's body.
 
 Without a handler each case keeps its historical behaviour — the transformer
 error and the guard violation go to the current zone, a publisher error
-propagates out of the logging call. Note what the zone route means in a
-plain Dart program without an error zone: an uncaught asynchronous error
-terminates the isolate, so a bug in a masking transformer takes the process
-down. Setting this callback is how logging stops being able to break the
-application that logs.
+propagates out of the logging call. Note what the zone route means in a plain
+Dart program without an error zone: an uncaught asynchronous error terminates
+the isolate, so a bug in a masking transformer takes the process down. Setting
+this callback is how logging stops being able to break the application that
+logs.
 
-It is resolved through the parent chain rather than copied down, so a
-sublogger with no handler of its own uses its parent's.
+It is resolved through the parent chain rather than copied down, so a sublogger
+with no handler of its own uses its parent's.
 
 > [!WARNING]
 > The handler must not log through the logger it belongs to. Both guards
@@ -1310,8 +1289,7 @@ a `Log` carrying a `message`, and a `Logger` with `d`, `i` and `e`.
 ### How to log to stdout and stderr
 
 On native targets `print` always writes to stdout, so error output ends up
-mixed into the program's normal output. Give the error level its own
-publisher:
+mixed into the program's normal output. Give the error level its own publisher:
 
 ```dart
 import 'dart:io';
@@ -1337,9 +1315,9 @@ final log = Logger()
 
 ### How to log to a file
 
-Writing to a file is asynchronous, and the writes must not interleave, so
-use a buffered async publisher: it gathers logs into batches and processes
-one batch at a time.
+Writing to a file is asynchronous, and the writes must not interleave, so use a
+buffered async publisher: it gathers logs into batches and processes one batch
+at a time.
 
 ```dart
 import 'dart:io';
@@ -1364,36 +1342,36 @@ final log = Logger()
 ```
 
 The queue in front of the file holds 100 000 entries by default: if the disk
-stalls for longer than that, the newest logs are refused rather than kept,
-and `onDropped` is where you see them. Pass `maxQueueSize: null` to let the
-queue grow instead until the process dies — see
-[the full set](#the-full-set) for that, `retryDelay` and the rest.
+stalls for longer than that, the newest logs are refused rather than kept, and
+`onDropped` is where you see them. Pass `maxQueueSize: null` to let the queue
+grow instead until the process dies — see [the full set](#the-full-set) for
+that, `retryDelay` and the rest.
 
-Drain the queue before the program exits, or the last batch never reaches
-the disk:
+Drain the queue before the program exits, or the last batch never reaches the
+disk:
 
 ```dart
 await filePublisher.close();
 ```
 
-`close()` is terminal, and "refuses" is stronger than it sounds: it
-processes everything accepted so far, and **any later `log.i(...)` throws a
-`StateError` at the call site**. That is deliberate — closing a publisher and
-then logging is a shutdown-ordering bug, and finding out immediately beats
-feeding logs into a dead buffer — but it does mean a stray log line in a
-`finally` can bring the program down. Close last, or use `flush()` when you
-only want to wait for the queue to empty and keep logging afterwards.
+`close()` is terminal, and "refuses" is stronger than it sounds: it processes
+everything accepted so far, and **any later `log.i(...)` throws a `StateError`
+at the call site**. That is deliberate — closing a publisher and then logging
+is a shutdown-ordering bug, and finding out immediately beats feeding logs into
+a dead buffer — but it does mean a stray log line in a `finally` can bring the
+program down. Close last, or use `flush()` when you only want to wait for the
+queue to empty and keep logging afterwards.
 
-Note that `flush()` means two different things depending on which publisher
-you picked, and both are useful:
+Note that `flush()` means two different things depending on which publisher you
+picked, and both are useful:
 
 - **snapshot** — `AsyncPublisher`, `AsyncFormatter` and their `WithParam`
-  variants complete when everything queued *at the moment of the call* has
-  been processed. Logs published after it land in the next round;
+  variants complete when everything queued *at the moment of the call* has been
+  processed. Logs published after it land in the next round;
 - **drain** — the buffered variants complete when the buffer is *empty*,
-  including logs published after the call. Under a steady stream of logging
-  a drain-flush finishes later than a snapshot-flush, and on a busy logger it
-  may not finish promptly at all.
+  including logs published after the call. Under a steady stream of logging a
+  drain-flush finishes later than a snapshot-flush, and on a busy logger it may
+  not finish promptly at all.
 
 A `MultiPublisher` holding one of each mixes the two guarantees, so reach for
 `close()` when you need a hard "everything is out" point.
@@ -1424,8 +1402,8 @@ String format(Log log) =>
 
 `DateTime.now()` inside the formatter only tells the truth for synchronous
 publishers. As soon as the output is asynchronous or buffered, formatting
-happens when the batch is processed rather than when the event occurred —
-and every log in a batch ends up with nearly the same, wrong, timestamp.
+happens when the batch is processed rather than when the event occurred — and
+every log in a batch ends up with nearly the same, wrong, timestamp.
 
 ### How to colour the logs
 
@@ -1445,9 +1423,9 @@ final log = Logger()
   );
 ```
 
-Escape codes are for terminals, not for files: colouring the shared
-formatter would put `\x1b[31m` into your log file too. When a log goes to
-both, give each destination its own publisher:
+Escape codes are for terminals, not for files: colouring the shared formatter
+would put `\x1b[31m` into your log file too. When a log goes to both, give each
+destination its own publisher:
 
 ```dart
 final log = Logger()
@@ -1470,9 +1448,8 @@ log.d('Cache state: ${jsonEncode(cache)}'); // BAD
 ```
 
 The interpolation runs before `log.d` is even called, so `jsonEncode` runs
-whether or not the debug level is enabled — the exact cost this package
-exists to avoid. Pass a closure and it is evaluated only if the level is
-on:
+whether or not the debug level is enabled — the exact cost this package exists
+to avoid. Pass a closure and it is evaluated only if the level is on:
 
 ```dart
 log.d(() => 'Cache state: ${jsonEncode(cache)}'); // GOOD
@@ -1482,9 +1459,9 @@ See [Lazy Evaluation](#lazy-evaluation).
 
 **Deferring what is never deferred**
 
-The mirror image of the same mistake. A closure pays off only for a level
-that can actually be off — on a level you keep enabled at all times it is
-evaluated on every call anyway, and all it adds is an allocation:
+The mirror image of the same mistake. A closure pays off only for a level that
+can actually be off — on a level you keep enabled at all times it is evaluated
+on every call anyway, and all it adds is an allocation:
 
 ```dart
 log.i(() => 'User $id logged in'); // pointless if `i` is always on
@@ -1499,8 +1476,8 @@ LogFn get d => _d.log;        // GOOD: switches with the level
 ```
 
 `log` is the field the package swaps between `processLog` and the no-op
-function. Handing out `processLog` directly gives you a level that can
-never be turned off — and none of the performance the switch exists for.
+function. Handing out `processLog` directly gives you a level that can never be
+turned off — and none of the performance the switch exists for.
 
 **Publishing with `publisher.publish` instead of `publishLog`**
 
@@ -1513,9 +1490,9 @@ LogFn get processLog => (message, {error, stackTrace}) {
     };
 ```
 
-`publishLog` is what applies `CustomLogger.transformer` before handing the
-log on. Going straight to the publisher silently skips it, so masking and
-filtering never run.
+`publishLog` is what applies `CustomLogger.transformer` before handing the log
+on. Going straight to the publisher silently skips it, so masking and filtering
+never run.
 
 **Reading state the constructor body has not set yet**
 
@@ -1536,24 +1513,23 @@ final class MyLogger extends CustomLogger<MyLogger, LevelLogger, LogFn, Log> {
 }
 ```
 
-The package calls into your subclass before that subclass's constructor
-body has run. `registerLevels` always does — both constructors call it from
-the base class. `processLog` does it too whenever a sublogger inherits a
-level its parent already had enabled: `CustomLogger.sub` registers the
-levels and then takes the parent's level, so the level switches on while
-the body is still pending.
+The package calls into your subclass before that subclass's constructor body
+has run. `registerLevels` always does — both constructors call it from the base
+class. `processLog` does it too whenever a sublogger inherits a level its
+parent already had enabled: `CustomLogger.sub` registers the levels and then
+takes the parent's level, so the level switches on while the body is still
+pending.
 
-Field initializers and the initializer list *have* run by then, which is
-why levels kept in `final` fields work. Anything the body assigns has not,
-and a `late` field read there throws. Keep both hooks off anything the body
-touches, or move that work into a field initializer.
+Field initializers and the initializer list *have* run by then, which is why
+levels kept in `final` fields work. Anything the body assigns has not, and a
+`late` field read there throws. Keep both hooks off anything the body touches,
+or move that work into a field initializer.
 
 **Timestamping in the formatter**
 
-`DateTime.now()` in a formatter is the time the log was *printed*, which
-stops matching the time it *happened* the moment a buffered or async
-publisher is involved. See
-[How to add a timestamp](#how-to-add-a-timestamp).
+`DateTime.now()` in a formatter is the time the log was *printed*, which stops
+matching the time it *happened* the moment a buffered or async publisher is
+involved. See [How to add a timestamp](#how-to-add-a-timestamp).
 
 **Exiting without draining an async publisher**
 
@@ -1574,18 +1550,17 @@ log.transformer = (entry) {
 };
 ```
 
-The nested call runs the transformer again, and again. Such a call is
-detected and dropped with a `StateError`, but the log you meant to write
-is lost — collect what you need into a plain list instead, or use
-a logger that this transformer never reaches.
+The nested call runs the transformer again, and again. Such a call is detected
+and dropped with a `StateError`, but the log you meant to write is lost —
+collect what you need into a plain list instead, or use a logger that this
+transformer never reaches.
 
 
 ## Using logger_builder in your own package
 
-A package that logs through `print` gives its users nothing to work with:
-they cannot turn the output on, cannot change its shape, cannot route it
-anywhere. Exposing a logger instead costs you one public field and gives
-them all three.
+A package that logs through `print` gives its users nothing to work with: they
+cannot turn the output on, cannot change its shape, cannot route it anywhere.
+Exposing a logger instead costs you one public field and gives them all three.
 
 **Expose the logger, leave it off**
 
@@ -1594,10 +1569,9 @@ them all three.
 final packageLog = Logger('my_package');
 ```
 
-A freshly built logger starts at `Levels.off`, so a user who never touches
-it never sees your output — which is what a well-behaved dependency does.
-Log freely inside your package; nothing is published until someone asks
-for it.
+A freshly built logger starts at `Levels.off`, so a user who never touches it
+never sees your output — which is what a well-behaved dependency does. Log
+freely inside your package; nothing is published until someone asks for it.
 
 **Let the user decide everything about the output**
 
@@ -1612,17 +1586,16 @@ void main() {
 }
 ```
 
-Do not install a publisher yourself, do not wrap anything in
-`runZonedGuarded` on the user's behalf, and do not decide that errors
-belong on stderr. Those are application decisions, and taking them makes
-your logs a foreign body in someone else's log stream instead of a part
-of it.
+Do not install a publisher yourself, do not wrap anything in `runZonedGuarded`
+on the user's behalf, and do not decide that errors belong on stderr. Those are
+application decisions, and taking them makes your logs a foreign body in
+someone else's log stream instead of a part of it.
 
 **Give the hierarchy to the user, too**
 
-Subloggers inherit level and publisher from their parent, so one
-assignment configures your whole package — while a user who wants only
-your HTTP layer can still say so:
+Subloggers inherit level and publisher from their parent, so one assignment
+configures your whole package — while a user who wants only your HTTP layer can
+still say so:
 
 ```dart
 final httpLog = packageLog.child('http');
@@ -1635,14 +1608,16 @@ httpLog.level = Levels.all;
 
 **Remember that your `Log` type is public API**
 
-Users write formatters against it, so its fields are part of your
-package's contract: adding one is safe, renaming or removing one is
-a breaking change. Keep the type exported and documented.
+Users write formatters against it, so its fields are part of your package's
+contract: adding one is safe, renaming or removing one is a breaking change.
+Keep the type exported and documented.
 
 
 ## Examples
 
-The [example/logger_builder_examples](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/) directory contains more elaborate examples, demonstrating:
+The
+[example/logger_builder_examples](https://github.com/vi-k/logger_builder/blob/main/example/logger_builder_examples/bin/)
+directory contains more elaborate examples, demonstrating:
 
 ### Loggers
 
